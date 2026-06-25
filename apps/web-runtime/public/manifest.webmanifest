@@ -1,0 +1,19 @@
+{
+  "name": "fox Training Runtime",
+  "short_name": "fox",
+  "description": "Local training runtime for the fox personal assistant.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape-primary",
+  "background_color": "#11130f",
+  "theme_color": "#11130f",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

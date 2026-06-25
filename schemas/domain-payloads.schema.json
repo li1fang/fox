@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/domain-payloads.schema.json",
+  "title": "Fox Domain Payloads",
+  "$defs": {
+    "meal_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "meal_name": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "portion": { "type": "string" },
+              "estimated_calories": { "type": "number", "minimum": 0 },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        },
+        "total_estimated_calories": { "type": "number", "minimum": 0 },
+        "notes": { "type": "string" }
+      }
+    },
+    "medical_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "medicines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "dosage": { "type": "string" },
+              "frequency": { "type": "string" },
+              "duration": { "type": "string" },
+              "instructions": { "type": "string" },
+              "warnings": { "type": "string" }
+            }
+          }
+        },
+        "doctor_notes": { "type": "string" },
+        "follow_up": { "type": "string" },
+        "source_type": {
+          "type": "string",
+          "enum": ["medicine_purchase", "prescription", "doctor_visit", "note"]
+        }
+      }
+    },
+    "workout_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workout_name": { "type": "string" },
+        "location": { "type": "string", "enum": ["home_gym", "gym", "outdoor", "pool", "unknown"] },
+        "focus": { "type": "string" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" },
+        "duration_seconds": { "type": "integer", "minimum": 0 },
+        "status": {
+          "type": "string",
+          "enum": ["planned", "active", "completed", "aborted", "confirmed"]
+        },
+        "plan": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "estimated_duration_minutes": { "type": "integer", "minimum": 0 },
+            "warmup": { "type": "string" },
+            "cooldown": { "type": "string" },
+            "safety_notes": { "type": "string" },
+            "exercises": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/exercise_block" }
+            }
+          }
+        },
+        "actual": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exercises": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/exercise_block" }
+            },
+            "completion_notes": { "type": "string" }
+          }
+        },
+        "feedback_events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/feedback_event" }
+        },
+        "timer_events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/timer_event" }
+        },
+        "adjustments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/adjustment" }
+        },
+        "coach_messages": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/coach_message" }
+        },
+        "coach_summary": { "type": "string" },
+        "user_confirmation_status": {
+          "type": "string",
+          "enum": ["unconfirmed", "confirmed", "corrected"]
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "exercise_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exercise_id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["push", "pull", "legs", "core", "cardio", "mobility", "other"]
+        },
+        "target_sets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/set_target" }
+        },
+        "completed_sets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/set_record" }
+        },
+        "rest_seconds": { "type": "integer", "minimum": 0 },
+        "tempo": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "set_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "set_index": { "type": "integer", "minimum": 1 },
+        "target_reps": { "type": "integer", "minimum": 0 },
+        "target_duration_seconds": { "type": "integer", "minimum": 0 },
+        "target_weight": { "type": "number", "minimum": 0 },
+        "weight_unit": { "type": "string", "enum": ["kg", "lb", "bodyweight", "machine_level"] },
+        "rest_seconds": { "type": "integer", "minimum": 0 },
+        "intensity_note": { "type": "string" }
+      }
+    },
+    "set_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "set_index": { "type": "integer", "minimum": 1 },
+        "planned_set_index": { "type": "integer", "minimum": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "partial", "skipped", "failed"]
+        },
+        "reps": { "type": "integer", "minimum": 0 },
+        "weight": { "type": "number", "minimum": 0 },
+        "weight_unit": { "type": "string", "enum": ["kg", "lb", "bodyweight", "machine_level"] },
+        "duration_seconds": { "type": "integer", "minimum": 0 },
+        "rpe": { "type": "number", "minimum": 0, "maximum": 10 },
+        "pain": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "counting_method": {
+          "type": "string",
+          "enum": ["manual", "timer", "accelerometer", "pose_estimation"]
+        }
+      }
+    },
+    "feedback_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "state": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": ["completed", "not_followed", "too_easy", "too_hard", "pain", "skip", "note"]
+        },
+        "exercise_name": { "type": "string" },
+        "set_index": { "type": "integer", "minimum": 1 },
+        "message": { "type": "string" }
+      }
+    },
+    "timer_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "exercise_timer_started",
+            "exercise_timer_finished",
+            "rest_timer_started",
+            "rest_timer_finished",
+            "timer_extended",
+            "timer_cancelled"
+          ]
+        },
+        "duration_seconds": { "type": "integer", "minimum": 0 },
+        "target": { "type": "string" }
+      }
+    },
+    "adjustment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "reason": {
+          "type": "string",
+          "enum": ["not_followed", "too_easy", "too_hard", "pain", "time_constraint", "manual"]
+        },
+        "decided_by": {
+          "type": "string",
+          "enum": ["rules", "ai_suggestion", "user"]
+        },
+        "target": { "type": "string" },
+        "before": { "type": "object" },
+        "after": { "type": "object" }
+      }
+    },
+    "coach_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "role": { "type": "string", "enum": ["coach", "system"] },
+        "state": { "type": "string" },
+        "text": { "type": "string" },
+        "source": { "type": "string", "enum": ["system", "ai", "template"] }
+      }
+    },
+    "expense_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "amount": { "type": "number", "minimum": 0 },
+        "currency": { "type": "string", "examples": ["THB", "USD", "CNY"] },
+        "merchant": { "type": "string" },
+        "category": { "type": "string" },
+        "payment_method": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "amount": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}
+

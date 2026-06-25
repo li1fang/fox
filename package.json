@@ -1,0 +1,32 @@
+{
+  "name": "fox",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @fox/api & npm run dev -w @fox/web-runtime",
+    "dev:web": "npm run dev -w @fox/web-runtime",
+    "dev:api": "npm run dev -w @fox/api",
+    "build": "npm run build -w @fox/core && npm run build -w @fox/schemas && npm run build -w @fox/api && npm run build -w @fox/web-runtime",
+    "typecheck": "npm run typecheck -w @fox/core && npm run typecheck -w @fox/schemas && npm run typecheck -w @fox/api && npm run typecheck -w @fox/web-runtime",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.4",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}
