@@ -380,13 +380,13 @@ option {
 
 .runtime-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.25fr);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.28fr);
 }
 
 .runtime-actions .primary,
 .runtime-actions .danger {
-  min-height: 76px;
-  font-size: 1.15rem;
+  min-height: 82px;
+  font-size: 1.18rem;
 }
 
 .feedback-grid {
@@ -403,8 +403,9 @@ option {
 }
 
 .feedback-grid button.selected {
-  background: rgba(247, 201, 72, 0.22);
-  border-color: rgba(247, 201, 72, 0.7);
+  background: #f7c948;
+  border-color: #f7c948;
+  color: #11130f;
 }
 
 .note-field {
@@ -623,13 +624,14 @@ option {
 
 @media (orientation: landscape) and (min-width: 900px) {
   .screen.runtime {
-    width: min(1280px, calc(100vw - 36px));
+    width: min(1320px, calc(100vw - 40px));
     display: grid;
-    grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr);
+    grid-template-columns: minmax(390px, 0.92fr) minmax(520px, 1.08fr);
     grid-auto-rows: auto;
     align-content: center;
     gap: 16px;
     min-height: 100vh;
+    padding: 24px 0;
   }
 
   .screen.runtime .progress-panel,
@@ -643,11 +645,48 @@ option {
   .screen.runtime .countdown-card {
     grid-column: 2;
     grid-row: 1 / span 3;
-    min-height: min(70vh, 560px);
+    min-height: min(64vh, 540px);
   }
 
   .screen.runtime > .actions {
     grid-column: 1 / -1;
+  }
+
+  .screen.runtime .current-card {
+    padding: 30px;
+  }
+
+  .screen.runtime .current-card h1 {
+    font-size: clamp(3rem, 5.2vw, 5.2rem);
+  }
+
+  .screen.runtime .current-card p {
+    font-size: clamp(1.3rem, 2.1vw, 1.9rem);
+  }
+
+  .screen.runtime .coach-panel,
+  .screen.runtime .sensor-panel {
+    padding: 14px 16px;
+  }
+
+  .screen.runtime .coach-panel p {
+    font-size: 1.05rem;
+  }
+
+  .screen.runtime .sensor-panel p {
+    font-size: 1.05rem;
+  }
+
+  .screen.runtime .sensor-panel small {
+    font-size: 0.86rem;
+  }
+
+  .screen.runtime .tempo-box {
+    width: min(30vw, 270px);
+  }
+
+  .screen.runtime .ring {
+    width: min(32vw, 320px);
   }
 
   .runtime-actions .primary,
@@ -655,7 +694,43 @@ option {
   .screen.runtime > .actions .primary,
   .screen.runtime > .actions .ghost,
   .screen.runtime > .actions .danger {
-    min-height: 84px;
+    min-height: 92px;
     font-size: 1.18rem;
+  }
+
+  .feedback-screen {
+    width: min(1320px, calc(100vw - 40px));
+    justify-content: flex-start;
+    padding: 84px 0 28px;
+    gap: 14px;
+  }
+
+  .feedback-screen h1 {
+    font-size: clamp(3rem, 4.8vw, 4.9rem);
+  }
+
+  .feedback-screen .coach-panel {
+    padding: 14px 16px;
+  }
+
+  .feedback-screen .form-grid {
+    grid-template-columns: minmax(180px, 0.85fr) minmax(180px, 0.85fr) minmax(320px, 1.3fr);
+  }
+
+  .feedback-screen .feedback-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .feedback-screen .feedback-grid button,
+  .feedback-screen .primary {
+    min-height: 68px;
+  }
+
+  .feedback-screen textarea {
+    min-height: 88px;
+  }
+
+  .transition-feedback button {
+    min-height: 64px;
   }
 }

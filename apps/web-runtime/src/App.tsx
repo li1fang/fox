@@ -558,7 +558,7 @@ function FeedbackScreen({
   const [message, setMessage] = useState("");
 
   return (
-    <main className="screen">
+    <main className="screen feedback-screen">
       <span className="eyebrow">组后反馈</span>
       <h1>{exercise?.name}</h1>
       <CoachMessagePanel session={session} />
@@ -591,10 +591,13 @@ function FeedbackScreen({
       <div className="feedback-grid">
         {[...feedbackOptions, ...aiOptions].map((option) => {
           const optionMessage = "message" in option && typeof option.message === "string" ? option.message : option.label;
+          const selected =
+            kind === option.kind && (message === optionMessage || (kind === "completed" && message === "" && option.kind === "completed"));
           return (
             <button
               key={`${option.kind}-${option.label}-${"id" in option ? option.id : "fixed"}`}
-              className={kind === option.kind && message === optionMessage ? "selected" : ""}
+              className={selected ? "selected" : ""}
+              aria-pressed={selected}
               onClick={() => {
                 setKind(option.kind);
                 setMessage(optionMessage);
