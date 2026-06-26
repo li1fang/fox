@@ -32,6 +32,7 @@
     "ipad:build": "node scripts/ipad.mjs build",
     "ipad:install": "node scripts/ipad.mjs install",
     "ipad:open": "node scripts/ipad.mjs open",
+    "ipad:run": "node scripts/ipad.mjs run",
     "ipad:smoke": "node scripts/ipad.mjs smoke"
   },
   "devDependencies": {

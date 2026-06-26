@@ -234,22 +234,66 @@ function startChild(command, args, env, cwd = root) {
   });
 }
 
-async function smoke() {
+function lanRuntimeConfig() {
   const lanHost = detectLanHost();
   const apiPort = process.env.FOX_API_PORT ?? "4177";
   const webPort = process.env.FOX_WEB_PORT ?? "5177";
   const apiUrl = `http://${lanHost}:${apiPort}`;
   const webUrl = `http://${lanHost}:${webPort}`;
+  return { apiPort, apiUrl, webPort, webUrl };
+}
+
+function startLanChildren({ databasePath } = {}) {
+  const { apiPort, apiUrl, webPort, webUrl } = lanRuntimeConfig();
+  const apiEnv = {
+    FOX_API_HOST: "0.0.0.0",
+    FOX_API_PORT: apiPort
+  };
+  if (databasePath) {
+    apiEnv.FOX_DB_PATH = databasePath;
+  }
   const children = [
     startChild(bin("tsx"), ["watch", "--tsconfig", "tsconfig.dev.json", "src/server.ts"], {
-      FOX_API_HOST: "0.0.0.0",
-      FOX_API_PORT: apiPort,
-      FOX_DB_PATH: join(root, ".tmp", "ipad-smoke.sqlite")
+      ...apiEnv
     }, join(root, "apps", "api")),
     startChild(bin("vite"), ["--host", "0.0.0.0", "--port", webPort], {
       VITE_FOX_API_URL: apiUrl
     }, join(root, "apps", "web-runtime"))
   ];
+  return { apiUrl, webUrl, children };
+}
+
+function stopChildren(children, signal = "SIGTERM") {
+  for (const child of children) {
+    child.kill(signal);
+  }
+}
+
+async function waitForChildExit(children) {
+  await new Promise((resolveExit, rejectExit) => {
+    let settled = false;
+    for (const child of children) {
+      child.on("exit", (code, signal) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (code && code !== 0) {
+          rejectExit(new Error(`LAN child exited with code ${code}`));
+          return;
+        }
+        if (signal) {
+          resolveExit();
+          return;
+        }
+        resolveExit();
+      });
+    }
+  });
+}
+
+async function smoke() {
+  const { apiUrl, webUrl, children } = startLanChildren({ databasePath: join(root, ".tmp", "ipad-smoke.sqlite") });
   try {
     await waitForUrl(`${apiUrl}/health`, "fox API");
     await waitForUrl(webUrl, "fox web runtime");
@@ -257,10 +301,34 @@ async function smoke() {
     install();
     process.env.FOX_WEB_URL = webUrl;
     open();
+    console.log("Smoke complete. Temporary LAN servers are stopping; use `npm run ipad:run` for hands-on iPad testing.");
   } finally {
-    for (const child of children) {
-      child.kill("SIGTERM");
+    stopChildren(children);
+  }
+}
+
+async function runIpad() {
+  const { apiUrl, webUrl, children } = startLanChildren();
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    shuttingDown = true;
+    stopChildren(children, signal);
+  };
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  try {
+    await waitForUrl(`${apiUrl}/health`, "fox API");
+    await waitForUrl(webUrl, "fox web runtime");
+    process.env.FOX_WEB_URL = webUrl;
+    open();
+    console.log(`iPad runtime is live at ${webUrl}. Press Ctrl+C to stop.`);
+    await waitForChildExit(children);
+  } catch (error) {
+    if (!shuttingDown) {
+      throw error;
     }
+  } finally {
+    stopChildren(children);
   }
 }
 
@@ -279,6 +347,8 @@ try {
     open();
   } else if (command === "smoke") {
     await smoke();
+  } else if (command === "run") {
+    await runIpad();
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
