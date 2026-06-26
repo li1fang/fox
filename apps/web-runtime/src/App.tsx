@@ -4,6 +4,7 @@ import {
   getCurrentTarget,
   getProgress,
   recommendedCountingMethod,
+  estimateSetTimerSeconds,
   type AiFeedbackOption,
   type EquipmentInventory,
   type EquipmentItem,
@@ -28,6 +29,17 @@ const feedbackOptions: Array<{ kind: FeedbackKind; label: string }> = [
   { kind: "pain", label: "疼痛或不舒服" },
   { kind: "skip", label: "跳过或提前停止" }
 ];
+
+interface FeedbackSelection {
+  key: string;
+  kind: FeedbackKind;
+  label: string;
+  message: string;
+}
+
+function defaultFeedbackSelection(): FeedbackSelection {
+  return { key: "completed-正常完成", kind: "completed", label: "正常完成", message: "" };
+}
 
 type SpeechCommand = "finish_set" | "ready" | "emergency_stop";
 
@@ -90,17 +102,47 @@ function secondsSince(iso: string | undefined): number | undefined {
 
 function estimateDefaultRecord(
   target: ReturnType<typeof getCurrentTarget>,
-  session: WorkoutSession
+  session: WorkoutSession,
+  durationSeconds = secondsSince(session.activeSetStartedAt) ?? target?.targetDurationSeconds
 ): Omit<SetRecord, "setIndex" | "plannedSetIndex"> {
   return {
     status: "completed",
     reps: target?.targetReps,
-    durationSeconds: secondsSince(session.activeSetStartedAt) ?? target?.targetDurationSeconds,
+    durationSeconds,
     weight: target?.targetWeight,
     weightUnit: target?.weightUnit,
     pain: false,
     countingMethod: target?.targetDurationSeconds ? "timer" : "manual"
   };
+}
+
+function currentSetTimerSeconds(session: WorkoutSession): number | undefined {
+  const exercise = getCurrentExercise(session);
+  const target = getCurrentTarget(session);
+  return estimateSetTimerSeconds(target, exercise?.tempo ?? []);
+}
+
+function useActiveSetCountdown(session: WorkoutSession): { remaining: number; total: number } {
+  const total = currentSetTimerSeconds(session) ?? 0;
+  const [remaining, setRemaining] = useState(total);
+
+  useEffect(() => {
+    if (session.status !== "active_exercise" || !session.activeSetStartedAt || total <= 0) {
+      setRemaining(total);
+      return;
+    }
+
+    let frame = 0;
+    const endsAt = new Date(session.activeSetStartedAt).getTime() + total * 1000;
+    const tick = () => {
+      setRemaining(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [session.status, session.activeSetStartedAt, total]);
+
+  return { remaining, total };
 }
 
 function useRestCountdown(session: WorkoutSession): number {
@@ -306,19 +348,6 @@ function CoachMessagePanel({ session }: { session: WorkoutSession }) {
   );
 }
 
-function TempoBox({ tempo, enabled, onToggle }: { tempo: TempoPhase[]; enabled: boolean; onToggle: () => void }) {
-  const label = tempo.map((phase) => `${phase.phase} ${phase.seconds}s`).join(" · ");
-  return (
-    <section className="tempo-card" aria-label="节奏演示">
-      <button className="tempo-toggle" type="button" aria-pressed={enabled} onClick={onToggle}>
-        {enabled ? "节奏开启" : "节奏暂停"}
-      </button>
-      <div className={`tempo-box${enabled ? "" : " paused"}`} />
-      <span>{label || "默认呼吸节奏"}</span>
-    </section>
-  );
-}
-
 function CountdownRing({ remaining, total, label }: { remaining: number; total: number; label: string }) {
   const percent = total <= 0 ? 0 : Math.max(0, Math.min(100, (remaining / total) * 100));
   return (
@@ -338,6 +367,46 @@ function CountdownRing({ remaining, total, label }: { remaining: number; total: 
         </div>
       </div>
       <p>{label}</p>
+    </section>
+  );
+}
+
+function ExerciseTimerPanel({
+  remaining,
+  total,
+  tempo,
+  enabled,
+  onToggle
+}: {
+  remaining: number;
+  total: number;
+  tempo: TempoPhase[];
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  const label = tempo.map((phase) => `${phase.phase} ${phase.seconds}s`).join(" · ");
+  return (
+    <section className="exercise-timer-card" aria-label="本组计时与节奏">
+      <button className="tempo-toggle" type="button" aria-pressed={enabled} onClick={onToggle}>
+        {enabled ? "节奏开启" : "节奏暂停"}
+      </button>
+      <div
+        className="ring"
+        style={{ background: `conic-gradient(#f7c948 ${total <= 0 ? 0 : (remaining / total) * 360}deg, rgba(255,255,255,0.1) 0deg)` }}
+        role="progressbar"
+        aria-label="本组倒计时"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={remaining}
+      >
+        <div>
+          <strong>{remaining}</strong>
+          <span>秒</span>
+        </div>
+      </div>
+      <div className={`tempo-box${enabled ? "" : " paused"}`} aria-label="发力节奏演示" />
+      <p>本组倒计时</p>
+      <span>{label || "默认呼吸节奏"}</span>
     </section>
   );
 }
@@ -513,6 +582,7 @@ function ActiveExerciseScreen({
   const exercise = getCurrentExercise(session);
   const target = getCurrentTarget(session);
   const elapsed = secondsSince(session.activeSetStartedAt);
+  const timer = useActiveSetCountdown(session);
   return (
     <main className="screen runtime">
       <ProgressBar session={session} />
@@ -526,7 +596,13 @@ function ActiveExerciseScreen({
       </section>
       <CoachMessagePanel session={session} />
       <SensorPanel session={session} capabilities={capabilities} />
-      <TempoBox tempo={exercise?.tempo ?? []} enabled={tempoEnabled} onToggle={onToggleTempo} />
+      <ExerciseTimerPanel
+        remaining={timer.remaining}
+        total={timer.total}
+        tempo={exercise?.tempo ?? []}
+        enabled={tempoEnabled}
+        onToggle={onToggleTempo}
+      />
       <section className="actions runtime-actions">
         <button className="primary" onClick={onFinish}>
           完成本组
@@ -548,14 +624,43 @@ function FeedbackScreen({
   session: WorkoutSession;
   aiOptions: AiFeedbackOption[];
   onUpdatePending: (record: Partial<Omit<SetRecord, "setIndex" | "plannedSetIndex">>) => void;
-  onSubmit: (kind: FeedbackKind, message: string) => void;
+  onSubmit: (payload: { kinds: FeedbackKind[]; messages: string[]; message?: string }) => void;
 }) {
   const exercise = getCurrentExercise(session);
   const target = getCurrentTarget(session);
   const pending = session.pendingSet?.record;
   const targetWeightLabel = target?.targetWeight ? `${target.targetWeight}${target.weightUnit === "kg" ? "kg" : ""}` : "无推荐重量";
-  const [kind, setKind] = useState<FeedbackKind>("completed");
-  const [message, setMessage] = useState("");
+  const [selected, setSelected] = useState<FeedbackSelection[]>([defaultFeedbackSelection()]);
+  const [freeNote, setFreeNote] = useState("");
+
+  const syncPendingFromSelection = (nextSelected: FeedbackSelection[]) => {
+    const kinds = nextSelected.map((selection) => selection.kind);
+    if (kinds.includes("pain")) {
+      onUpdatePending({ pain: true, status: "failed" });
+    } else if (kinds.includes("skip")) {
+      onUpdatePending({ pain: false, status: "skipped" });
+    } else if (kinds.includes("not_followed") || kinds.includes("too_hard")) {
+      onUpdatePending({ pain: false, status: "partial" });
+    } else {
+      onUpdatePending({ pain: false, status: "completed" });
+    }
+  };
+
+  const toggleSelection = (selection: FeedbackSelection) => {
+    setSelected((current) => {
+      const exists = current.some((item) => item.key === selection.key);
+      const withoutCompleted = current.filter((item) => item.kind !== "completed");
+      const next =
+        selection.kind === "completed"
+          ? [selection]
+          : exists
+            ? withoutCompleted.filter((item) => item.key !== selection.key)
+            : [...withoutCompleted, selection];
+      const normalized = next.length > 0 ? next : [defaultFeedbackSelection()];
+      syncPendingFromSelection(normalized);
+      return normalized;
+    });
+  };
 
   return (
     <main className="screen feedback-screen">
@@ -590,23 +695,21 @@ function FeedbackScreen({
       </div>
       <div className="feedback-grid">
         {[...feedbackOptions, ...aiOptions].map((option) => {
-          const optionMessage = "message" in option && typeof option.message === "string" ? option.message : option.label;
-          const selected =
-            kind === option.kind && (message === optionMessage || (kind === "completed" && message === "" && option.kind === "completed"));
+          const optionMessage =
+            option.kind === "completed" ? "" : "message" in option && typeof option.message === "string" ? option.message : option.label;
+          const selection: FeedbackSelection = {
+            key: "id" in option && typeof option.id === "string" ? option.id : `${option.kind}-${option.label}`,
+            kind: option.kind,
+            label: option.label,
+            message: optionMessage
+          };
+          const isSelected = selected.some((item) => item.key === selection.key);
           return (
             <button
-              key={`${option.kind}-${option.label}-${"id" in option ? option.id : "fixed"}`}
-              className={selected ? "selected" : ""}
-              aria-pressed={selected}
-              onClick={() => {
-                setKind(option.kind);
-                setMessage(optionMessage);
-                if (option.kind === "pain") {
-                  onUpdatePending({ pain: true, status: "failed" });
-                } else if (option.kind === "not_followed" || option.kind === "too_hard") {
-                  onUpdatePending({ status: "partial" });
-                }
-              }}
+              key={selection.key}
+              className={isSelected ? "selected" : ""}
+              aria-pressed={isSelected}
+              onClick={() => toggleSelection(selection)}
             >
               {option.label}
             </button>
@@ -615,9 +718,18 @@ function FeedbackScreen({
       </div>
       <label className="note-field">
         自由备注
-        <textarea value={message} onChange={(event) => setMessage(event.target.value)} />
+        <textarea value={freeNote} onChange={(event) => setFreeNote(event.target.value)} />
       </label>
-      <button className="primary" onClick={() => onSubmit(kind, message)}>
+      <button
+        className="primary"
+        onClick={() =>
+          onSubmit({
+            kinds: [...new Set(selected.map((selection) => selection.kind))],
+            messages: selected.map((selection) => selection.message),
+            message: freeNote.trim() || undefined
+          })
+        }
+      >
         提交反馈
       </button>
     </main>
@@ -1080,7 +1192,7 @@ export function App() {
     </>
   );
 
-  const send = async (event: WorkoutEvent) => {
+  const send = useCallback(async (event: WorkoutEvent) => {
     try {
       setSending(true);
       const next = await foxApi.dispatchEvent(event);
@@ -1091,7 +1203,39 @@ export function App() {
     } finally {
       setSending(false);
     }
-  };
+  }, []);
+
+  const activeAutoKey = useMemo(() => {
+    if (session?.status !== "active_exercise" || !session.activeSetStartedAt) {
+      return null;
+    }
+    return `${session.id}-${session.currentExerciseIndex}-${session.currentSetIndex}-${session.activeSetStartedAt}`;
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || session.status !== "active_exercise" || !session.activeSetStartedAt || !activeAutoKey) {
+      return;
+    }
+    const totalSeconds = currentSetTimerSeconds(session);
+    if (!totalSeconds) {
+      return;
+    }
+    const endsAt = new Date(session.activeSetStartedAt).getTime() + totalSeconds * 1000;
+    const timeout = window.setTimeout(() => {
+      void send({ type: "SET_FINISHED", record: estimateDefaultRecord(getCurrentTarget(session), session, totalSeconds) });
+    }, Math.max(0, endsAt - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [activeAutoKey, send, session]);
+
+  useEffect(() => {
+    if (session?.status !== "rest_timer" || !session.restTimer) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void send({ type: "REST_FINISHED" });
+    }, Math.max(0, new Date(session.restTimer.endsAt).getTime() - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [send, session?.restTimer, session?.status]);
 
   const restart = async () => {
     try {
@@ -1132,7 +1276,7 @@ export function App() {
         void send({ type: "EMERGENCY_STOP", message: "用户通过语音触发紧急停止。" });
       }
     },
-    [currentTarget, runtimeActive, session]
+    [currentTarget, runtimeActive, send, session]
   );
 
   useSpeechCommandRecognition(speechInputEnabled && runtimeActive, handleSpeechCommand);
@@ -1223,7 +1367,7 @@ export function App() {
         session={session}
         aiOptions={aiFeedbackOptions}
         onUpdatePending={(record) => void send({ type: "UPDATE_PENDING_SET", record })}
-        onSubmit={(kind, message) => void send({ type: "SUBMIT_FEEDBACK", kind, message })}
+        onSubmit={(payload) => void send({ type: "SUBMIT_FEEDBACK", ...payload })}
       />
     );
   }

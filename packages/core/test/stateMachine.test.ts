@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createConservativePlan, createSession, dispatchWorkoutEvent, getCurrentTarget, getProgress } from "../src";
-import type { DailyCheckIn, SetRecord, WorkoutSession } from "../src";
+import type { DailyCheckIn, SetRecord, WorkoutPlan, WorkoutSession } from "../src";
 
 const checkIn: DailyCheckIn = {
   sleep: "ok",
@@ -91,6 +91,65 @@ describe("workout state machine", () => {
     expect(session.pendingSet?.startedAt).toBe("2026-06-26T10:02:00.000Z");
     expect(session.pendingSet?.finishedAt).toBe("2026-06-26T10:03:10.000Z");
     expect(session.pendingSet?.record.durationSeconds).toBe(70);
+    expect(session.timerEvents.at(-1)?.kind).toBe("exercise_timer_finished");
+    expect(session.timerEvents.at(-1)?.durationSeconds).toBe(70);
+  });
+
+  it("records multi-select feedback and writes useful summary context", () => {
+    const shortPlan: WorkoutPlan = {
+      focus: "timer and feedback test",
+      estimatedDurationMinutes: 5,
+      warmup: "light warmup",
+      cooldown: "stretch",
+      safetyNotes: "stop on pain",
+      exercises: [
+        {
+          exerciseId: "test_press",
+          name: "Test Press",
+          category: "push",
+          restSeconds: 1,
+          tempo: [
+            { phase: "lift", seconds: 1, visual: "expand" },
+            { phase: "lower", seconds: 1, visual: "shrink" }
+          ],
+          targetSets: [{ setIndex: 1, targetReps: 1, targetWeight: 5, weightUnit: "kg", restSeconds: 1 }],
+          completedSets: []
+        }
+      ]
+    };
+    let session = createSession("2026-06-26T10:00:00.000Z");
+    session = dispatchWorkoutEvent(session, {
+      type: "LOAD_PLAN_DRAFT",
+      plan: shortPlan,
+      checkIn: { ...checkIn, painAreas: ["手臂后侧"] },
+      source: "ai",
+      at: "2026-06-26T10:01:00.000Z"
+    });
+    session = dispatchWorkoutEvent(session, { type: "ACCEPT_PLAN", at: "2026-06-26T10:02:00.000Z" });
+    expect(session.timerEvents.at(-1)?.kind).toBe("exercise_timer_started");
+
+    session = dispatchWorkoutEvent(session, {
+      type: "SET_FINISHED",
+      record: finishSet({ durationSeconds: 2 }),
+      at: "2026-06-26T10:02:02.000Z"
+    });
+    session = dispatchWorkoutEvent(session, {
+      type: "SUBMIT_FEEDBACK",
+      kinds: ["too_hard", "note"],
+      messages: ["太重了", "速度不稳定"],
+      message: "自动测试备注",
+      at: "2026-06-26T10:03:00.000Z"
+    });
+
+    expect(session.status).toBe("summary_pending");
+    expect(session.feedbackEvents.at(-1)?.kind).toBe("too_hard");
+    expect(session.feedbackEvents.at(-1)?.kinds).toEqual(["too_hard", "note"]);
+    expect(session.plan?.exercises[0].completedSets[0]?.status).toBe("partial");
+    expect(session.summary).toContain("开始前注意：手臂后侧");
+    expect(session.summary).toContain("完成明细：Test Press: 1/1");
+    expect(session.summary).toContain("反馈与备注");
+    expect(session.summary).toContain("too_hard/note");
+    expect(session.summary).toContain("自动测试备注");
   });
 
   it("can load an external plan draft for human confirmation", () => {

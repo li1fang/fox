@@ -6,4 +6,5 @@ export * from "./rules.js";
 export * from "./sensors.js";
 export * from "./stateMachine.js";
 export * from "./summary.js";
+export * from "./timing.js";
 export * from "./types.js";

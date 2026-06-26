@@ -230,6 +230,7 @@ option {
 .progress-panel,
 .coach-panel,
 .tempo-card,
+.exercise-timer-card,
 .countdown-card,
 .summary {
   border-radius: 8px;
@@ -327,6 +328,28 @@ option {
   place-items: center;
   padding: 24px;
   position: relative;
+}
+
+.exercise-timer-card {
+  min-height: 360px;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(140px, 0.7fr);
+  align-items: center;
+  justify-items: center;
+  gap: 18px;
+  padding: 28px;
+  position: relative;
+}
+
+.exercise-timer-card p {
+  grid-column: 1 / -1;
+  color: #edf5e8;
+  font-weight: 900;
+}
+
+.exercise-timer-card > span {
+  grid-column: 1 / -1;
+  color: #b9c3b4;
 }
 
 .tempo-box {
@@ -642,6 +665,7 @@ option {
   }
 
   .screen.runtime .tempo-card,
+  .screen.runtime .exercise-timer-card,
   .screen.runtime .countdown-card {
     grid-column: 2;
     grid-row: 1 / span 3;
@@ -683,6 +707,10 @@ option {
 
   .screen.runtime .tempo-box {
     width: min(30vw, 270px);
+  }
+
+  .screen.runtime .exercise-timer-card .tempo-box {
+    width: min(18vw, 210px);
   }
 
   .screen.runtime .ring {

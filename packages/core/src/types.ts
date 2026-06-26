@@ -187,9 +187,11 @@ export interface FeedbackEvent {
   at: string;
   state: WorkoutRuntimeState;
   kind: FeedbackKind;
+  kinds?: FeedbackKind[];
   exerciseName: string;
   setIndex: number;
   message?: string;
+  messages?: string[];
 }
 
 export interface TimerEvent {
@@ -270,7 +272,7 @@ export type WorkoutEvent =
   | { type: "REJECT_PLAN"; at?: string }
   | { type: "SET_FINISHED"; record: Omit<SetRecord, "setIndex" | "plannedSetIndex">; at?: string }
   | { type: "UPDATE_PENDING_SET"; record: Partial<Omit<SetRecord, "setIndex" | "plannedSetIndex">>; at?: string }
-  | { type: "SUBMIT_FEEDBACK"; kind: FeedbackKind; message?: string; at?: string }
+  | { type: "SUBMIT_FEEDBACK"; kind?: FeedbackKind; kinds?: FeedbackKind[]; message?: string; messages?: string[]; at?: string }
   | { type: "SUBMIT_TRANSITION_FEEDBACK"; kind: FeedbackKind; message?: string; at?: string }
   | { type: "REST_FINISHED"; at?: string }
   | { type: "REST_EXTENDED"; seconds: number; at?: string }

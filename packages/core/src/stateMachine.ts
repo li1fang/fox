@@ -2,8 +2,10 @@ import { createConservativePlan, createInitialSession } from "./fixtures.js";
 import { getMainTrainingProgress } from "./progress.js";
 import { applyFeedbackRules } from "./rules.js";
 import { draftWorkoutSummary } from "./summary.js";
+import { estimateSetTimerSeconds } from "./timing.js";
 import type {
   FeedbackEvent,
+  FeedbackKind,
   RestTimer,
   SetRecord,
   TimerEvent,
@@ -72,6 +74,32 @@ function createTimerEvent(kind: TimerEvent["kind"], timer: RestTimer, at: string
   };
 }
 
+function createExerciseTimerEvent(
+  kind: "exercise_timer_started" | "exercise_timer_finished",
+  plan: WorkoutPlan,
+  exerciseIndex: number,
+  setIndex: number,
+  durationSeconds: number,
+  at: string
+): TimerEvent {
+  const exercise = plan.exercises[exerciseIndex];
+  const target = exercise.targetSets[setIndex];
+  return {
+    id: `timer_${Date.now()}`,
+    at,
+    kind,
+    durationSeconds,
+    target: `${exercise.name} set ${target.setIndex}`
+  };
+}
+
+function createExerciseTimerStartedEvent(plan: WorkoutPlan, exerciseIndex: number, setIndex: number, at: string): TimerEvent | undefined {
+  const exercise = plan.exercises[exerciseIndex];
+  const target = exercise.targetSets[setIndex];
+  const durationSeconds = estimateSetTimerSeconds(target, exercise.tempo);
+  return durationSeconds === undefined ? undefined : createExerciseTimerEvent("exercise_timer_started", plan, exerciseIndex, setIndex, durationSeconds, at);
+}
+
 function appendCompletedSet(plan: WorkoutPlan, pending: WorkoutSession["pendingSet"]): WorkoutPlan {
   if (!pending) {
     return plan;
@@ -83,6 +111,28 @@ function appendCompletedSet(plan: WorkoutPlan, pending: WorkoutSession["pendingS
 
 function terminalStatus(status: WorkoutSession["status"]): boolean {
   return status === "confirmed" || status === "cancelled" || status === "aborted";
+}
+
+function primaryFeedbackKind(kinds: FeedbackKind[]): FeedbackKind {
+  const priority: FeedbackKind[] = ["pain", "skip", "not_followed", "too_hard", "too_easy", "note", "completed"];
+  return priority.find((kind) => kinds.includes(kind)) ?? "completed";
+}
+
+function normalizedFeedbackMessages(message: string | undefined, messages: string[] | undefined): string[] {
+  return [...new Set([...(messages ?? []), message].filter((item): item is string => Boolean(item?.trim())))];
+}
+
+function recordWithFeedbackStatus(record: SetRecord, kinds: FeedbackKind[]): SetRecord {
+  if (kinds.includes("pain")) {
+    return { ...record, status: "failed", pain: true };
+  }
+  if (kinds.includes("skip")) {
+    return { ...record, status: "skipped", pain: false };
+  }
+  if (kinds.includes("not_followed") || kinds.includes("too_hard")) {
+    return { ...record, status: record.status === "completed" ? "partial" : record.status, pain: false };
+  }
+  return { ...record, pain: record.pain ?? false };
 }
 
 export function createSession(now = new Date().toISOString()): WorkoutSession {
@@ -154,9 +204,17 @@ export function dispatchWorkoutEvent(session: WorkoutSession, event: WorkoutEven
       if (session.status !== "awaiting_approval" || !session.plan) {
         return session;
       }
+      const timerStarted = createExerciseTimerStartedEvent(session.plan, 0, 0, at);
       return withUpdate(
         session,
-        { status: "active_exercise", startedAt: at, activeSetStartedAt: at, currentExerciseIndex: 0, currentSetIndex: 0 },
+        {
+          status: "active_exercise",
+          startedAt: at,
+          activeSetStartedAt: at,
+          currentExerciseIndex: 0,
+          currentSetIndex: 0,
+          timerEvents: timerStarted ? [...session.timerEvents, timerStarted] : session.timerEvents
+        },
         at
       );
     }
@@ -178,10 +236,20 @@ export function dispatchWorkoutEvent(session: WorkoutSession, event: WorkoutEven
         pain: event.record.pain,
         countingMethod: event.record.countingMethod
       };
+      const durationSeconds = record.durationSeconds ?? elapsedSeconds ?? 0;
+      const timerFinished = createExerciseTimerEvent(
+        "exercise_timer_finished",
+        session.plan,
+        session.currentExerciseIndex,
+        session.currentSetIndex,
+        durationSeconds,
+        at
+      );
       return withUpdate(
         session,
         {
           status: "feedback",
+          timerEvents: [...session.timerEvents, timerFinished],
           pendingSet: {
             exerciseIndex: session.currentExerciseIndex,
             setIndex: session.currentSetIndex,
@@ -216,16 +284,24 @@ export function dispatchWorkoutEvent(session: WorkoutSession, event: WorkoutEven
         return session;
       }
 
-      const pending = session.pendingSet;
+      const kinds = event.kinds?.length ? [...new Set(event.kinds)] : [event.kind ?? "completed"];
+      const pending = {
+        ...session.pendingSet,
+        record: recordWithFeedbackStatus(session.pendingSet.record, kinds)
+      };
       const exercise = session.plan.exercises[pending.exerciseIndex];
+      const messages = normalizedFeedbackMessages(event.message, event.messages);
+      const kind = primaryFeedbackKind(kinds);
       const feedback: FeedbackEvent = {
         id: `fb_${Date.now()}`,
         at,
         state: "feedback",
-        kind: event.kind,
+        kind,
+        kinds,
         exerciseName: exercise.name,
         setIndex: pending.record.setIndex,
-        message: event.message
+        message: messages.join("；") || undefined,
+        messages
       };
       const withSet = appendCompletedSet(session.plan, pending);
       const ruleResult = applyFeedbackRules({
@@ -349,13 +425,20 @@ export function dispatchWorkoutEvent(session: WorkoutSession, event: WorkoutEven
         return session;
       }
       const timer = session.restTimer;
+      const timerStarted = session.plan
+        ? createExerciseTimerStartedEvent(session.plan, session.currentExerciseIndex, session.currentSetIndex, at)
+        : undefined;
       return withUpdate(
         session,
         {
           status: "active_exercise",
           activeSetStartedAt: at,
           restTimer: undefined,
-          timerEvents: timer ? [...session.timerEvents, createTimerEvent("rest_timer_finished", timer, at)] : session.timerEvents
+          timerEvents: [
+            ...session.timerEvents,
+            ...(timer ? [createTimerEvent("rest_timer_finished", timer, at)] : []),
+            ...(timerStarted ? [timerStarted] : [])
+          ]
         },
         at
       );
