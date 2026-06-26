@@ -1,0 +1,29 @@
+name: FoxPad
+
+options:
+  bundleIdPrefix: com.whipa
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  FoxPad:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: FoxPad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.whipa.fox
+        INFOPLIST_FILE: FoxPad/Info.plist
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: 2
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: FDW7865XW5
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1

@@ -10,6 +10,7 @@ import type { AiProvider, DailyCheckIn, EquipmentInventory, ExerciseHistorySnaps
 import { createWorkoutRepository, defaultDatabasePath, type EntryRecord, type WorkoutRepository } from "./repository.js";
 
 const port = Number(process.env.FOX_API_PORT ?? 4177);
+const host = process.env.FOX_API_HOST;
 
 export interface FoxServerDependencies {
   repository: WorkoutRepository;
@@ -314,7 +315,12 @@ export function createFoxServer(dependencies: FoxServerDependencies = createDefa
 
 if (process.env.NODE_ENV !== "test" && process.env.VITEST !== "true") {
   const server = createFoxServer();
-  server.listen(port, () => {
-    console.log(`fox api listening on http://localhost:${port}`);
-  });
+  const onListening = () => {
+    console.log(`fox api listening on http://${host ?? "localhost"}:${port}`);
+  };
+  if (host) {
+    server.listen(port, host, onListening);
+  } else {
+    server.listen(port, onListening);
+  }
 }

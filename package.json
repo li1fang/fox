@@ -18,14 +18,24 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @fox/api & npm run dev -w @fox/web-runtime",
-    "dev:web": "npm run dev -w @fox/web-runtime",
+    "dev": "npm run dev:api & npm run dev:web",
+    "dev:lan": "node scripts/dev-lan.mjs",
+    "dev:web": "npm run dev -w @fox/web-runtime -- --host 0.0.0.0 --port 5177",
     "dev:api": "npm run dev -w @fox/api",
     "build": "npm run build -w @fox/core && npm run build -w @fox/schemas && npm run build -w @fox/api && npm run build -w @fox/web-runtime",
     "typecheck": "npm run typecheck -w @fox/core && npm run typecheck -w @fox/schemas && npm run typecheck -w @fox/api && npm run typecheck -w @fox/web-runtime",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "playwright test",
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "ipad:doctor": "node scripts/ipad.mjs doctor",
+    "ipad:generate": "node scripts/ipad.mjs generate",
+    "ipad:build": "node scripts/ipad.mjs build",
+    "ipad:install": "node scripts/ipad.mjs install",
+    "ipad:open": "node scripts/ipad.mjs open",
+    "ipad:smoke": "node scripts/ipad.mjs smoke"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^24.0.4",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

@@ -2,6 +2,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 coverage/
+.tmp/
+test-results/
+playwright-report/
 
 .DS_Store
 *.log
@@ -10,3 +13,5 @@ coverage/
 
 apps/api/.data/
 apps/web-runtime/dist/
+apps/ipad/FoxPad.xcodeproj/
+apps/ipad/build/

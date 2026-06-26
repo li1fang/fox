@@ -51,8 +51,10 @@ npm run dev
 常用命令：
 
 ```bash
+npm run verify
 npm run typecheck
 npm run test
+npm run test:e2e
 npm run build
 ```
 
@@ -98,6 +100,7 @@ flowchart LR
 - [产品简报](docs/product-brief.md)
 - [系统架构](docs/architecture.md)
 - [数据模型](docs/data-model.md)
+- [自动化流水线](docs/automation.md)
 - [开发路线图](docs/development-roadmap.md)
 
 健身模块：
