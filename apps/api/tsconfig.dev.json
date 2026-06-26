@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@fox/core": ["../../packages/core/src/index.ts"]
+    }
+  }
+}
