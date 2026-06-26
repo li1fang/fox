@@ -2,7 +2,17 @@
   "name": "fox",
   "private": true,
   "version": "0.1.0",
+  "description": "本地优先的个人生活助手，当前以健身训练主持为第一条主线。",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/li1fang/fox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/li1fang/fox/issues"
+  },
+  "homepage": "https://github.com/li1fang/fox#readme",
   "workspaces": [
     "packages/*",
     "apps/*"
