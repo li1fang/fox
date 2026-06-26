@@ -12,6 +12,10 @@ const appPath = join(derivedDataPath, "Build", "Products", "Debug-iphoneos", "Fo
 const developerDir = process.env.DEVELOPER_DIR ?? "/Applications/Xcode.app/Contents/Developer";
 const bundleId = "com.whipa.fox";
 
+function bin(name) {
+  return join(root, "node_modules", ".bin", name);
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd ?? root,
@@ -219,9 +223,9 @@ async function waitForUrl(url, label) {
   throw new Error(`${label} did not become ready at ${url}: ${latestError}`);
 }
 
-function startChild(command, args, env) {
+function startChild(command, args, env, cwd = root) {
   return spawn(command, args, {
-    cwd: root,
+    cwd,
     stdio: "inherit",
     env: {
       ...process.env,
@@ -237,14 +241,14 @@ async function smoke() {
   const apiUrl = `http://${lanHost}:${apiPort}`;
   const webUrl = `http://${lanHost}:${webPort}`;
   const children = [
-    startChild("npm", ["run", "dev", "-w", "@fox/api"], {
+    startChild(bin("tsx"), ["watch", "--tsconfig", "tsconfig.dev.json", "src/server.ts"], {
       FOX_API_HOST: "0.0.0.0",
       FOX_API_PORT: apiPort,
       FOX_DB_PATH: join(root, ".tmp", "ipad-smoke.sqlite")
-    }),
-    startChild("npm", ["run", "dev", "-w", "@fox/web-runtime", "--", "--host", "0.0.0.0", "--port", webPort], {
+    }, join(root, "apps", "api")),
+    startChild(bin("vite"), ["--host", "0.0.0.0", "--port", webPort], {
       VITE_FOX_API_URL: apiUrl
-    })
+    }, join(root, "apps", "web-runtime"))
   ];
   try {
     await waitForUrl(`${apiUrl}/health`, "fox API");

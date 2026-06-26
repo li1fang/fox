@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { networkInterfaces } from "node:os";
+import { join, resolve } from "node:path";
 
 const apiPort = process.env.FOX_API_PORT ?? "4177";
 const webPort = process.env.FOX_WEB_PORT ?? "5177";
+const root = resolve(new URL("..", import.meta.url).pathname);
+
+function bin(name) {
+  return join(root, "node_modules", ".bin", name);
+}
 
 function detectLanHost() {
   if (process.env.FOX_LAN_HOST) {
@@ -27,7 +33,8 @@ console.log(`fox LAN API: ${apiUrl}`);
 console.log(`fox LAN Web: ${webUrl}`);
 
 const children = [
-  spawn("npm", ["run", "dev", "-w", "@fox/api"], {
+  spawn(bin("tsx"), ["watch", "--tsconfig", "tsconfig.dev.json", "src/server.ts"], {
+    cwd: join(root, "apps", "api"),
     stdio: "inherit",
     env: {
       ...process.env,
@@ -35,7 +42,8 @@ const children = [
       FOX_API_PORT: apiPort
     }
   }),
-  spawn("npm", ["run", "dev", "-w", "@fox/web-runtime", "--", "--host", "0.0.0.0", "--port", webPort], {
+  spawn(bin("vite"), ["--host", "0.0.0.0", "--port", webPort], {
+    cwd: join(root, "apps", "web-runtime"),
     stdio: "inherit",
     env: {
       ...process.env,
