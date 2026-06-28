@@ -6,7 +6,7 @@ import {
   draftFeedbackOptionsWithFallback,
   draftPlanWithFallback
 } from "@fox/core";
-import type { AiProvider, DailyCheckIn, EquipmentInventory, ExerciseHistorySnapshot, FeedbackKind, WorkoutEvent } from "@fox/core";
+import type { AiProvider, DailyCheckIn, EquipmentInventory, ExerciseHistorySnapshot, FeedbackKind, UserProfile, WorkoutEvent } from "@fox/core";
 import { createWorkoutRepository, defaultDatabasePath, type EntryRecord, type WorkoutRepository } from "./repository.js";
 
 const port = Number(process.env.FOX_API_PORT ?? 4177);
@@ -195,6 +195,21 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
       return;
     }
     sendJson(response, 200, { equipmentInventory: repository.saveEquipmentInventory(body.equipmentInventory) });
+    return;
+  }
+
+  if (request.method === "GET" && pathname === "/profile/user") {
+    sendJson(response, 200, { userProfile: repository.getUserProfile() });
+    return;
+  }
+
+  if (request.method === "PATCH" && pathname === "/profile/user") {
+    const body = await readJson<{ userProfile?: UserProfile }>(request);
+    if (!body.userProfile || typeof body.userProfile !== "object") {
+      sendJson(response, 400, { error: "user_profile_required" });
+      return;
+    }
+    sendJson(response, 200, { userProfile: repository.saveUserProfile(body.userProfile) });
     return;
   }
 

@@ -86,7 +86,12 @@ function formatTarget(target: ReturnType<typeof getCurrentTarget>): string {
   if (!target) {
     return "等待计划";
   }
-  const weight = target.targetWeight ? `${target.targetWeight}${target.weightUnit === "kg" ? "kg" : ""}` : "自重";
+  const weight =
+    target.targetWeight !== undefined
+      ? `${target.targetWeight}${target.weightUnit === "kg" ? "kg" : ""}`
+      : target.weightUnit === "kg" || target.weightUnit === "lb" || target.weightUnit === "machine_level"
+        ? "重量待测试"
+        : "自重";
   if (target.targetDurationSeconds) {
     return `${target.targetDurationSeconds} 秒 · ${weight}`;
   }

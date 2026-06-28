@@ -130,6 +130,32 @@ export interface EquipmentInventory {
   updatedAt?: string;
 }
 
+export interface BodyMeasurement {
+  kind: "shoulder_width" | "chest" | "waist" | "hip" | "arm" | "thigh" | "body_weight" | "other";
+  label: string;
+  value: number;
+  unit: "cm" | "kg" | "lb";
+  measuredAt: string;
+  notes?: string;
+}
+
+export interface UserProfile {
+  sex?: "male" | "female" | "other" | "unknown";
+  birthYear?: number;
+  ethnicity?: string;
+  heightCm?: number;
+  weightKg?: number;
+  preferredWeightUnit?: "kg" | "lb";
+  activityBaseline?: {
+    dailyStepsApprox?: number;
+    recentTrainingStatus?: string;
+    cardioBaseline?: string;
+  };
+  measurements?: BodyMeasurement[];
+  notes?: string;
+  updatedAt?: string;
+}
+
 export interface ExerciseHistorySnapshot {
   exerciseId?: string;
   exerciseName: string;

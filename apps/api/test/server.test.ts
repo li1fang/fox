@@ -143,6 +143,40 @@ describe("fox api server", () => {
     expect(restored.equipmentInventory.items[0]?.maxWeight).toBe(30);
   });
 
+  it("saves and returns the user body profile", async () => {
+    const { repository } = createTempRepository();
+    const baseUrl = await listen(createFoxServer({ repository, aiProvider: createTemplateAiProvider() }));
+
+    const empty = await request<{ userProfile: null }>(baseUrl, "/profile/user");
+    expect(empty.userProfile).toBeNull();
+
+    const saved = await request<{ userProfile: { heightCm?: number; weightKg?: number; measurements?: Array<{ value: number }> } }>(
+      baseUrl,
+      "/profile/user",
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          userProfile: {
+            sex: "male",
+            birthYear: 1993,
+            ethnicity: "Asian",
+            heightCm: 183,
+            weightKg: 70,
+            preferredWeightUnit: "kg",
+            measurements: [{ kind: "shoulder_width", label: "肩宽", value: 43.5, unit: "cm", measuredAt: "2026-06-28T00:00:00.000Z" }]
+          }
+        })
+      }
+    );
+    const restored = await request<{ userProfile: { heightCm?: number; weightKg?: number; measurements?: Array<{ value: number }> } }>(
+      baseUrl,
+      "/profile/user"
+    );
+
+    expect(saved.userProfile.heightCm).toBe(183);
+    expect(restored.userProfile.measurements?.[0]?.value).toBe(43.5);
+  });
+
   it("drafts an AI plan from check-in, equipment, and confirmed workout history", async () => {
     const { repository } = createTempRepository();
     const confirmed = seedConfirmedWorkoutWithHardFirstSet(repository);

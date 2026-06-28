@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { createDefaultEquipmentInventory, createSession, dispatchWorkoutEvent } from "@fox/core";
-import type { EquipmentInventory, WorkoutEvent, WorkoutSession } from "@fox/core";
+import type { EquipmentInventory, UserProfile, WorkoutEvent, WorkoutSession } from "@fox/core";
 
 export interface EntryRecord {
   id: string;
@@ -41,6 +41,8 @@ export interface WorkoutRepository {
   updateEntryNote: (entryId: string, userNote: string) => EntryRecord | null;
   getEquipmentInventory: () => EquipmentInventory;
   saveEquipmentInventory: (inventory: EquipmentInventory) => EquipmentInventory;
+  getUserProfile: () => UserProfile | null;
+  saveUserProfile: (profile: UserProfile) => UserProfile;
   listEvents: (sessionId: string) => StoredEventRecord[];
   close: () => void;
 }
@@ -303,6 +305,26 @@ export function createWorkoutRepository(dbPath = defaultDatabasePath()): Workout
     return nextInventory;
   };
 
+  const getUserProfile = (): UserProfile | null => {
+    const row = database.prepare("SELECT payload_json FROM profile_records WHERE key = 'user_profile'").get() as Row | undefined;
+    return row ? (JSON.parse(String(row.payload_json)) as UserProfile) : null;
+  };
+
+  const saveUserProfile = (profile: UserProfile): UserProfile => {
+    const now = new Date().toISOString();
+    const nextProfile = { ...profile, updatedAt: now };
+    database
+      .prepare(
+        `INSERT INTO profile_records (key, payload_json, created_at, updated_at)
+         VALUES ('user_profile', ?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           payload_json = excluded.payload_json,
+           updated_at = excluded.updated_at`
+      )
+      .run(JSON.stringify(nextProfile), profile.updatedAt ?? now, now);
+    return nextProfile;
+  };
+
   return {
     createFreshSession,
     getCurrentSession,
@@ -312,6 +334,8 @@ export function createWorkoutRepository(dbPath = defaultDatabasePath()): Workout
     updateEntryNote,
     getEquipmentInventory,
     saveEquipmentInventory,
+    getUserProfile,
+    saveUserProfile,
     listEvents,
     close: () => database.close()
   };

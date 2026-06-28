@@ -75,4 +75,32 @@ describe("workout repository", () => {
     expect(restored.listEntries()[0]?.payload.summary).toContain("今日训练完成");
     restored.close();
   });
+
+  it("persists the user profile record", () => {
+    const { dir, repository } = createTempRepository();
+    const saved = repository.saveUserProfile({
+      sex: "male",
+      birthYear: 1993,
+      ethnicity: "Asian",
+      heightCm: 183,
+      weightKg: 70,
+      preferredWeightUnit: "kg",
+      measurements: [
+        {
+          kind: "shoulder_width",
+          label: "肩宽",
+          value: 43.5,
+          unit: "cm",
+          measuredAt: "2026-06-28T00:00:00.000Z"
+        }
+      ]
+    });
+    expect(saved.updatedAt).toBeTruthy();
+    repository.close();
+
+    const restored = createWorkoutRepository(join(dir, "fox.sqlite"));
+    expect(restored.getUserProfile()?.heightCm).toBe(183);
+    expect(restored.getUserProfile()?.measurements?.[0]?.value).toBe(43.5);
+    restored.close();
+  });
 });

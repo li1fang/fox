@@ -1,4 +1,4 @@
-import type { AiFeedbackOption, AiPlanDraft, DailyCheckIn, EquipmentInventory, WorkoutEvent, WorkoutSession } from "@fox/core";
+import type { AiFeedbackOption, AiPlanDraft, DailyCheckIn, EquipmentInventory, UserProfile, WorkoutEvent, WorkoutSession } from "@fox/core";
 
 const apiBase = import.meta.env.VITE_FOX_API_URL ?? "http://localhost:4177";
 
@@ -16,6 +16,10 @@ interface PlanDraftResponse extends SessionResponse {
 
 interface EquipmentResponse {
   equipmentInventory: EquipmentInventory;
+}
+
+interface UserProfileResponse {
+  userProfile: UserProfile | null;
 }
 
 export interface EntryRecord {
@@ -91,6 +95,22 @@ export const foxApi = {
       body: JSON.stringify({ equipmentInventory })
     });
     return payload.equipmentInventory;
+  },
+
+  async getUserProfile(): Promise<UserProfile | null> {
+    const payload = await request<UserProfileResponse>("/profile/user");
+    return payload.userProfile;
+  },
+
+  async saveUserProfile(userProfile: UserProfile): Promise<UserProfile> {
+    const payload = await request<UserProfileResponse>("/profile/user", {
+      method: "PATCH",
+      body: JSON.stringify({ userProfile })
+    });
+    if (!payload.userProfile) {
+      throw new Error("Fox API did not return a user profile");
+    }
+    return payload.userProfile;
   },
 
   async listEntries(): Promise<EntryRecord[]> {
