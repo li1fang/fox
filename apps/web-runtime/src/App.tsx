@@ -454,7 +454,19 @@ function sevenDaySummary(entries: EntryRecord[]) {
   return { workouts: recent.length, sets, risks };
 }
 
-const equipmentKinds: EquipmentKind[] = ["dumbbell", "barbell", "kettlebell", "pull_up_bar", "bench", "mat", "machine", "cardio", "other"];
+const equipmentKinds: EquipmentKind[] = [
+  "dumbbell",
+  "barbell",
+  "kettlebell",
+  "pull_up_bar",
+  "bench",
+  "mat",
+  "machine",
+  "cardio",
+  "bodyweight",
+  "activity",
+  "other"
+];
 
 function CheckInScreen({
   onDraftPlan,
@@ -1022,6 +1034,15 @@ function EquipmentScreen({
               备注
               <input value={item.notes ?? ""} onChange={(event) => updateItem(item.id, { notes: event.target.value })} />
             </label>
+            <section className="equipment-ai-profile">
+              <span className="eyebrow">AI 档案</span>
+              <p>
+                {[item.nameCn, item.nameEn, item.equipmentType].filter(Boolean).join(" · ") || "暂无结构化名称"}
+              </p>
+              {item.movementPatterns?.length ? <small>动作模式：{item.movementPatterns.join("、")}</small> : null}
+              {item.functions?.length ? <small>支持功能：{item.functions.map((fn) => fn.nameCn ?? fn.name).join("、")}</small> : null}
+              {item.constraints?.length ? <small>限制：{item.constraints.join("；")}</small> : null}
+            </section>
           </article>
         ))}
       </section>

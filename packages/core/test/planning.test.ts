@@ -12,6 +12,20 @@ const checkIn: DailyCheckIn = {
 };
 
 describe("planning helpers", () => {
+  it("keeps the home equipment profile readable for AI planning", () => {
+    const inventory = createDefaultEquipmentInventory("2026-06-28T00:00:00.000Z");
+    const multiPress = inventory.items.find((item) => item.id === "multi_press_machine");
+    const latPulldown = inventory.items.find((item) => item.id === "lat_pulldown_machine");
+
+    expect(inventory.notes).toContain("两台主要固定器械");
+    expect(multiPress?.functions?.map((fn) => fn.nameCn)).toEqual(["坐姿胸推", "上斜推举", "坐姿肩推"]);
+    expect(multiPress?.adjustments?.backPadPositions).toBe(5);
+    expect(latPulldown?.constraints).toContain("仅支持垂直下拉。");
+    expect(latPulldown?.constraints).toContain("不支持标准水平划船。");
+    expect(inventory.items.some((item) => item.id === "swimming" && item.available)).toBe(true);
+    expect(inventory.items.some((item) => item.id === "push_up_bodyweight" && item.available)).toBe(true);
+  });
+
   it("recommends a conservative weight when recent history had negative feedback", () => {
     const plan = createConservativePlan(checkIn);
     const exercise = plan.exercises[0];

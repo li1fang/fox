@@ -83,13 +83,38 @@ export type EquipmentKind =
   | "mat"
   | "machine"
   | "cardio"
+  | "bodyweight"
+  | "activity"
   | "other";
+
+export interface EquipmentFunction {
+  id: string;
+  name: string;
+  nameCn?: string;
+  nameEn?: string;
+  category?: ExerciseBlock["category"];
+  movementPatterns?: string[];
+  mainMuscles?: string[];
+  secondaryMuscles?: string[];
+  description?: string;
+  setupNotes?: string[];
+  constraints?: string[];
+}
 
 export interface EquipmentItem {
   id: string;
   name: string;
+  nameCn?: string;
+  nameEn?: string;
   kind: EquipmentKind;
   available: boolean;
+  equipmentType?: string;
+  movementPatterns?: string[];
+  adjustments?: Record<string, unknown>;
+  functions?: EquipmentFunction[];
+  constraints?: string[];
+  aliases?: string[];
+  tags?: string[];
   weightUnit?: "kg" | "lb" | "machine_level";
   minWeight?: number;
   maxWeight?: number;

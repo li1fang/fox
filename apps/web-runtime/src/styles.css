@@ -611,6 +611,26 @@ option {
   gap: 12px;
 }
 
+.equipment-ai-profile {
+  grid-column: 1 / -1;
+  border-radius: 8px;
+  border: 1px solid rgba(247, 201, 72, 0.18);
+  background: rgba(247, 201, 72, 0.08);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.equipment-ai-profile p {
+  color: #edf5e8;
+  font-weight: 800;
+}
+
+.equipment-ai-profile small {
+  color: #c7d0c0;
+  line-height: 1.5;
+}
+
 .checkbox-label {
   min-height: 72px;
   align-content: center;
