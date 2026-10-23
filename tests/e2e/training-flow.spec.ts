@@ -104,3 +104,120 @@ test("auto-advances exercise and rest timers while preserving multi-select feedb
   expect(entries[0].payload.summary).toContain("自动测试备注");
   expect(entries[0].payload.feedbackEvents[0].kinds).toEqual(["too_hard", "note"]);
 });
+
+test("shows rep cues and dumbbell weight quick-picks during set feedback", async ({ page, request }) => {
+  await request.post(`${apiBase}/sessions`);
+  await request.post(`${apiBase}/sessions/current/plan-draft`, {
+    data: {
+      source: "ai",
+      message: "哑铃快选测试计划。",
+      checkIn: {
+        sleep: "good",
+        fatigue: "low",
+        hunger: "not_hungry",
+        stress: "low",
+        painAreas: [],
+        availableMinutes: 5
+      },
+      plan: {
+        focus: "dumbbell quick input flow",
+        estimatedDurationMinutes: 5,
+        warmup: "light warmup",
+        cooldown: "stretch",
+        safetyNotes: "stop on pain",
+        exercises: [
+          {
+            exerciseId: "dumbbell_fly_e2e",
+            name: "哑铃飞鸟",
+            category: "push",
+            restSeconds: 1,
+            tempo: [
+              { phase: "lower", seconds: 1, visual: "shrink" },
+              { phase: "lift", seconds: 1, visual: "expand" }
+            ],
+            notes: "quick input test",
+            targetSets: [{ setIndex: 1, targetReps: 4, targetWeight: 2.5, weightUnit: "kg", restSeconds: 1 }],
+            completedSets: []
+          }
+        ]
+      }
+    }
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("计划确认")).toBeVisible();
+  await page.getByRole("button", { name: "接受计划" }).click();
+
+  await expect(page.getByText("第 1 / 4 次")).toBeVisible();
+  await expect(page.getByLabel("当前动作次数")).toContainText("1 / 4");
+  await expect(page.getByLabel("发力节奏演示")).toBeVisible();
+
+  await page.getByRole("button", { name: "完成本组" }).click();
+  await expect(page.getByText("组后反馈")).toBeVisible();
+  await expect(page.getByRole("button", { name: "2.5kg", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "5kg", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "-1" }).click();
+  await expect(page.getByLabel("实际次数输入")).toHaveValue("3");
+  await page.getByRole("button", { name: "目标" }).click();
+  await expect(page.getByLabel("实际次数输入")).toHaveValue("4");
+
+  await page.getByRole("button", { name: "5kg", exact: true }).click();
+  await expect(page.getByLabel("实际重量输入")).toHaveValue("5");
+});
+
+test("keeps active and feedback screens within an iPad Pro landscape viewport", async ({ page, request }) => {
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await request.post(`${apiBase}/sessions`);
+  await request.post(`${apiBase}/sessions/current/plan-draft`, {
+    data: {
+      source: "ai",
+      message: "iPad 视口测试计划。",
+      checkIn: {
+        sleep: "good",
+        fatigue: "low",
+        hunger: "not_hungry",
+        stress: "low",
+        painAreas: [],
+        availableMinutes: 5
+      },
+      plan: {
+        focus: "ipad viewport flow",
+        estimatedDurationMinutes: 5,
+        warmup: "light warmup",
+        cooldown: "stretch",
+        safetyNotes: "stop on pain",
+        exercises: [
+          {
+            exerciseId: "dumbbell_press_viewport",
+            name: "哑铃卧推",
+            category: "push",
+            restSeconds: 1,
+            tempo: [
+              { phase: "lower", seconds: 1, visual: "shrink" },
+              { phase: "peak", seconds: 1, visual: "vibrate" },
+              { phase: "lift", seconds: 1, visual: "expand" }
+            ],
+            notes: "viewport test",
+            targetSets: [{ setIndex: 1, targetReps: 8, targetWeight: 7.5, weightUnit: "kg", restSeconds: 1 }],
+            completedSets: []
+          }
+        ]
+      }
+    }
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "接受计划" }).click();
+  await expect(page.getByLabel("当前动作次数")).toContainText("1 / 8");
+
+  const activeOverflow = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+  expect(activeOverflow).toBeLessThanOrEqual(2);
+
+  await page.getByRole("button", { name: "完成本组" }).click();
+  await expect(page.getByText("组后反馈")).toBeVisible();
+  await expect(page.getByRole("button", { name: "7.5kg", exact: true })).toBeVisible();
+
+  const feedbackOverflow = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+  expect(feedbackOverflow).toBeLessThanOrEqual(2);
+});

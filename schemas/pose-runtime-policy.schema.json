@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/pose-runtime-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "acquisitionMinX", "acquisitionMaxX", "acquisitionMinY", "acquisitionMaxY", "subjectConfidence", "maximumSubjectJump", "ambiguityMargin", "retentionSeconds", "countdownLossTolerance", "endpointToleranceDegrees", "curlReturnToleranceDegrees", "returnEndpointDwellSeconds", "loweredOcclusionSeconds"],
+  "properties": {
+    "schema": { "const": "fox.pose_runtime_policy.v1" },
+    "acquisitionMode": { "enum": ["region_only", "single_ready_fallback_v1"] },
+    "curlRecovery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "initialEndpointToleranceDegrees", "wristOnlyGraceSeconds", "maximumStableJointDrift"],
+      "properties": {
+        "schema": { "const": "fox.curl_recovery.v1" },
+        "initialEndpointToleranceDegrees": { "type": "number", "minimum": 0, "maximum": 10 },
+        "wristOnlyGraceSeconds": { "type": "number", "minimum": 0, "maximum": 0.6 },
+        "maximumStableJointDrift": { "type": "number", "minimum": 0.01, "maximum": 0.08 }
+      }
+    },
+    "eccentricPolicy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "noiseBandDegrees", "reversalDegrees", "confirmationSeconds", "minimumExcursionDegrees", "maximumObservationGapSeconds"],
+      "properties": {
+        "schema": { "const": "fox.eccentric_policy.v1" },
+        "noiseBandDegrees": { "type": "number", "minimum": 0.5, "maximum": 4 },
+        "reversalDegrees": { "type": "number", "minimum": 4, "maximum": 15 },
+        "confirmationSeconds": { "type": "number", "minimum": 0.1, "maximum": 0.5 },
+        "minimumExcursionDegrees": { "type": "number", "minimum": 15, "maximum": 45 },
+        "maximumObservationGapSeconds": { "type": "number", "minimum": 0.15, "maximum": 0.4 }
+      }
+    },
+    "acquisitionMinX": { "type": "number", "minimum": 0, "maximum": 1 },
+    "acquisitionMaxX": { "type": "number", "minimum": 0, "maximum": 1 },
+    "acquisitionMinY": { "type": "number", "minimum": 0, "maximum": 1 },
+    "acquisitionMaxY": { "type": "number", "minimum": 0, "maximum": 1 },
+    "subjectConfidence": { "type": "number", "minimum": 0.1, "maximum": 1 },
+    "maximumSubjectJump": { "type": "number", "minimum": 0.02, "maximum": 0.3 },
+    "ambiguityMargin": { "type": "number", "minimum": 0.01, "maximum": 0.1 },
+    "retentionSeconds": { "type": "number", "minimum": 0.3, "maximum": 2 },
+    "countdownLossTolerance": { "type": "number", "minimum": 0, "maximum": 0.5 },
+    "endpointToleranceDegrees": { "type": "number", "minimum": 0, "maximum": 15 },
+    "curlReturnToleranceDegrees": { "type": "number", "minimum": 0, "maximum": 10 },
+    "returnEndpointDwellSeconds": { "type": "number", "minimum": 0.1, "maximum": 0.5 },
+    "loweredOcclusionSeconds": { "type": "number", "minimum": 0.3, "maximum": 2 },
+    "lateralTorsoReference": { "enum": ["same_side", "fresh_opposite", null] },
+    "maximumTorsoObliquityDegrees": { "type": ["number", "null"], "minimum": 5, "maximum": 30 }
+  },
+  "allOf": [{ "if": { "required": ["lateralTorsoReference"], "properties": { "lateralTorsoReference": { "const": "fresh_opposite" } } },
+    "then": { "required": ["maximumTorsoObliquityDegrees"], "properties": { "maximumTorsoObliquityDegrees": { "type": "number" } } } }],
+  "$comment": "Swift also checks ROI ordering and combined settings: acquisition/return endpoints remain above the departure gate. Values are frozen in each v3 trial. Spatial matching is not biometric identity."
+}

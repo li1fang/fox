@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/motion-strategy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "fox.motion_strategy.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "const": 1
+    },
+    "exercise": {
+      "enum": [
+        "curl",
+        "lateralRaise",
+        "latPulldown"
+      ]
+    },
+    "algorithm": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bodyView": {
+      "enum": [
+        "side",
+        "front",
+        "back"
+      ]
+    },
+    "provider": {
+      "const": "apple_vision_2d"
+    },
+    "coordinateSpace": {
+      "const": "normalized_image_y_up_pixel_aspect_corrected"
+    },
+    "preparationJoints": {
+      "const": [
+        "selected.shoulder",
+        "selected.elbow"
+      ]
+    },
+    "countingJoints": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "alternativeGeometry": {
+      "enum": [
+        "none",
+        "fresh_opposite_torso_with_obliquity_guard"
+      ]
+    },
+    "counting": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "enum": [
+            "completed_cycle",
+            "contracted_endpoint"
+          ]
+        },
+        "terminal": {
+          "enum": [
+            "requires_return",
+            "peak_without_return"
+          ]
+        },
+        "rangeMeaning": {
+          "const": "counting_gate_not_form_score"
+        }
+      },
+      "required": [
+        "commit",
+        "terminal",
+        "rangeMeaning"
+      ]
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shortGap": {
+          "const": "retain_candidate_only_with_valid_continuity_guards"
+        },
+        "timingAfterGap": {
+          "const": "unmeasured"
+        },
+        "longGap": {
+          "const": "discard_unfinished_preserve_count"
+        }
+      },
+      "required": [
+        "shortGap",
+        "timingAfterGap",
+        "longGap"
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "visual_angular_return"
+        },
+        "end": {
+          "const": "counting_gate"
+        },
+        "publication": {
+          "enum": [
+            "same_cycle",
+            "following_accepted_peak"
+          ]
+        },
+        "lastRepetition": {
+          "enum": [
+            "only_observed",
+            "excluded"
+          ]
+        },
+        "fullEccentricComparison": {
+          "const": false
+        }
+      },
+      "required": [
+        "kind",
+        "end",
+        "publication",
+        "lastRepetition",
+        "fullEccentricComparison"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "const": "pose-counter-defaults.json"
+        },
+        "runtime": {
+          "const": "pose-runtime-defaults.json"
+        },
+        "profile": {
+          "enum": [
+            "curl",
+            "lateralRaise",
+            "latPulldown"
+          ]
+        }
+      },
+      "required": [
+        "configuration",
+        "runtime",
+        "profile"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "contractTests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "version",
+    "exercise",
+    "algorithm",
+    "bodyView",
+    "provider",
+    "coordinateSpace",
+    "preparationJoints",
+    "countingJoints",
+    "alternativeGeometry",
+    "counting",
+    "recovery",
+    "phase",
+    "parameters",
+    "limitations",
+    "contractTests"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "exercise": {
+            "const": "latPulldown"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "counting": {
+            "properties": {
+              "commit": {
+                "const": "contracted_endpoint"
+              },
+              "terminal": {
+                "const": "peak_without_return"
+              }
+            }
+          },
+          "phase": {
+            "properties": {
+              "publication": {
+                "const": "following_accepted_peak"
+              },
+              "lastRepetition": {
+                "const": "excluded"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "counting": {
+            "properties": {
+              "commit": {
+                "const": "completed_cycle"
+              },
+              "terminal": {
+                "const": "requires_return"
+              }
+            }
+          },
+          "phase": {
+            "properties": {
+              "publication": {
+                "const": "same_cycle"
+              },
+              "lastRepetition": {
+                "const": "only_observed"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

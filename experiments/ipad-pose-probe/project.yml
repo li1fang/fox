@@ -1,0 +1,29 @@
+name: FoxPoseLab
+options:
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  FoxTrainingCore:
+    path: ../../apps/ipad/FoxTrainingCore
+targets:
+  FoxPoseLab:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    dependencies:
+      - package: FoxTrainingCore
+        product: FoxPoseExperimentKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.whipa.foxposelab
+        PRODUCT_NAME: FoxPoseLab
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Fox Pose Lab
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown
+        TARGETED_DEVICE_FAMILY: "2"
+        SWIFT_VERSION: "5.0"
+        DEVELOPMENT_TEAM: "$(FOX_DEVELOPMENT_TEAM)"
+        CODE_SIGN_STYLE: Automatic
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1

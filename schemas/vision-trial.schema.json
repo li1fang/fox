@@ -1,0 +1,1289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/vision-trial.schema.json",
+  "title": "Fox D1 local vision trial",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "algorithm",
+    "id",
+    "startedAt",
+    "endedAt",
+    "device",
+    "appVersion",
+    "visionRevision",
+    "source",
+    "camera",
+    "arm",
+    "automaticCount",
+    "manualAdjustment",
+    "confirmedCount",
+    "repetitions",
+    "metrics",
+    "notes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fox.vision_trial.v1"
+    },
+    "algorithm": {
+      "enum": [
+        "curl_2d_v1",
+        "lateral_raise_2d_v1",
+        "curl_2d_v2",
+        "lateral_raise_2d_v2",
+        "curl_2d_v3",
+        "curl_2d_v4",
+        "lateral_raise_2d_v3",
+        "lateral_raise_2d_v4",
+        "lat_pulldown_2d_v1"
+      ]
+    },
+    "exercise": {
+      "enum": [
+        "curl",
+        "lateralRaise",
+        null,
+        "latPulldown"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "device": {
+      "type": "string"
+    },
+    "appVersion": {
+      "type": "string"
+    },
+    "visionRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source": {
+      "enum": [
+        "camera",
+        "fixture"
+      ]
+    },
+    "camera": {
+      "enum": [
+        "front",
+        "back"
+      ]
+    },
+    "arm": {
+      "enum": [
+        "left",
+        "right"
+      ]
+    },
+    "automaticCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "manualAdjustment": {
+      "type": "integer",
+      "minimum": -10000,
+      "maximum": 10000
+    },
+    "confirmedCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "referenceCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "repetitions": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "liftSeconds",
+          "completedAtSeconds",
+          "minimumConfidence"
+        ],
+        "properties": {
+          "liftSeconds": {
+            "type": "number",
+            "minimum": 0.099999,
+            "maximum": 60
+          },
+          "holdSeconds": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 60
+          },
+          "lowerSeconds": {
+            "type": "number",
+            "minimum": 0.099999,
+            "maximum": 60
+          },
+          "completedAtSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minimumConfidence": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1
+          },
+          "trackingGapSeconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 60
+          },
+          "startedAtSeconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "peakAtSeconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "loweredAtSeconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "geometryFallbackFrames": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "eccentric": {
+            "$ref": "#/$defs/eccentricMeasurement"
+          },
+          "countingBasis": {
+            "const": "contractedEndpoint"
+          },
+          "precedingReturn": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "repetitionIndex",
+              "measurement"
+            ],
+            "properties": {
+              "repetitionIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9999
+              },
+              "measurement": {
+                "$ref": "#/$defs/eccentricMeasurement"
+              }
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processedFrames",
+        "validFrames",
+        "interruptions",
+        "processedHz",
+        "latencyP50Ms",
+        "latencyP95Ms",
+        "peakThermalState"
+      ],
+      "properties": {
+        "processedFrames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "validFrames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "interruptions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "processedHz": {
+          "type": "number",
+          "minimum": 0
+        },
+        "latencyP50Ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "latencyP95Ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "peakThermalState": {
+          "enum": [
+            "nominal",
+            "fair",
+            "serious",
+            "critical"
+          ]
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    },
+    "trialReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "recordedAt"],
+      "anyOf": [{"required": ["information"]}, {"required": ["softwareIssue"]}, {"required": ["trainingFeeling"]}],
+      "properties": {
+        "schema": {"const": "fox.trial_review.v1"},
+        "recordedAt": {"type": "string", "format": "date-time"},
+        "information": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "softwareIssue": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "trainingFeeling": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "captureContext": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/captureContext"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "counterDiagnostics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/counterDiagnostics"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "algorithm": {
+            "const": "lat_pulldown_2d_v1"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "exercise",
+          "counterDiagnostics"
+        ],
+        "properties": {
+          "exercise": {
+            "const": "latPulldown"
+          },
+          "counterDiagnostics": {
+            "$ref": "#/$defs/counterDiagnostics"
+          },
+          "repetitions": {
+            "items": {
+              "required": [
+                "countingBasis",
+                "startedAtSeconds",
+                "peakAtSeconds"
+              ],
+              "properties": {
+                "startedAtSeconds": {
+                  "type": "number"
+                },
+                "peakAtSeconds": {
+                  "type": "number"
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "holdSeconds"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "lowerSeconds"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "loweredAtSeconds"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "eccentric"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "geometryFallbackFrames"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "algorithm": {
+                  "const": "curl_2d_v4"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "counterDiagnostics": {
+                  "properties": {
+                    "runtimePolicy": {
+                      "required": [
+                        "curlRecovery"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "counterDiagnostics"
+              ],
+              "properties": {
+                "counterDiagnostics": {
+                  "type": "object",
+                  "required": [
+                    "runtimePolicy"
+                  ],
+                  "properties": {
+                    "runtimePolicy": {
+                      "type": "object",
+                      "required": [
+                        "eccentricPolicy"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "repetitions": {
+                  "items": {
+                    "required": [
+                      "eccentric"
+                    ]
+                  }
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "repetitions": {
+                  "items": {
+                    "not": {
+                      "required": [
+                        "eccentric"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "algorithm": {
+                  "const": "lateral_raise_2d_v4"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "counterDiagnostics": {
+                  "properties": {
+                    "runtimePolicy": {
+                      "required": [
+                        "lateralTorsoReference"
+                      ],
+                      "properties": {
+                        "lateralTorsoReference": {
+                          "const": "fresh_opposite"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "repetitions": {
+                  "items": {
+                    "properties": {
+                      "geometryFallbackFrames": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                "counterDiagnostics": {
+                  "properties": {
+                    "samples": {
+                      "items": {
+                        "properties": {
+                          "joints": {
+                            "maxItems": 4
+                          },
+                          "usedTorsoFallback": {
+                            "enum": [
+                              false,
+                              null
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "algorithm": {
+                  "enum": [
+                    "lateral_raise_2d_v1",
+                    "lateral_raise_2d_v2",
+                    "lateral_raise_2d_v3",
+                    "lateral_raise_2d_v4"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "exercise"
+              ],
+              "properties": {
+                "exercise": {
+                  "const": "lateralRaise"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "exercise": {
+                  "enum": [
+                    "curl",
+                    null
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "algorithm": {
+                  "enum": [
+                    "curl_2d_v2",
+                    "lateral_raise_2d_v2",
+                    "curl_2d_v3",
+                    "curl_2d_v4",
+                    "lateral_raise_2d_v3",
+                    "lateral_raise_2d_v4"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "exercise",
+                "counterDiagnostics"
+              ],
+              "properties": {
+                "exercise": {
+                  "enum": [
+                    "curl",
+                    "lateralRaise"
+                  ]
+                },
+                "counterDiagnostics": {
+                  "$ref": "#/$defs/counterDiagnostics"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "counterDiagnostics": {
+                  "type": "null"
+                },
+                "repetitions": {
+                  "items": {
+                    "properties": {
+                      "liftSeconds": {
+                        "minimum": 0.199999,
+                        "maximum": 20
+                      },
+                      "holdSeconds": {
+                        "maximum": 20
+                      },
+                      "lowerSeconds": {
+                        "minimum": 0.199999,
+                        "maximum": 20
+                      },
+                      "minimumConfidence": {
+                        "minimum": 0.55
+                      },
+                      "trackingGapSeconds": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "algorithm": {
+                  "enum": [
+                    "curl_2d_v3",
+                    "curl_2d_v4",
+                    "lateral_raise_2d_v3",
+                    "lateral_raise_2d_v4"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "counterDiagnostics": {
+                  "required": [
+                    "runtimePolicy"
+                  ],
+                  "properties": {
+                    "runtimePolicy": {
+                      "$ref": "pose-runtime-policy.schema.json"
+                    }
+                  }
+                },
+                "repetitions": {
+                  "items": {
+                    "required": [
+                      "startedAtSeconds",
+                      "peakAtSeconds",
+                      "loweredAtSeconds"
+                    ],
+                    "properties": {
+                      "startedAtSeconds": {
+                        "type": "number"
+                      },
+                      "peakAtSeconds": {
+                        "type": "number"
+                      },
+                      "loweredAtSeconds": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "counterDiagnostics": {
+                  "properties": {
+                    "runtimePolicy": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "repetitions": {
+            "items": {
+              "required": [
+                "holdSeconds",
+                "lowerSeconds"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "countingBasis"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "precedingReturn"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "eccentricMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "status"
+      ],
+      "properties": {
+        "schema": {
+          "const": "fox.eccentric_measurement.v1"
+        },
+        "status": {
+          "enum": [
+            "measured",
+            "trackingGap",
+            "insufficientMotion",
+            "nonMonotonic"
+          ]
+        },
+        "startedAtSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "detectedAtSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endedAtSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 60
+        },
+        "onsetUncertaintySeconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "measured"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "startedAtSeconds",
+              "detectedAtSeconds",
+              "endedAtSeconds",
+              "durationSeconds",
+              "onsetUncertaintySeconds"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "startedAtSeconds"
+                  ]
+                },
+                {
+                  "required": [
+                    "detectedAtSeconds"
+                  ]
+                },
+                {
+                  "required": [
+                    "endedAtSeconds"
+                  ]
+                },
+                {
+                  "required": [
+                    "durationSeconds"
+                  ]
+                },
+                {
+                  "required": [
+                    "onsetUncertaintySeconds"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "counterDiagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "configuration",
+        "resetCounts",
+        "recoveries",
+        "droppedSamples",
+        "samples"
+      ],
+      "properties": {
+        "schema": {
+          "const": "fox.pose_counter_diagnostics.v1"
+        },
+        "configuration": {
+          "$ref": "pose-counter-configuration.schema.json"
+        },
+        "runtimePolicy": {
+          "anyOf": [
+            {
+              "$ref": "pose-runtime-policy.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resetCounts": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/failureReason"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "recoveries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "droppedSamples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/traceSample"
+          }
+        }
+      }
+    },
+    "failureReason": {
+      "enum": [
+        "noPerson",
+        "multiplePeople",
+        "invalidFrame",
+        "missingJoint",
+        "lowConfidence",
+        "degenerateSegment",
+        "frameGap",
+        "anchorJump",
+        "angleJump",
+        "dropoutTimeout",
+        "incompleteRange",
+        "cycleTimeout",
+        "movementTooShort",
+        "explicitInterrupt"
+      ]
+    },
+    "traceSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elapsedSeconds",
+        "kind",
+        "width",
+        "height",
+        "people",
+        "joints",
+        "quality",
+        "phase",
+        "trackingState",
+        "automaticCount"
+      ],
+      "properties": {
+        "elapsedSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "frame",
+            "interrupt"
+          ]
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "people": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "joints": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "joint",
+              "x",
+              "y",
+              "confidence"
+            ],
+            "properties": {
+              "joint": {
+                "enum": [
+                  "leftShoulder",
+                  "rightShoulder",
+                  "leftElbow",
+                  "rightElbow",
+                  "leftWrist",
+                  "rightWrist",
+                  "leftHip",
+                  "rightHip"
+                ]
+              },
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "rawAngle": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 180
+        },
+        "smoothedAngle": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 180
+        },
+        "quality": {
+          "enum": [
+            "valid",
+            "noPerson",
+            "multiplePeople",
+            "lowConfidence",
+            "invalidFrame",
+            "discontinuous"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "waitingForExtension",
+            "lowered",
+            "raising",
+            "top",
+            "lowering"
+          ]
+        },
+        "trackingState": {
+          "enum": [
+            "acquiring",
+            "tracking",
+            "grace",
+            "lost"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/failureReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "automaticCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "originalPeopleCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 10
+        },
+        "selectedSubjectIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9
+        },
+        "subjectState": {
+          "enum": [
+            "waiting",
+            "bound",
+            "occluded",
+            "ambiguous",
+            "lost",
+            null
+          ]
+        },
+        "usedTorsoFallback": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "devicePose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "gravityX",
+        "gravityY",
+        "gravityZ",
+        "screenInclinationDegrees",
+        "cameraElevationDegrees"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "coreMotion",
+            "fixture"
+          ]
+        },
+        "gravityX": {
+          "type": "number",
+          "minimum": -1.5,
+          "maximum": 1.5
+        },
+        "gravityY": {
+          "type": "number",
+          "minimum": -1.5,
+          "maximum": 1.5
+        },
+        "gravityZ": {
+          "type": "number",
+          "minimum": -1.5,
+          "maximum": 1.5
+        },
+        "screenInclinationDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 180
+        },
+        "cameraElevationDegrees": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      }
+    },
+    "framing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visibleBodyPoints",
+        "observedWidthFraction",
+        "observedHeightFraction",
+        "nearImageEdge"
+      ],
+      "properties": {
+        "visibleBodyPoints": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 14
+        },
+        "observedWidthFraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "observedHeightFraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "torsoHeightFraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "shoulderWidthFraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "nearImageEdge": {
+          "type": "boolean"
+        }
+      }
+    },
+    "cameraGeometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deviceType",
+        "zoomFactor",
+        "reportedFormatFieldOfViewDegrees"
+      ],
+      "properties": {
+        "deviceType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "zoomFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reportedFormatFieldOfViewDegrees": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 180
+        }
+      }
+    },
+    "contextSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elapsedSeconds",
+        "screenOrientation",
+        "motionStatus",
+        "imageWidthPixels",
+        "imageHeightPixels",
+        "people",
+        "trackingQuality",
+        "automaticCount",
+        "counterInterruptions"
+      ],
+      "properties": {
+        "elapsedSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "screenOrientation": {
+          "enum": [
+            "unknown",
+            "portrait",
+            "portraitUpsideDown",
+            "landscapeLeft",
+            "landscapeRight"
+          ]
+        },
+        "motionStatus": {
+          "enum": [
+            "available",
+            "unavailable",
+            "failed",
+            "fixture"
+          ]
+        },
+        "devicePose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/devicePose"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "imageWidthPixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "imageHeightPixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "people": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trackingQuality": {
+          "enum": [
+            "valid",
+            "noPerson",
+            "multiplePeople",
+            "lowConfidence",
+            "invalidFrame",
+            "discontinuous"
+          ]
+        },
+        "automaticCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "counterInterruptions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "framing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/framing"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "captureContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "declaredBodyView",
+        "bodyViewSource",
+        "samplingIntervalSeconds",
+        "droppedSamples",
+        "samples"
+      ],
+      "properties": {
+        "schema": {
+          "const": "fox.vision_capture_context.v1"
+        },
+        "declaredBodyView": {
+          "enum": [
+            "unknown",
+            "front",
+            "side",
+            "back",
+            "mixed"
+          ]
+        },
+        "bodyViewSource": {
+          "enum": [
+            "unlabeled",
+            "user"
+          ]
+        },
+        "samplingIntervalSeconds": {
+          "const": 1
+        },
+        "droppedSamples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cameraGeometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cameraGeometry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "samples": {
+          "type": "array",
+          "maxItems": 1800,
+          "items": {
+            "$ref": "#/$defs/contextSample"
+          }
+        }
+      }
+    }
+  },
+  "$comment": "Native validation also requires automaticCount == repetitions.length, confirmedCount == automaticCount + manualAdjustment, validFrames <= processedFrames, endedAt >= startedAt and P95 >= P50. Capture context also validates gravity-derived angles, monotonic sample timestamps, motion status/value consistency, user/unlabeled body-view provenance and camera/fixture source isolation. Swift omits absent optional values. Capture context is optional for legacy reports; framing is image scale, not metric distance."
+}

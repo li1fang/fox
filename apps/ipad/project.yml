@@ -10,8 +10,36 @@ configs:
   Debug: debug
   Release: release
 
+packages:
+  FoxTrainingCore:
+    path: FoxTrainingCore
+  FoxJournalCore:
+    path: FoxJournalCore
+
 targets:
-  FoxPad:
+  Fox:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: FoxNative
+    dependencies:
+      - package: FoxTrainingCore
+      - package: FoxTrainingCore
+        product: FoxPoseExperimentKit
+      - package: FoxJournalCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.whipa.fox
+        PRODUCT_NAME: Fox
+        INFOPLIST_FILE: FoxNative/Info.plist
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "$(FOX_DEVELOPMENT_TEAM)"
+        CURRENT_PROJECT_VERSION: 25
+        MARKETING_VERSION: 0.6.8
+  FoxSay:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
@@ -19,11 +47,65 @@ targets:
       - path: FoxPad
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.whipa.fox
+        PRODUCT_BUNDLE_IDENTIFIER: com.whipa.foxsay
+        PRODUCT_NAME: FoxSay
         INFOPLIST_FILE: FoxPad/Info.plist
+        FOX_DISPLAY_NAME: "Fox Say"
+        FOX_APP_NAME: "Fox Say"
+        FOX_APP_SUBTITLE: "连接本机语音 runtime"
+        FOX_DEFAULT_WEB_PATH: "/?mode=say"
+        FOX_URL_DEFAULTS_KEY: "FoxSayWebURL"
         SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: 2
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: FDW7865XW5
+        DEVELOPMENT_TEAM: "$(FOX_DEVELOPMENT_TEAM)"
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 0.1
+
+  FoxUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: FoxUITests
+      - path: FoxNative/DesignScenarioCatalog.swift
+    dependencies:
+      - target: Fox
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.whipa.fox.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1,2"
+        DEVELOPMENT_TEAM: "$(FOX_DEVELOPMENT_TEAM)"
+        CODE_SIGN_STYLE: Automatic
+
+  FoxAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: FoxAppTests
+    dependencies:
+      - target: Fox
+      - package: FoxJournalCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.whipa.fox.apptests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1,2"
+        DEVELOPMENT_TEAM: "$(FOX_DEVELOPMENT_TEAM)"
+        CODE_SIGN_STYLE: Automatic
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Fox.app/Fox"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  Fox:
+    build:
+      targets:
+        Fox: all
+    test:
+      targets:
+        - FoxUITests
+        - FoxAppTests

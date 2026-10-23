@@ -1,0 +1,33 @@
+{
+  "schema": "fox.pose_runtime_policy.v1",
+  "acquisitionMode": "single_ready_fallback_v1",
+  "eccentricPolicy": {
+    "schema": "fox.eccentric_policy.v1",
+    "noiseBandDegrees": 2,
+    "reversalDegrees": 6,
+    "confirmationSeconds": 0.2,
+    "minimumExcursionDegrees": 20,
+    "maximumObservationGapSeconds": 0.25
+  },
+  "curlRecovery": {
+    "schema": "fox.curl_recovery.v1",
+    "initialEndpointToleranceDegrees": 10,
+    "wristOnlyGraceSeconds": 0.55,
+    "maximumStableJointDrift": 0.06
+  },
+  "acquisitionMinX": 0.25,
+  "acquisitionMaxX": 0.72,
+  "acquisitionMinY": 0.50,
+  "acquisitionMaxY": 0.95,
+  "subjectConfidence": 0.35,
+  "maximumSubjectJump": 0.14,
+  "ambiguityMargin": 0.035,
+  "retentionSeconds": 1.2,
+  "countdownLossTolerance": 0.35,
+  "endpointToleranceDegrees": 5,
+  "curlReturnToleranceDegrees": 10,
+  "returnEndpointDwellSeconds": 0.1,
+  "loweredOcclusionSeconds": 1,
+  "lateralTorsoReference": "fresh_opposite",
+  "maximumTorsoObliquityDegrees": 30
+}

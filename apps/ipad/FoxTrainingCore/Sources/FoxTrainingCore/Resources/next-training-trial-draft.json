@@ -1,0 +1,56 @@
+{
+  "focus": "视听引导试用 · 待确认草稿",
+  "warmup": "开始前确认今日状态、热身与本次完整训练内容。",
+  "cooldown": "结束后核对实际记录，再按需要放松。",
+  "safetyNotes": "这是可编辑的试用草稿，不是训练处方。次数、组数、节奏、重量及是否进行每个动作都需开始前确认；没有回答的重量保持未知。不为测试额外训练，不舒服时停止。",
+  "exercises": [
+    {
+      "exerciseId": "dumbbell_curl",
+      "name": "哑铃弯举",
+      "repetitionBasis": "per_side",
+      "visualObservation": { "exercise": "curl", "arm": "left", "bodyView": "side" },
+      "notes": "侧身，观察臂靠近镜头；左右次数分开核对。组数和次数是待确认占位，不要求为测试做满。",
+      "targetSets": [
+        { "setIndex": 1, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 },
+        { "setIndex": 2, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 }
+      ],
+      "tempo": [
+        { "phase": "lift", "seconds": 2, "visual": "expand" },
+        { "phase": "peak", "seconds": 1, "visual": "vibrate" },
+        { "phase": "lower", "seconds": 3, "visual": "shrink" }
+      ]
+    },
+    {
+      "exerciseId": "lateral_raise",
+      "name": "哑铃侧平举",
+      "repetitionBasis": "per_side",
+      "visualObservation": { "exercise": "lateralRaise", "arm": "right", "bodyView": "front" },
+      "notes": "正面，肩、肘、髋入镜；每组固定一个观察侧，另一侧由人确认。",
+      "targetSets": [
+        { "setIndex": 1, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 },
+        { "setIndex": 2, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 }
+      ],
+      "tempo": [
+        { "phase": "lift", "seconds": 2, "visual": "expand" },
+        { "phase": "peak", "seconds": 1, "visual": "vibrate" },
+        { "phase": "lower", "seconds": 3, "visual": "shrink" }
+      ]
+    },
+    {
+      "exerciseId": "lat_pulldown",
+      "name": "高位下拉",
+      "repetitionBasis": "total",
+      "visualObservation": { "exercise": "latPulldown", "arm": "left", "bodyView": "back" },
+      "notes": "背面上半身及所选侧肩肘腕入镜。到达收缩端点记次；末次不发布自身返回时长。",
+      "targetSets": [
+        { "setIndex": 1, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 },
+        { "setIndex": 2, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 }
+      ],
+      "tempo": [
+        { "phase": "lift", "seconds": 2, "visual": "expand" },
+        { "phase": "peak", "seconds": 1, "visual": "vibrate" },
+        { "phase": "lower", "seconds": 3, "visual": "shrink" }
+      ]
+    }
+  ]
+}

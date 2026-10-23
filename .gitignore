@@ -2,9 +2,11 @@ node_modules/
 dist/
 *.tsbuildinfo
 coverage/
+.data/
 .tmp/
 test-results/
 playwright-report/
+.playwright-cli/
 
 .DS_Store
 *.log
@@ -15,3 +17,8 @@ apps/api/.data/
 apps/web-runtime/dist/
 apps/ipad/FoxPad.xcodeproj/
 apps/ipad/build/
+apps/ipad/FoxTrainingCore/.build/
+apps/ipad/FoxTrainingCore/.swiftpm/
+apps/ipad/FoxJournalCore/.build/
+apps/ipad/FoxJournalCore/.swiftpm/
+experiments/ipad-pose-probe/FoxPoseLab.xcodeproj/

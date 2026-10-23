@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/pose-session-settings.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "configuration", "runtimePolicy"],
+  "properties": {
+    "schema": { "const": "fox.pose_session_settings.v1" },
+    "configuration": { "$ref": "pose-counter-configuration.schema.json" },
+    "runtimePolicy": { "$ref": "pose-runtime-policy.schema.json" }
+  }
+}

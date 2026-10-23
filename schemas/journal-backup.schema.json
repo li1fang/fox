@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/journal-backup.schema.json",
+  "title": "Fox Journal Local Backup v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["format", "createdAt", "records", "photos"],
+  "properties": {
+    "format": {"const": "fox.journal.backup.v1"},
+    "createdAt": {"$ref": "capture-record.schema.json#/$defs/timestamp"},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "revisions"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "revisions": {"type": "array", "minItems": 1, "items": {"$ref": "capture-record.schema.json"}}
+        }
+      }
+    },
+    "photos": {"type": "array", "items": {"$ref": "capture-record.schema.json#/$defs/photo"}, "uniqueItems": true}
+  }
+}

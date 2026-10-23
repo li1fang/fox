@@ -1,0 +1,232 @@
+{
+  "schema": "fox.say_task_ledger.v0",
+  "updated_at": "2026-07-02T01:56:00+07:00",
+  "scope": "fox-say",
+  "tasks": [
+    {
+      "id": "fox-say.ipad-linux-roundtrip-smoke",
+      "status": "green_with_real_ipad_capture",
+      "goal": "Prove the staged capture/export/Linux evidence handoff path before UI team takeover.",
+      "evidence": [
+        "apps/api POST /say/capture",
+        "scripts/fox-say-export-capture.mjs",
+        "VCompose fox-voice-ipad-linux-roundtrip-smoke-v0.json",
+        "job-1782923656-e4cbb4f2b6cd27b7",
+        "capture say_1782923628160_54e3baac"
+      ],
+      "remaining_constraint": "The staged path is green. Realtime streaming and corpus scoring remain separate tasks."
+    },
+    {
+      "id": "fox-say.handoff-test-plan",
+      "status": "green",
+      "goal": "Define the minimum tests required before handing Fox Say to a UI/native team.",
+      "evidence": [
+        "docs/fox-say/HANDOFF_TEST_PLAN_V0.zh-CN.md",
+        "docs/fox-say/feature-ledger.v0.json"
+      ],
+      "minimum_gates": [
+        "app_isolation",
+        "native_capture_upload",
+        "capture_api_regression",
+        "export_to_vcompose",
+        "linux_roundtrip_staged_smoke",
+        "handoff_boundary_check"
+      ]
+    },
+    {
+      "id": "fox-say.dual-ipad-app",
+      "status": "green_build_ready",
+      "goal": "Expose Fox and Fox Say as two independent iPad home-screen apps while sharing the same native WKWebView shell.",
+      "evidence": [
+        "apps/ipad/project.yml",
+        "apps/ipad/FoxPad/Info.plist",
+        "scripts/ipad.mjs",
+        "npm run ipad:build"
+      ],
+      "bundle_ids": {
+        "fox": "com.whipa.fox",
+        "fox_say": "com.whipa.foxsay"
+      }
+    },
+    {
+      "id": "fox-say.one-command-handoff-smoke-runner",
+      "status": "green",
+      "goal": "Provide one command that checks latest capture, exports it to VCompose, submits the Linux staged smoke gate, polls the report, and emits a single handoff summary.",
+      "command": "npm run say:handoff-smoke",
+      "evidence": [
+        "scripts/fox-say-handoff-smoke.mjs",
+        ".tmp/fox-say-handoff-smoke-report.json",
+        "job-1782924227-33cc3809242dde4b"
+      ],
+      "decision": "fox_say_handoff_smoke_ready"
+    },
+    {
+      "id": "fox-say.human-ipad-noisy-corpus-matrix",
+      "status": "capture_mode_ready_collection_pending",
+      "goal": "Collect and score 50-100 real human/iPad/noise samples.",
+      "evidence": [
+        "docs/fox-say/CORPUS_CAPTURE_MODE_V0.md",
+        "POST /say/corpus-samples",
+        "GET /say/corpus-samples",
+        "tests/e2e/fox-say-corpus.spec.ts"
+      ],
+      "sample_target": {
+        "min": 50,
+        "preferred": 100
+      },
+      "buckets": [
+        "short_command",
+        "training_feedback",
+        "equipment_context",
+        "mixed_utterance",
+        "noise_distance"
+      ],
+      "success_metrics": {
+        "command_accuracy": ">=95%",
+        "weight_reps_action_extraction": ">=90%",
+        "short_command_e2e_latency_ms": "<=1500",
+        "tts_first_audio_ms": "<=800",
+        "continuous_training_minutes": ">=45"
+      }
+    },
+    {
+      "id": "fox-say.asr-to-fox-draft-tdd",
+      "status": "green_tdd_contract",
+      "goal": "Implement the safe bridge from Linux ASR results to Fox review drafts and manually confirmed Entries.",
+      "evidence": [
+        "docs/fox-say/ASR_TO_FOX_DRAFT_TDD_V0.md",
+        "POST /say/asr-results",
+        "POST /say/drafts",
+        "PATCH /say/drafts/:id",
+        "POST /say/drafts/:id/confirm",
+        "GET /entries?source=voice_draft",
+        "npm run test -w @fox/api",
+        "npm run test:e2e"
+      ],
+      "boundary": [
+        "ASR text does not mutate workout state",
+        "confirmed Entry requires user confirmation",
+        "raw audio paths are not exposed in Entry evidence"
+      ]
+    },
+    {
+      "id": "fox-say.review-inbox",
+      "status": "green_review_inbox_ready",
+      "goal": "Make Fox Say usable as a voice draft inbox before introducing automatic command admission.",
+      "evidence": [
+        "GET /say/drafts",
+        "PATCH /say/drafts/:id",
+        "POST /say/drafts/:id/confirm",
+        "apps/web-runtime/src/FoxSay.tsx",
+        "tests/e2e/fox-say-corpus.spec.ts",
+        "npx playwright test tests/e2e/fox-say-corpus.spec.ts"
+      ],
+      "capabilities": [
+        "list pending and historical voice drafts",
+        "select a draft for review",
+        "edit entry type, title, confirmation text, and structured JSON",
+        "discard unwanted drafts",
+        "confirm selected drafts into Entries"
+      ],
+      "boundary": [
+        "confirmed and discarded drafts are not returned to pending work by the UI",
+        "ASR text still does not mutate workout state",
+        "LLM extraction is not yet wired into draft creation"
+      ]
+    },
+    {
+      "id": "fox-say.guided-flow-1-1",
+      "status": "green_guided_flow_ready",
+      "goal": "Make Fox Say understandable and testable before adding LLM extraction or realtime voice control.",
+      "evidence": [
+        "docs/fox-say/GUIDED_FLOW_1_1.md",
+        "apps/web-runtime/src/FoxSay.tsx",
+        "tests/e2e/fox-say-corpus.spec.ts",
+        "npx playwright test tests/e2e/fox-say-corpus.spec.ts"
+      ],
+      "capabilities": [
+        "three workspaces: daily record, link test, inbox",
+        "daily stepper for capture, ASR, draft, review, and Entry",
+        "completion receipt showing Entry, kind, raw audio boundary, and workout-state boundary",
+        "one-click local test draft generation",
+        "debug-only area for TTS, browser speech recognition, corpus capture, and policy diagnostics"
+      ],
+      "boundary": [
+        "test mode uses fake local capture and guided-test ASR evidence",
+        "real Linux ASR is still staged through npm run say:linux-asr",
+        "no automatic workout state mutation"
+      ]
+    },
+    {
+      "id": "fox-say.linux-sensevoice-asr-runner",
+      "status": "green_with_real_ipad_capture",
+      "goal": "Run the latest iPad recording through Linux SenseVoice and post the transcript back to Fox ASR evidence.",
+      "command": "npm run say:linux-asr",
+      "evidence": [
+        "scripts/fox-say-linux-asr-runner.mjs",
+        "scripts/fox-say-export-capture.mjs",
+        "tests/scripts/fox-say-linux-asr-runner.test.mjs",
+        ".tmp/fox-say-linux-asr-runner-report.json",
+        "VCompose fox/k3s-heavy-gpu-fox-say-sensevoice-latest-capture-asr",
+        "job-1782929178-5ea870d0c5532b",
+        "POST /say/asr-results",
+        "POST /say/drafts"
+      ],
+      "verified_result": {
+        "provider": "linux-sensevoice",
+        "transcript": "吃葡萄不吐葡大皮。",
+        "asr_result_id": "asr_1782929185333_27c4873d",
+        "draft_id": "draft_1782929213885_21695272",
+        "draft_status": "needs_review",
+        "raw_audio_committed": false
+      },
+      "remaining_constraint": "This is a staged latest-capture path, not realtime streaming or automatic workout command admission."
+    },
+    {
+      "id": "fox-say.realtime-ipad-linux-streaming",
+      "status": "planned_not_handoff_blocking",
+      "goal": "Replace staged upload/export with realtime iPad -> Linux streaming and measure short command latency.",
+      "why_not_now": "This is a higher-complexity runtime path and should be measured after the staged capture handoff is stable.",
+      "acceptance_hint": {
+        "short_command_e2e_latency_ms": "<=1500",
+        "streaming_report_schema": "fox.say_realtime_roundtrip_report.v0"
+      }
+    },
+    {
+      "id": "fox-say.linux-tts-to-ipad-playback",
+      "status": "planned_not_handoff_blocking",
+      "goal": "Play Linux-generated or cached TTS audio back on the iPad instead of relying on browser speechSynthesis.",
+      "why_not_now": "Browser speechSynthesis is only a basic fallback; natural voice should be wired through a separate Linux TTS playback gate.",
+      "acceptance_hint": {
+        "tts_first_audio_ms": "<=800",
+        "playback_source": "linux_tts_runtime"
+      }
+    },
+    {
+      "id": "fox-say.asr-text-to-workout-state",
+      "status": "planned_not_handoff_blocking",
+      "goal": "Admit Linux ASR text into the Fox workout state machine for commands, corrections, and review notes.",
+      "why_not_now": "This touches product behavior and safety; ASR text must pass a typed command gate before mutating workout state.",
+      "blocked_actions": [
+        "automatic workout state mutation from unverified ASR text"
+      ]
+    },
+    {
+      "id": "fox-say.daily-use-product-readiness",
+      "status": "planned_not_handoff_blocking",
+      "goal": "Turn Fox Say from a handoff/evidence path into a daily-use voice product with polished native UI and resilient runtime lifecycle.",
+      "why_not_now": "This combines UI polish, realtime runtime, state mutation, and benchmark evidence; it should follow the narrower runtime gates."
+    },
+    {
+      "id": "fox-say.ui-team-handoff",
+      "status": "ready",
+      "goal": "Let another team build the iPad/native UI and streaming bridge using the current contracts.",
+      "handoff_doc": "docs/fox-say/ROUNDTRIP_AND_CORPUS_HANDOFF_V0.md",
+      "blocked_actions": [
+        "automatic workout state mutation from ASR text",
+        "unmeasured realtime streaming admission",
+        "committing raw audio samples"
+      ]
+    }
+  ]
+}

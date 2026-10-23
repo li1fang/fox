@@ -37,6 +37,13 @@ interface FeedbackSelection {
   message: string;
 }
 
+interface PostWorkoutReview {
+  informationSupplement?: Record<string, unknown>;
+  workoutCorrections?: string[];
+  productFeedback?: string[];
+  trainingFeedback?: string[];
+}
+
 function defaultFeedbackSelection(): FeedbackSelection {
   return { key: "completed-正常完成", kind: "completed", label: "正常完成", message: "" };
 }
@@ -119,6 +126,121 @@ function estimateDefaultRecord(
     pain: false,
     countingMethod: target?.targetDurationSeconds ? "timer" : "manual"
   };
+}
+
+function parseOptionalNumber(value: string): number | undefined {
+  if (value.trim() === "") {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function tempoCycleSeconds(tempo: TempoPhase[]): number {
+  return tempo.reduce((total, phase) => total + phase.seconds, 0) || 4;
+}
+
+function phaseLabel(phase: TempoPhase["phase"] | undefined): string {
+  switch (phase) {
+    case "lift":
+      return "发力";
+    case "peak":
+      return "顶峰";
+    case "lower":
+      return "控制";
+    case "hold":
+      return "保持";
+    case "rest":
+      return "停顿";
+    default:
+      return "节奏";
+  }
+}
+
+function activeRepSnapshot(target: ReturnType<typeof getCurrentTarget>, tempo: TempoPhase[], remaining: number, total: number) {
+  if (!target?.targetReps || total <= 0) {
+    return undefined;
+  }
+  const elapsed = Math.max(0, total - remaining);
+  const cycleSeconds = total / target.targetReps || tempoCycleSeconds(tempo);
+  const currentRep = remaining <= 0 ? target.targetReps : Math.min(target.targetReps, Math.floor(elapsed / cycleSeconds) + 1);
+  const phaseElapsed = elapsed % cycleSeconds;
+  let cursor = 0;
+  const currentPhase =
+    tempo.find((phase) => {
+      cursor += phase.seconds;
+      return phaseElapsed <= cursor;
+    }) ?? tempo.at(-1);
+  return {
+    currentRep,
+    targetReps: target.targetReps,
+    phase: phaseLabel(currentPhase?.phase)
+  };
+}
+
+function getWorkoutReviewFromRecord(record: unknown): PostWorkoutReview | undefined {
+  if (!record || typeof record !== "object") {
+    return undefined;
+  }
+  const review = (record as { postWorkoutReview?: unknown }).postWorkoutReview;
+  if (!review || typeof review !== "object") {
+    return undefined;
+  }
+  return review as PostWorkoutReview;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+function formatSupplement(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.join("、");
+  }
+  if (value && typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function sortedUniqueNumbers(values: Array<number | undefined>): number[] {
+  return [...new Set(values.filter((value): value is number => typeof value === "number" && Number.isFinite(value)))]
+    .filter((value) => value >= 0)
+    .sort((left, right) => left - right);
+}
+
+function matchingEquipmentItem(exerciseName: string | undefined, inventory: EquipmentInventory | null): EquipmentItem | undefined {
+  const normalized = (exerciseName ?? "").toLowerCase();
+  if (normalized.includes("哑铃") || normalized.includes("dumbbell")) {
+    return inventory?.items.find((item) => item.available && item.kind === "dumbbell");
+  }
+  if (normalized.includes("跑步") || normalized.includes("running")) {
+    return inventory?.items.find((item) => item.available && (item.id === "running" || item.name.toLowerCase().includes("running")));
+  }
+  if (normalized.includes("下拉")) {
+    return inventory?.items.find((item) => item.available && item.id.includes("lat_pulldown"));
+  }
+  if (normalized.includes("胸推") || normalized.includes("推举") || normalized.includes("press")) {
+    return inventory?.items.find((item) => item.available && item.id.includes("press"));
+  }
+  return undefined;
+}
+
+function weightOptionsForFeedback(session: WorkoutSession, inventory: EquipmentInventory | null): number[] {
+  const exercise = getCurrentExercise(session);
+  const target = getCurrentTarget(session);
+  const pending = session.pendingSet?.record;
+  const equipment = matchingEquipmentItem([exercise?.exerciseId, exercise?.name].filter(Boolean).join(" "), inventory);
+  if (equipment?.fixedWeights?.length) {
+    return sortedUniqueNumbers([...equipment.fixedWeights, target?.targetWeight, pending?.weight]);
+  }
+  const lastWeight = [...(exercise?.completedSets ?? [])].reverse().find((set) => typeof set.weight === "number")?.weight;
+  const base = pending?.weight ?? target?.targetWeight ?? lastWeight;
+  if (typeof base !== "number") {
+    return [];
+  }
+  const increment = equipment?.increment ?? (target?.weightUnit === "kg" || pending?.weightUnit === "kg" ? 2.5 : 1);
+  return sortedUniqueNumbers([base - increment * 2, base - increment, base, base + increment, base + increment * 2]);
 }
 
 function currentSetTimerSeconds(session: WorkoutSession): number | undefined {
@@ -380,12 +502,14 @@ function ExerciseTimerPanel({
   remaining,
   total,
   tempo,
+  repSnapshot,
   enabled,
   onToggle
 }: {
   remaining: number;
   total: number;
   tempo: TempoPhase[];
+  repSnapshot?: { currentRep: number; targetReps: number; phase: string };
   enabled: boolean;
   onToggle: () => void;
 }) {
@@ -395,23 +519,42 @@ function ExerciseTimerPanel({
       <button className="tempo-toggle" type="button" aria-pressed={enabled} onClick={onToggle}>
         {enabled ? "节奏开启" : "节奏暂停"}
       </button>
-      <div
-        className="ring"
-        style={{ background: `conic-gradient(#f7c948 ${total <= 0 ? 0 : (remaining / total) * 360}deg, rgba(255,255,255,0.1) 0deg)` }}
-        role="progressbar"
-        aria-label="本组倒计时"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={remaining}
-      >
-        <div>
-          <strong>{remaining}</strong>
-          <span>秒</span>
+      <div className="tempo-stage">
+        <div className={`tempo-box${enabled ? "" : " paused"}`} aria-label="发力节奏演示" />
+        <div className="rep-readout" aria-label="当前动作次数">
+          {repSnapshot ? (
+            <>
+              <span>{repSnapshot.phase}</span>
+              <strong>
+                {repSnapshot.currentRep} / {repSnapshot.targetReps}
+              </strong>
+              <small>次</small>
+            </>
+          ) : (
+            <>
+              <span>保持</span>
+              <strong>{remaining}</strong>
+              <small>秒</small>
+            </>
+          )}
         </div>
       </div>
-      <div className={`tempo-box${enabled ? "" : " paused"}`} aria-label="发力节奏演示" />
-      <p>本组倒计时</p>
-      <span>{label || "默认呼吸节奏"}</span>
+      <div className="timer-readout">
+        <div
+          className="timer-track"
+          role="progressbar"
+          aria-label="本组倒计时"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={remaining}
+        >
+          <span style={{ width: `${total <= 0 ? 0 : Math.max(0, Math.min(100, (remaining / total) * 100))}%` }} />
+        </div>
+        <p>
+          <strong>{remaining}</strong> 秒
+        </p>
+        <span>{label || "默认呼吸节奏"}</span>
+      </div>
     </section>
   );
 }
@@ -427,6 +570,57 @@ function workoutStats(entry: EntryRecord) {
   const completedSets = exercises.reduce((total, exercise) => total + entryArray(exercise, "completedSets").length, 0);
   const riskEvents = feedbackEvents.filter((event) => ["pain", "skip", "not_followed", "too_hard"].includes(String(event.kind)));
   return { completedSets, riskEvents };
+}
+
+function PostWorkoutReviewPanel({ review }: { review?: PostWorkoutReview }) {
+  const informationSupplement = review?.informationSupplement ? Object.entries(review.informationSupplement) : [];
+  const workoutCorrections = stringArray(review?.workoutCorrections);
+  const trainingFeedback = stringArray(review?.trainingFeedback);
+  const productFeedback = stringArray(review?.productFeedback);
+  if (!informationSupplement.length && !workoutCorrections.length && !trainingFeedback.length && !productFeedback.length) {
+    return null;
+  }
+
+  return (
+    <section className="post-review" aria-label="结构化复盘">
+      <span className="eyebrow">Review</span>
+      {informationSupplement.length ? (
+        <article>
+          <h3>信息补充</h3>
+          {informationSupplement.map(([key, value]) => (
+            <p key={key}>
+              <strong>{key}</strong>
+              <span>{formatSupplement(value)}</span>
+            </p>
+          ))}
+        </article>
+      ) : null}
+      {workoutCorrections.length ? (
+        <article>
+          <h3>记录校正</h3>
+          {workoutCorrections.map((item) => (
+            <p key={item}>{item}</p>
+          ))}
+        </article>
+      ) : null}
+      {trainingFeedback.length ? (
+        <article>
+          <h3>训练反馈</h3>
+          {trainingFeedback.map((item) => (
+            <p key={item}>{item}</p>
+          ))}
+        </article>
+      ) : null}
+      {productFeedback.length ? (
+        <article>
+          <h3>软件反馈</h3>
+          {productFeedback.map((item) => (
+            <p key={item}>{item}</p>
+          ))}
+        </article>
+      ) : null}
+    </section>
+  );
 }
 
 function exerciseHistory(entries: EntryRecord[]) {
@@ -600,6 +794,7 @@ function ActiveExerciseScreen({
   const target = getCurrentTarget(session);
   const elapsed = secondsSince(session.activeSetStartedAt);
   const timer = useActiveSetCountdown(session);
+  const repSnapshot = activeRepSnapshot(target, exercise?.tempo ?? [], timer.remaining, timer.total);
   return (
     <main className="screen runtime">
       <ProgressBar session={session} />
@@ -609,6 +804,14 @@ function ActiveExerciseScreen({
         <p>
           第 {(target?.setIndex ?? 0).toString()} / {exercise?.targetSets.length ?? 0} 组 · {formatTarget(target)}
         </p>
+        {repSnapshot ? (
+          <div className="inline-rep">
+            <strong>
+              第 {repSnapshot.currentRep} / {repSnapshot.targetReps} 次
+            </strong>
+            <span>{repSnapshot.phase}</span>
+          </div>
+        ) : null}
         <small>本组已进行 {elapsed ?? 0} 秒，完成时自动记录实际时长</small>
       </section>
       <CoachMessagePanel session={session} />
@@ -617,6 +820,7 @@ function ActiveExerciseScreen({
         remaining={timer.remaining}
         total={timer.total}
         tempo={exercise?.tempo ?? []}
+        repSnapshot={repSnapshot}
         enabled={tempoEnabled}
         onToggle={onToggleTempo}
       />
@@ -635,20 +839,32 @@ function ActiveExerciseScreen({
 function FeedbackScreen({
   session,
   aiOptions,
+  equipmentInventory,
   onUpdatePending,
   onSubmit
 }: {
   session: WorkoutSession;
   aiOptions: AiFeedbackOption[];
+  equipmentInventory: EquipmentInventory | null;
   onUpdatePending: (record: Partial<Omit<SetRecord, "setIndex" | "plannedSetIndex">>) => void;
   onSubmit: (payload: { kinds: FeedbackKind[]; messages: string[]; message?: string }) => void;
 }) {
   const exercise = getCurrentExercise(session);
   const target = getCurrentTarget(session);
   const pending = session.pendingSet?.record;
-  const targetWeightLabel = target?.targetWeight ? `${target.targetWeight}${target.weightUnit === "kg" ? "kg" : ""}` : "无推荐重量";
+  const targetWeightLabel = target?.targetWeight !== undefined ? `${target.targetWeight}${target.weightUnit === "kg" ? "kg" : ""}` : "无推荐重量";
+  const weightUnit = pending?.weightUnit ?? target?.weightUnit ?? "kg";
+  const usesExternalWeight = weightUnit !== "bodyweight";
+  const weightOptions = weightOptionsForFeedback(session, equipmentInventory);
   const [selected, setSelected] = useState<FeedbackSelection[]>([defaultFeedbackSelection()]);
   const [freeNote, setFreeNote] = useState("");
+  const setReps = (reps: number | undefined) => onUpdatePending({ reps });
+  const setWeight = (weight: number | undefined) => onUpdatePending({ weight, weightUnit });
+  const stepReps = (delta: number) => setReps(Math.max(0, (pending?.reps ?? target?.targetReps ?? 0) + delta));
+  const stepWeight = (delta: number) => {
+    const current = pending?.weight ?? target?.targetWeight ?? 0;
+    setWeight(Number(Math.max(0, current + delta).toFixed(1)));
+  };
 
   const syncPendingFromSelection = (nextSelected: FeedbackSelection[]) => {
     const kinds = nextSelected.map((selection) => selection.kind);
@@ -685,30 +901,73 @@ function FeedbackScreen({
       <h1>{exercise?.name}</h1>
       <CoachMessagePanel session={session} />
       <div className="form-grid">
-        <label>
-          实际次数
-          <input type="number" value={pending?.reps ?? ""} onChange={(event) => onUpdatePending({ reps: Number(event.target.value) })} />
-        </label>
+        <section className="quick-field" aria-label="实际次数">
+          <span>实际次数</span>
+          <strong>{pending?.reps ?? 0}</strong>
+          <div className="stepper-row">
+            <button type="button" className="ghost compact" onClick={() => stepReps(-1)}>
+              -1
+            </button>
+            <button type="button" className="ghost compact" onClick={() => target?.targetReps !== undefined && setReps(target.targetReps)}>
+              目标
+            </button>
+            <button type="button" className="ghost compact" onClick={() => stepReps(1)}>
+              +1
+            </button>
+          </div>
+          <input
+            aria-label="实际次数输入"
+            type="number"
+            min={0}
+            value={pending?.reps ?? ""}
+            onChange={(event) => setReps(parseOptionalNumber(event.target.value))}
+          />
+        </section>
         <div className="readonly-metric" aria-label="实际时长">
           <span>实际时长</span>
           <strong>{pending?.durationSeconds ?? 0} 秒</strong>
           <small>由系统根据本组开始和完成时间自动记录</small>
         </div>
-        <label className="weight-field">
-          实际重量
-          <div className="input-with-action">
-            <input type="number" value={pending?.weight ?? ""} onChange={(event) => onUpdatePending({ weight: Number(event.target.value) })} />
-            <button
-              type="button"
-              className="ghost compact"
-              disabled={target?.targetWeight === undefined}
-              onClick={() => onUpdatePending({ weight: target?.targetWeight, weightUnit: target?.weightUnit })}
-            >
-              推荐
-            </button>
-          </div>
-          <small>推荐：{targetWeightLabel}</small>
-        </label>
+        {usesExternalWeight ? (
+          <section className="quick-field weight-field" aria-label="实际重量">
+            <span>实际重量</span>
+            <strong>{pending?.weight !== undefined ? `${pending.weight}${weightUnit === "kg" ? "kg" : ""}` : "未填"}</strong>
+            <div className="stepper-row">
+              <button type="button" className="ghost compact" onClick={() => stepWeight(-2.5)}>
+                -2.5
+              </button>
+              <button type="button" className="ghost compact" disabled={target?.targetWeight === undefined} onClick={() => setWeight(target?.targetWeight)}>
+                推荐
+              </button>
+              <button type="button" className="ghost compact" onClick={() => stepWeight(2.5)}>
+                +2.5
+              </button>
+            </div>
+            <input
+              aria-label="实际重量输入"
+              type="number"
+              min={0}
+              step={0.5}
+              value={pending?.weight ?? ""}
+              onChange={(event) => setWeight(parseOptionalNumber(event.target.value))}
+            />
+            {weightOptions.length ? (
+              <div className="weight-options" aria-label="可选重量">
+                {weightOptions.map((weight) => (
+                  <button
+                    key={weight}
+                    type="button"
+                    className={pending?.weight === weight ? "selected" : ""}
+                    onClick={() => setWeight(weight)}
+                  >
+                    {weight}kg
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <small>推荐：{targetWeightLabel}</small>
+          </section>
+        ) : null}
       </div>
       <div className="feedback-grid">
         {[...feedbackOptions, ...aiOptions].map((option) => {
@@ -818,6 +1077,7 @@ function SummaryScreen({ session, onConfirm }: { session: WorkoutSession; onConf
 }
 
 function ConfirmedScreen({ session, onRestart }: { session: WorkoutSession; onRestart: () => void }) {
+  const review = getWorkoutReviewFromRecord(session);
   return (
     <main className="screen narrow">
       <span className="eyebrow">已确认</span>
@@ -825,6 +1085,7 @@ function ConfirmedScreen({ session, onRestart }: { session: WorkoutSession; onRe
       <p className="lead">本轮训练已写入 SQLite。刷新页面后，会恢复到最近一次训练状态。</p>
       <CoachMessagePanel session={session} />
       <pre className="summary">{session.summary}</pre>
+      <PostWorkoutReviewPanel review={review} />
       <button className="primary" onClick={onRestart}>
         再来一次
       </button>
@@ -905,6 +1166,7 @@ function HistoryScreen({
               <span className="eyebrow">Detail</span>
               <h2>{selected.title}</h2>
               <pre className="summary">{typeof selected.payload.summary === "string" ? selected.payload.summary : "暂无总结"}</pre>
+              <PostWorkoutReviewPanel review={getWorkoutReviewFromRecord(selected.payload)} />
               <section className="history-subsection">
                 <h3>同动作最近表现</h3>
                 <div className="exercise-history">
@@ -1152,7 +1414,7 @@ export function App() {
   const loadEntries = useCallback(async () => {
     try {
       setHistoryLoading(true);
-      const nextEntries = await foxApi.listEntries();
+      const nextEntries = await foxApi.listEntries({ kind: "workout", source: "workout_session" });
       setEntries(nextEntries);
       setSelectedEntryId((current) => current ?? nextEntries[0]?.id ?? null);
     } finally {
@@ -1168,6 +1430,10 @@ export function App() {
       setEquipmentLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    void loadEquipment();
+  }, [loadEquipment]);
 
   useEffect(() => {
     if (view === "history") {
@@ -1392,6 +1658,7 @@ export function App() {
       <FeedbackScreen
         session={session}
         aiOptions={aiFeedbackOptions}
+        equipmentInventory={equipmentInventory}
         onUpdatePending={(record) => void send({ type: "UPDATE_PENDING_SET", record })}
         onSubmit={(payload) => void send({ type: "SUBMIT_FEEDBACK", ...payload })}
       />

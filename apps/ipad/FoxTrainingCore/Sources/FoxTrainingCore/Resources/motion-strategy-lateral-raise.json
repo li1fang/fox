@@ -1,0 +1,50 @@
+{
+  "schema": "fox.motion_strategy.v1",
+  "version": 1,
+  "provider": "apple_vision_2d",
+  "coordinateSpace": "normalized_image_y_up_pixel_aspect_corrected",
+  "preparationJoints": [
+    "selected.shoulder",
+    "selected.elbow"
+  ],
+  "recovery": {
+    "shortGap": "retain_candidate_only_with_valid_continuity_guards",
+    "timingAfterGap": "unmeasured",
+    "longGap": "discard_unfinished_preserve_count"
+  },
+  "phase": {
+    "kind": "visual_angular_return",
+    "end": "counting_gate",
+    "fullEccentricComparison": false,
+    "publication": "same_cycle",
+    "lastRepetition": "only_observed"
+  },
+  "parameters": {
+    "configuration": "pose-counter-defaults.json",
+    "runtime": "pose-runtime-defaults.json",
+    "profile": "lateralRaise"
+  },
+  "id": "lateral-raise-front",
+  "exercise": "lateralRaise",
+  "algorithm": "lateral_raise_2d_v4",
+  "bodyView": "front",
+  "countingJoints": [
+    "selected.shoulder",
+    "selected.elbow",
+    "selected.hip"
+  ],
+  "alternativeGeometry": "fresh_opposite_torso_with_obliquity_guard",
+  "counting": {
+    "commit": "completed_cycle",
+    "terminal": "requires_return",
+    "rangeMeaning": "counting_gate_not_form_score"
+  },
+  "limitations": [
+    "Fixed selected arm, not independent bilateral counting.",
+    "Torso fallback is fresh geometry, not an interpolated missing hip."
+  ],
+  "contractTests": [
+    "MotionStrategyTests/testLegacyActionsDoNotCommitAtPeakAndKeepPhaseEvidenceAfterReturn",
+    "LateralRaiseTests/testMissingHipAndDegenerateTorsoRejectButWristIsOptional"
+  ]
+}

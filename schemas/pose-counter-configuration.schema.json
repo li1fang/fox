@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/pose-counter-configuration.schema.json",
+  "title": "Fox local pose counter configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "tracking",
+    "curl",
+    "lateralRaise"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fox.pose_counter_configuration.v1"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "tracking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acquisitionConfidence",
+        "trackingConfidence",
+        "graceSeconds",
+        "maximumFrameGapSeconds",
+        "maximumAnchorJump",
+        "maximumAngleJumpDegrees",
+        "minimumSegmentHeightFraction",
+        "smoothingSeconds",
+        "endpointDwellSeconds",
+        "minimumMovementSeconds",
+        "maximumCycleSeconds",
+        "recordsTrace",
+        "traceCapacity"
+      ],
+      "properties": {
+        "acquisitionConfidence": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1
+        },
+        "trackingConfidence": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1
+        },
+        "graceSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
+        "maximumFrameGapSeconds": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1
+        },
+        "maximumAnchorJump": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 0.5
+        },
+        "maximumAngleJumpDegrees": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 180
+        },
+        "minimumSegmentHeightFraction": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 0.1
+        },
+        "smoothingSeconds": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 1
+        },
+        "endpointDwellSeconds": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 1
+        },
+        "minimumMovementSeconds": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 2
+        },
+        "maximumCycleSeconds": {
+          "type": "number",
+          "minimum": 2,
+          "maximum": 60
+        },
+        "recordsTrace": {
+          "type": "boolean"
+        },
+        "traceCapacity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "curl": {
+      "$ref": "#/$defs/profile",
+      "properties": {
+        "requiresWrist": {
+          "const": true
+        }
+      }
+    },
+    "lateralRaise": {
+      "$ref": "#/$defs/profile"
+    },
+    "latPulldown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "angles",
+        "acquisitionConfidence",
+        "trackingConfidence",
+        "minimumOverheadWrist",
+        "maximumContractedWrist"
+      ],
+      "properties": {
+        "schema": {
+          "const": "fox.lat_pulldown_policy.v1"
+        },
+        "angles": {
+          "$ref": "#/$defs/profile",
+          "properties": {
+            "requiresWrist": {
+              "const": true
+            }
+          }
+        },
+        "acquisitionConfidence": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 0.8
+        },
+        "trackingConfidence": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 0.6
+        },
+        "minimumOverheadWrist": {
+          "type": "number",
+          "minimum": 0.4,
+          "maximum": 1.2
+        },
+        "maximumContractedWrist": {
+          "type": "number",
+          "minimum": -0.2,
+          "maximum": 0.5
+        }
+      }
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loweredAngleDegrees",
+        "departureAngleDegrees",
+        "peakAngleDegrees",
+        "returnAngleDegrees",
+        "requiresWrist"
+      ],
+      "properties": {
+        "loweredAngleDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 180
+        },
+        "departureAngleDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 180
+        },
+        "peakAngleDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 180
+        },
+        "returnAngleDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 180
+        },
+        "requiresWrist": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "$comment": "Native validation additionally enforces trackingConfidence <= acquisitionConfidence, graceSeconds <= maximumFrameGapSeconds, and exercise-direction-specific ordered angle gates. Values are experimental counter parameters, not medical form standards."
+}

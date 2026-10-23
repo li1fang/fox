@@ -1,0 +1,206 @@
+{
+  "schema": "fox.say_feature_ledger.v0",
+  "updated_at": "2026-07-02T01:56:00+07:00",
+  "scope": "fox-say",
+  "handoff_level": "staged_capture_linux_evidence_handoff_ready",
+  "features": [
+    {
+      "id": "fox-say.dual-ipad-app",
+      "status": "green",
+      "description": "Fox Say is a separate iPad app target from Fox, sharing the WKWebView shell but using its own Bundle ID and default route.",
+      "evidence": [
+        "apps/ipad/project.yml",
+        "apps/ipad/FoxPad/FoxWebViewController.swift",
+        "scripts/ipad.mjs",
+        "npm run ipad:build"
+      ],
+      "handoff_relevance": "prevents Fox Say from hijacking Fox while allowing a real iPad home-screen entry"
+    },
+    {
+      "id": "fox-say.native-ipad-capture-upload",
+      "status": "green_with_real_ipad_capture",
+      "description": "FoxPad can record audio through a native iPad microphone bridge and upload it to the Fox API.",
+      "evidence": [
+        "apps/ipad/FoxPad/FoxWebViewController.swift",
+        "apps/web-runtime/src/FoxSay.tsx",
+        "capture say_1782923628160_54e3baac"
+      ],
+      "latest_real_capture": {
+        "content_type": "audio/mp4",
+        "bytes": 1455477,
+        "sha256": "fd3f34515279bba7317e7525881158c4da3fde058442091751a430da237af201",
+        "raw_audio_committed": false
+      }
+    },
+    {
+      "id": "fox-say.capture-api",
+      "status": "green",
+      "description": "The Fox API stores capture metadata, exposes latest capture metadata, replays capture audio, and rejects empty captures.",
+      "evidence": [
+        "apps/api/src/server.ts",
+        "apps/api/test/server.test.ts",
+        "npm run test -w @fox/api"
+      ]
+    },
+    {
+      "id": "fox-say.capture-export",
+      "status": "green_with_real_ipad_capture",
+      "description": "The latest runtime capture can be exported to VCompose roundtrip storage without committing raw audio.",
+      "evidence": [
+        "scripts/fox-say-export-capture.mjs",
+        "npm run say:export-capture"
+      ],
+      "remote_shape": {
+        "host": "fox-voice-host",
+        "directory": "/srv/vcompose/data/fox/voice/roundtrip"
+      }
+    },
+    {
+      "id": "fox-say.vcompose-staged-roundtrip-smoke",
+      "status": "green_with_real_ipad_capture",
+      "description": "VCompose staged smoke consumes the exported real iPad capture and verifies existing Linux ASR/TTS evidence links.",
+      "evidence": [
+        "job-1782923656-e4cbb4f2b6cd27b7",
+        "/srv/vcompose/output/fox/voice/runtime/e2e/fox-voice-ipad-linux-roundtrip-smoke-v0.json"
+      ],
+      "decision": "roundtrip_capture_linux_evidence_ready"
+    },
+    {
+      "id": "fox-say.one-command-handoff-smoke-runner",
+      "status": "green",
+      "description": "One command validates latest capture, exports it to VCompose, submits the staged Linux smoke gate, polls the report, and writes a single local handoff summary.",
+      "evidence": [
+        "scripts/fox-say-handoff-smoke.mjs",
+        "npm run say:handoff-smoke",
+        ".tmp/fox-say-handoff-smoke-report.json"
+      ],
+      "decision": "fox_say_handoff_smoke_ready"
+    },
+    {
+      "id": "fox-say.browser-tts-fallback",
+      "status": "green_basic_fallback",
+      "description": "Browser/iPad speechSynthesis can speak text, with Mandarin voice selection when available. It is explicitly not the natural Linux TTS target.",
+      "evidence": [
+        "apps/web-runtime/src/FoxSay.tsx",
+        "docs/fox-say/ROUNDTRIP_AND_CORPUS_HANDOFF_V0.md"
+      ]
+    },
+    {
+      "id": "fox-say.corpus-capture-mode",
+      "status": "green_capture_mode_ready",
+      "description": "Fox Say can label latest captures into shape-only corpus sample manifests for the 50-100 real iPad/noise sample matrix.",
+      "evidence": [
+        "apps/api/src/server.ts",
+        "apps/web-runtime/src/FoxSay.tsx",
+        "docs/fox-say/CORPUS_CAPTURE_MODE_V0.md",
+        "tests/e2e/fox-say-corpus.spec.ts"
+      ],
+      "handoff_relevance": "starts real sample collection without admitting ASR text into workout state"
+    },
+    {
+      "id": "fox-say.asr-to-fox-draft",
+      "status": "green_tdd_contract",
+      "description": "Fox API can ingest Linux ASR results, create reviewable Fox drafts, and confirm them into voice-sourced Entries only after user review.",
+      "evidence": [
+        "docs/fox-say/ASR_TO_FOX_DRAFT_TDD_V0.md",
+        "apps/api/src/repository.ts",
+        "apps/api/src/server.ts",
+        "apps/api/test/server.test.ts",
+        "apps/web-runtime/src/FoxSay.tsx",
+        "tests/e2e/fox-say-corpus.spec.ts"
+      ],
+      "handoff_relevance": "connects ASR text to Fox storage without allowing automatic workout state mutation"
+    },
+    {
+      "id": "fox-say.review-inbox",
+      "status": "green_review_inbox_ready",
+      "description": "Fox Say can list pending voice drafts, select a draft, edit type/title/structured JSON, discard unwanted drafts, and confirm selected drafts into Entries.",
+      "evidence": [
+        "apps/api/src/repository.ts",
+        "apps/api/src/server.ts",
+        "apps/api/test/server.test.ts",
+        "apps/web-runtime/src/FoxSay.tsx",
+        "apps/web-runtime/src/styles.css",
+        "tests/e2e/fox-say-corpus.spec.ts",
+        "PATCH /say/drafts/:id",
+        "npm run test -w @fox/api",
+        "npx playwright test tests/e2e/fox-say-corpus.spec.ts"
+      ],
+      "handoff_relevance": "turns staged ASR evidence into a daily usable review queue while preserving manual confirmation before storage"
+    },
+    {
+      "id": "fox-say.guided-flow-1-1",
+      "status": "green_guided_flow_ready",
+      "description": "Fox Say now separates daily recording, local link testing, and draft inbox review so users can tell what stage they are in and whether a smoke path succeeded.",
+      "evidence": [
+        "docs/fox-say/GUIDED_FLOW_1_1.md",
+        "apps/web-runtime/src/FoxSay.tsx",
+        "apps/web-runtime/src/styles.css",
+        "tests/e2e/fox-say-corpus.spec.ts",
+        "npx playwright test tests/e2e/fox-say-corpus.spec.ts"
+      ],
+      "handoff_relevance": "adds the UX layer needed before LLM extraction or realtime voice control"
+    },
+    {
+      "id": "fox-say.linux-sensevoice-asr-runner",
+      "status": "green_with_real_ipad_capture",
+      "description": "The latest iPad capture can be exported, transcoded to a Linux-friendly wav derivative, transcribed by SenseVoice on VCompose, and posted back to Fox as ASR evidence.",
+      "command": "npm run say:linux-asr",
+      "evidence": [
+        "scripts/fox-say-linux-asr-runner.mjs",
+        "scripts/fox-say-export-capture.mjs",
+        "tests/scripts/fox-say-linux-asr-runner.test.mjs",
+        ".tmp/fox-say-linux-asr-runner-report.json",
+        "VCompose registry/teams/fox/templates/k3s-heavy-gpu-fox-say-sensevoice-latest-capture-asr.yaml",
+        "job-1782929178-5ea870d0c5532b",
+        "asr_1782929185333_27c4873d",
+        "draft_1782929213885_21695272"
+      ],
+      "latest_real_capture": {
+        "content_type": "audio/mp4",
+        "bytes": 83367,
+        "sha256": "e862a9e2edebb03fee8dbe77f5802dc0d0e0d3f8f2d3976cd0389dae23e8516d",
+        "asr_content_type": "audio/wav",
+        "asr_audio_bytes": 100388,
+        "raw_audio_committed": false
+      },
+      "latest_transcript": "吃葡萄不吐葡大皮。",
+      "handoff_relevance": "proves the staged iPad recording to Linux ASR to Fox draft path without realtime streaming or workout state mutation"
+    }
+  ],
+  "not_features_yet": [
+    {
+      "id": "fox-say.realtime-ipad-linux-streaming",
+      "reason": "streaming roundtrip latency is not measured"
+    },
+    {
+      "id": "fox-say.linux-asr-to-workout-state",
+      "reason": "ASR text can become a confirmed Entry after manual review, but it is not admitted into the workout state machine"
+    },
+    {
+      "id": "fox-say.linux-tts-to-ipad-playback",
+      "reason": "Linux TTS playback package exists, but automatic iPad playback is not wired"
+    },
+    {
+      "id": "fox-say.real-corpus-matrix",
+      "reason": "50-100 real human/iPad/noise samples have not been collected and scored"
+    },
+    {
+      "id": "fox-say.daily-use-product-readiness",
+      "reason": "full realtime runtime, natural TTS playback, ASR command admission, UI polish, and benchmark evidence are not complete"
+    }
+  ],
+  "handoff_boundary": {
+    "allowed": [
+      "UI/native team can build a better recorder UI on top of the native capture bridge",
+      "UI/native team can consume capture metadata and playback API",
+      "runtime team can consume exported captures in VCompose staged gates"
+    ],
+    "blocked": [
+      "do not commit raw audio",
+      "do not claim realtime streaming is green",
+      "do not mutate workout state from ASR text without a new gate",
+      "do not market browser speechSynthesis as natural TTS"
+    ]
+  }
+}
