@@ -19,11 +19,22 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         visible(app.buttons["feedback-dismiss-keyboard"], in: app)
         app.buttons["feedback-dismiss-keyboard"].tap()
         for (index, id) in ["trial-information", "trial-software-issue", "trial-training-feeling"].enumerated() {
-            XCUIDevice.shared.orientation = index == 1 ? .landscapeLeft : .portrait
+            let orientation: UIDeviceOrientation = index == 1 ? .landscapeLeft : .portrait
+            XCUIDevice.shared.orientation = orientation
+            waitForOrientation(orientation, in: app)
             let field = app.textFields[id], form = app.scrollViews["set-feedback"]
-            for _ in 0..<12 { if field.isHittable { break }; form.swipeUp() }
-            XCTAssertTrue(field.isHittable, id)
-            field.tap(); field.typeText("test \(index)")
+            let footer = app.buttons["submit-feedback"]
+            for _ in 0..<12 {
+                if fullyVisible(field, in: app, viewport: form, above: footer) { break }
+                scrollFeedback(form, target: field, above: footer, in: app)
+            }
+            stableTarget(field, in: app, viewport: form, above: footer)
+            field.tap()
+            XCTAssertTrue(form.exists, "Tapping a feedback field must not submit the set")
+            XCTAssertFalse(app.buttons["rest-ready"].exists)
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 4))
+            field.typeText("test \(index)")
+            XCTAssertEqual(field.value as? String, "test \(index)")
             visible(app.buttons["feedback-dismiss-keyboard"], in: app)
             app.buttons["feedback-dismiss-keyboard"].tap()
             visible(app.buttons["submit-feedback"], in: app)
@@ -31,6 +42,54 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         }
         app.buttons["submit-feedback"].tap()
         XCTAssertTrue(app.buttons["rest-ready"].waitForExistence(timeout: 5))
+    }
+
+    private func scrollFeedback(_ form: XCUIElement, target: XCUIElement, above footer: XCUIElement,
+                                in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let bounds = form.frame.intersection(app.frame)
+        let bottom = min(bounds.maxY, footer.frame.minY - 8)
+        let gutter = target.frame.minX - bounds.minX
+        XCTAssertGreaterThan(gutter, 0, "Need a visible form gutter outside the multiline field", file: file, line: line)
+        XCTAssertGreaterThan(bottom - bounds.minY, 60, file: file, line: line)
+        guard gutter > 0, bottom - bounds.minY > 60 else { return }
+        // A centered swipe can be consumed by a multiline field's own scroll view.
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let x = bounds.minX - app.frame.minX + gutter / 2
+        let top = bounds.minY - app.frame.minY, height = bottom - bounds.minY
+        let start = origin.withOffset(CGVector(dx: x, dy: top + height * 0.8))
+        let end = origin.withOffset(CGVector(dx: x, dy: top + height * 0.2))
+        start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
+    private func waitForOrientation(_ orientation: UIDeviceOrientation, in app: XCUIApplication) {
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            orientation.isLandscape ? app.frame.width > app.frame.height : app.frame.height > app.frame.width
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 4), .completed)
+    }
+
+    private func fullyVisible(_ element: XCUIElement, in app: XCUIApplication, viewport: XCUIElement? = nil,
+                              above footer: XCUIElement? = nil) -> Bool {
+        guard element.exists, element.isHittable else { return false }
+        let frame = element.frame, bounds = app.frame.intersection(viewport?.frame ?? app.frame)
+        return frame.width > 0 && frame.height > 0 && bounds.contains(frame)
+            && (footer == nil || frame.maxY < footer!.frame.minY - 4)
+    }
+
+    private func stableTarget(_ element: XCUIElement, in app: XCUIApplication, viewport: XCUIElement? = nil,
+                              above footer: XCUIElement? = nil, file: StaticString = #filePath, line: UInt = #line) {
+        var previous: CGRect?, stableSince: TimeInterval?
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            guard self.fullyVisible(element, in: app, viewport: viewport, above: footer) else {
+                previous = nil; stableSince = nil; return false
+            }
+            let frame = element.frame, now = ProcessInfo.processInfo.systemUptime
+            if previous != frame { previous = frame; stableSince = now; return false }
+            return now - (stableSince ?? now) >= 0.25
+        }, object: nil)
+        let result = XCTWaiter.wait(for: [ready], timeout: 4)
+        if result != .completed { screenshot("unstable-target-\(element.identifier)", app: app) }
+        XCTAssertEqual(result, .completed, element.identifier, file: file, line: line)
     }
 
     private func screenshot(_ name: String, app: XCUIApplication) {
@@ -118,9 +177,17 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_START_SCREEN": "vision", "FOX_POSE_FIXTURE": "no_person", "FOX_POSE_IMAGE_FIXTURE": "1"]
         app.launchArguments = ["--ui-testing-reset"]; app.launch()
         XCTAssertTrue(app.segmentedControls["vision-quick-exercise"].waitForExistence(timeout: 10))
+        waitForOrientation(.landscapeLeft, in: app)
         let exercise = app.segmentedControls["vision-quick-exercise"], arm = app.segmentedControls["vision-quick-arm"]
         visible(exercise, in: app); visible(arm, in: app)
-        exercise.buttons["哑铃侧平举"].tap(); arm.buttons["右臂"].tap()
+        for choice in [exercise.buttons["哑铃侧平举"], arm.buttons["右臂"]] {
+            stableTarget(choice, in: app)
+            choice.tap()
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: choice)
+            let result = XCTWaiter.wait(for: [selected], timeout: 4)
+            if result != .completed { screenshot("quick-selection-not-applied", app: app) }
+            XCTAssertEqual(result, .completed, choice.label)
+        }
         XCTAssertTrue(app.staticTexts["哑铃侧平举 · 右臂"].waitForExistence(timeout: 4))
         let preview = app.otherElements["pose-preview"].frame
         XCTAssertLessThan(exercise.frame.maxX, preview.minX)
