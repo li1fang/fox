@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, writeFile, readFile, rm} from 'node:fs/promises';
+import {mkdtemp, mkdir, writeFile, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {validatePrivateInputs} from '../../scripts/private-inputs.mjs';
+import * as privateInputs from '../../scripts/private-inputs.mjs';
+import {discoverTests} from '../../scripts/test-inventory.mjs';
 import {auditInventory, auditNativeCoverage, auditReceipt, auditCommandOutput, classifyDeviceError} from '../../scripts/verification-contracts.mjs';
 
 test('private inputs are explicit, complete, pinned and rechecked, never an implicit local cache', async t => {
@@ -66,4 +68,49 @@ test('non-native zero, skipped and placeholder-file tests cannot be counted as c
   assert.throws(() => auditCommandOutput('# Subtest: tests/scripts/empty.test.mjs\n# pass 1','node'), /missing/);
   assert.throws(() => auditCommandOutput('Tests 1 passed | 1 skipped\n# pass 1','web'), /skipped/);
   assert.throws(() => auditCommandOutput('Ran 7 tests\nOK (skipped=1)','python'), /incomplete/);
+  assert.throws(() => auditCommandOutput('Ran 3 tests\nOK (expected failures=3)','python'), /incomplete/);
+  assert.equal(auditCommandOutput('Ran 3 tests in 0.03s\n\nOK\n','python').passed, 3);
+});
+
+test('nested tests are discovered across native, Python and browser directories', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fox-discovery-test-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const folders = ['apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests', 'apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests',
+    'apps/ipad/FoxAppTests', 'apps/ipad/FoxUITests', 'tests/scripts', 'tests/e2e', 'packages/core/test', 'apps/api/test'];
+  for (const folder of folders) await mkdir(path.join(dir, folder, 'nested'), {recursive: true});
+  await writeFile(path.join(dir, folders[0], 'nested/Example.swift'), 'final class Example: XCTestCase {\nfunc testNested() {}\n}');
+  await writeFile(path.join(dir, 'tests/scripts/nested/test_extra.py'), '');
+  await writeFile(path.join(dir, 'tests/e2e/nested/extra.spec.ts'), '');
+  const found = await discoverTests(dir);
+  assert.equal(found.length, 3);
+  for (const id of ['FoxTrainingCoreTests/Example/testNested', 'tests/scripts/nested/test_extra.py', 'tests/e2e/nested/extra.spec.ts']) {
+    assert.ok(found.some(row => row.id === id), id);
+  }
+  assert.throws(() => auditInventory(found, []), /Unclassified/);
+});
+
+test('private batch consumers must use the pinned files, not unpinned siblings', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fox-bindings-test-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const manifest = {schema: 'fox.private_inputs.v1', assets: {}};
+  const contract = {schema: 'fox.private_input_contract.v1', assets: {}};
+  const contents = {job: ['job.json', JSON.stringify({files: [{path: 'input.jsonl'}]})], asset0: ['input.jsonl', 'poses'],
+    status: ['status.json', JSON.stringify({files: [{path: 'result.json'}, {path: 'settings.json'}, {path: 'vision.jsonl'}]})],
+    result: ['result.json', '{}'], settings: ['settings.json', '{}'], vision: ['vision.jsonl', 'observations']};
+  for (const [key, [name, bytes]] of Object.entries(contents)) {
+    const file = path.join(dir, name); await writeFile(file, bytes);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    manifest.assets[`sample.${key}`] = {path: file, bytes: Buffer.byteLength(bytes), sha256};
+    contract.assets[`sample.${key}`] = {sha256, purpose: 'Synthetic binding test'};
+  }
+  const file = path.join(dir, 'manifest.private.json');
+  const save = () => writeFile(file, JSON.stringify(manifest));
+  await save();
+  assert.deepEqual(await privateInputs.privateBatchFolders('sample', file, contract), {jobFolder: dir, resultFolder: dir});
+  for (const key of ['job', 'status', 'asset0', 'result', 'settings', 'vision']) {
+    const row = manifest.assets[`sample.${key}`], original = row.path;
+    row.path = path.join(dir, `frozen-${key}`); await writeFile(row.path, contents[key][1]); await save();
+    await assert.rejects(privateInputs.privateBatchFolders('sample', file, contract), /binding/);
+    row.path = original;
+  }
 });

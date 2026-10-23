@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp, writeFile, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {Writable} from 'node:stream';
+import * as suiteModule from '../../scripts/trial-suite.mjs';
 import {runSuite, checkXCTestLog, suiteSteps, compareHistory} from '../../scripts/trial-suite.mjs';
 
 test('suite has actual controller, phone/pad UI, real speech, wire and per-event history gates', () => {
@@ -85,4 +87,47 @@ test('private bytes changing after otherwise green steps invalidate the receipt'
   await assert.rejects(runSuite({directory:dir, steps, fingerprint:async()=> 'same', preflight:async()=>[++n],
     execute:async()=>({code:0,output:'done'})}), /inputs changed/);
   assert.equal(JSON.parse(await readFile(path.join(dir,'suite.json'))).status,'failed');
+});
+
+test('cancellation during the final input recheck cannot publish success', async t => {
+  const {dir, steps} = await harness(t); let checks = 0;
+  await assert.rejects(runSuite({directory: dir, steps, fingerprint: async () => 'same',
+    preflight: async () => { if (++checks === 2) process.emit('SIGTERM'); return []; },
+    execute: async () => ({code: 0, output: 'done'})}), /cancelled/);
+  assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'cancelled');
+});
+
+test('a timed-out child exiting zero is a failure, not a green receipt', async t => {
+  const {dir} = await harness(t);
+  const step = {id: 'timeout', command: process.execPath, timeoutMs: 800,
+    args: ['-e', "process.on('SIGTERM', () => process.exit(0)); console.log('ready'); setInterval(() => {}, 50)"]};
+  await assert.rejects(runSuite({directory: dir, steps: [step], fingerprint: async () => 'same',
+    preflight: async () => []}), /timed out/);
+  assert.match(await readFile(path.join(dir, 'timeout.log'), 'utf8'), /ready/);
+  assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'failed');
+});
+
+test('pre-cancelled execution and unavailable logs never spawn a child', async t => {
+  const {dir} = await harness(t); const marker = path.join(dir, 'spawned');
+  const step = {command: process.execPath, args: ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'spawned')`]};
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(suiteModule.execute(step, {logPath: path.join(dir, 'cancelled.log'), signal: controller.signal}), /abort|cancel/i);
+  const logPath = path.join(dir, 'existing.log'); await writeFile(logPath, 'keep');
+  await assert.rejects(suiteModule.execute(step, {logPath}), /EEXIST/);
+  await assert.rejects(readFile(marker), {code: 'ENOENT'});
+  assert.equal(await readFile(logPath, 'utf8'), 'keep');
+});
+
+test('a mid-stream logging error terminates the child and retains a failed receipt', async t => {
+  const {dir} = await harness(t); let pid;
+  const log = new Writable({write(chunk, encoding, callback) {
+    pid = Number(chunk.toString().trim()); callback(Error('synthetic disk full'));
+  }});
+  const step = {id: 'logging', command: process.execPath,
+    args: ['-e', 'console.log(process.pid); setInterval(() => {}, 50)']};
+  await assert.rejects(runSuite({directory: dir, steps: [step], fingerprint: async () => 'same',
+    preflight: async () => [], execute: (s, options) => suiteModule.execute(s, {...options, openLog: async () => log})}), /disk full/);
+  assert.ok(pid > 0);
+  assert.throws(() => process.kill(pid, 0), {code: 'ESRCH'});
+  assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'failed');
 });

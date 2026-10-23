@@ -9,6 +9,7 @@
 | 平台适配 | `FoxNative` | Apple Vision/相机/屏幕/音频 -> 核心输入；核心状态 -> UI/语音 | 不用 UI 操作重写运动事实；平台能力不能冒充核心准确性 |
 | 记录与附件 | `FoxJournalCore` | 本地记录、照片、完整备份 -> SQLite/私有文件 | 不依赖训练或远端服务；不静默迁移现有训练 JSON |
 | Web 与语音实验 | `apps/api`, `apps/web-runtime`, `packages` | API、人工确认草稿、持久化 | 不依赖真实 Linux 才能测试；不自动更改 workout state |
+| Fox Say 原生壳 | `apps/ipad/FoxPad` | 独立 App 的 Web 入口、原生麦克风桥、录音上传 | 不代替 FoxNative；录音/上传/识别/入库是不同的成功条件 |
 | 实验与开发证据 | `scripts`, `experiments`, 测试专用 `FoxTestSupport` | 固定输入 -> 可追溯报告/索引 | 不进产品依赖；SQLite 索引可重建，不能替代原始证据 |
 
 完整仓库路径前缀：Swift 模块均在 `apps/ipad/`，引导策略在 `apps/ipad/FoxTrainingCore/Sources/FoxTrainingCore/Guidance/`。

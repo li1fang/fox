@@ -31,7 +31,7 @@ export async function discoverTests(directory = root) {
   for (const [folder, extensions] of [['tests/scripts', /\.test\.mjs$|^test_.*\.py$/],
     ['tests/e2e', /\.spec\.ts$/], ['packages/core/test', /\.test\.ts$/], ['apps/api/test', /\.test\.ts$/]]) {
     for (const file of await filesBelow(path.join(directory, folder))) {
-      if (extensions.test(file)) found.push({id: `${folder}/${file}`, file: `${folder}/${file}`});
+      if (extensions.test(path.basename(file))) found.push({id: `${folder}/${file}`, file: `${folder}/${file}`});
     }
   }
   return found;

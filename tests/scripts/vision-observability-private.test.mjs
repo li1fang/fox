@@ -2,11 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { validateBatchJob, verifyBatchResult } from '../../scripts/vision-batch.mjs';
 import { analyzeObservability } from '../../scripts/vision-observability.mjs';
-import {privateInput} from '../../scripts/private-inputs.mjs';
+import {privateInput, privateBatchFolders} from '../../scripts/private-inputs.mjs';
 
 for(const [name,id,count] of [
   ['pulldown','CFCCA7B7-7E58-494C-B041-38A6374870E8',615],
@@ -15,7 +14,7 @@ for(const [name,id,count] of [
 ]) {
   test(`private iPad ${name}: verified inference and reproducible observation analysis, not accuracy acceptance`,
     async()=>{
-      const jobFolder=path.dirname(await privateInput(`${name}.job`)),folder=path.dirname(await privateInput(`${name}.status`));
+      const {jobFolder, resultFolder: folder}=await privateBatchFolders(name);
       const {jobSHA256}=await validateBatchJob(jobFolder);
       const {result}=await verifyBatchResult(folder,jobSHA256);
       assert.equal(result.device,'iPad16,5');

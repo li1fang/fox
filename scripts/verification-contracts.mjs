@@ -48,7 +48,12 @@ export function auditCommandOutput(raw, kind) {
     return {nodePassed: passes.reduce((a,b)=>a+b,0), ...(kind === 'web' ? {vitestPassed: vitest.reduce((a,b)=>a+b,0)} : {}), skipped: []};
   }
   if (kind === 'browser' && (!/\b[1-9]\d* passed/.test(output) || /\d+ (?:skipped|flaky|failed)/.test(output))) throw Error('Browser tests incomplete');
-  if (kind === 'python' && (!/Ran [1-9]\d* tests[\s\S]*\bOK\b/.test(output) || /skipped=[1-9]/.test(output))) throw Error('Python tests incomplete');
+  if (kind === 'python') {
+    const ran = output.match(/Ran ([1-9]\d*) tests/);
+    if (!ran || !/^OK\s*$/m.test(output) || /(?:skipped|expected failures|unexpected successes)=[1-9]/.test(output)
+        || /^FAILED\b/m.test(output)) throw Error('Python tests incomplete');
+    return {passed: Number(ran[1]), skipped: []};
+  }
   return {scope: kind, skipped: []};
 }
 

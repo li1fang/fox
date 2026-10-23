@@ -40,3 +40,27 @@ export async function privateInput(id) {
   if (actual.sha256 !== value.sha256 || actual.bytes !== value.bytes) throw Error(`Private input changed: ${id}`);
   return value.path;
 }
+
+// Batch validators open fixed sibling filenames. Bind those actual readers to the pinned manifest too.
+export async function privateBatchFolders(prefix, filename = process.env.FOX_PRIVATE_INPUT_MANIFEST, contract) {
+  const inputs = await validatePrivateInputs(filename, contract);
+  const asset = suffix => inputs.find(row => row.id === `${prefix}.${suffix}`)?.path;
+  const jobPath = asset('job'), statusPath = asset('status');
+  if (!jobPath || !statusPath || path.basename(jobPath) !== 'job.json' || path.basename(statusPath) !== 'status.json') {
+    throw Error(`Private batch binding mismatch: ${prefix} job/status filename`);
+  }
+  const jobFolder = path.dirname(jobPath), resultFolder = path.dirname(statusPath);
+  const bind = (suffix, folder, name) => {
+    if (!asset(suffix) || path.resolve(asset(suffix)) !== path.resolve(folder, name)) {
+      throw Error(`Private batch binding mismatch: ${prefix}.${suffix}`);
+    }
+  };
+  const job = JSON.parse(await readFile(jobPath, 'utf8'));
+  const status = JSON.parse(await readFile(statusPath, 'utf8'));
+  for (const [i, file] of job.files.entries()) bind(`asset${i}`, jobFolder, file.path);
+  const resultNames = {'result.json': 'result', 'settings.json': 'settings', 'vision.jsonl': 'vision'};
+  for (const file of status.files) bind(resultNames[file.path], resultFolder, file.path);
+  // Observation analysis reads vision.jsonl even if a malformed status omits it.
+  bind('vision', resultFolder, 'vision.jsonl');
+  return {jobFolder, resultFolder};
+}

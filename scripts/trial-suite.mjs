@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import {spawn, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {mkdir, readFile, writeFile, rename, lstat} from 'node:fs/promises';
-import {createWriteStream} from 'node:fs';
+import {mkdir, readFile, writeFile, rename, lstat, open} from 'node:fs/promises';
+import {finished} from 'node:stream/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isDeepStrictEqual} from 'node:util';
@@ -94,25 +94,43 @@ export async function fingerprint() {
   return createHash('sha256').update(JSON.stringify({commit: commit.stdout.trim(), files: rows})).digest('hex');
 }
 
-async function execute(step, {logPath, signal} = {}) {
+const openLogFile = async filename => (await open(filename, 'wx')).createWriteStream();
+
+export async function execute(step, {logPath, signal, openLog = openLogFile} = {}) {
+  signal?.throwIfAborted();
+  // Secure the log before spawning; a broken log is a failed run, even when the child exits zero.
+  const log = await openLog(logPath);
   return new Promise((resolve, reject) => {
-    const log = createWriteStream(logPath, {flags: 'wx'});
-    const child = spawn(step.command, step.args, {cwd: root, env: {...environment, ...step.env},
-      detached: true, stdio: ['ignore', 'pipe', 'pipe']});
+    let child, forced, failure;
     let stdout = '', stderr = '';
-    let forced;
     const terminate = () => {
+      if (!child?.pid) return;
       try { process.kill(-child.pid, 'SIGTERM'); } catch {}
       forced ??= setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, 5000);
     };
-    const timeout = setTimeout(terminate, step.timeoutMs ?? 45 * 60 * 1000);
-    signal?.addEventListener('abort', terminate, {once: true});
-    child.stdout.on('data', chunk => { stdout += chunk.toString(); log.write(chunk); });
-    child.stderr.on('data', chunk => { stderr += chunk.toString(); log.write(chunk); });
-    child.on('error', error => { clearTimeout(timeout); clearTimeout(forced); signal?.removeEventListener('abort', terminate); log.end(); reject(error); });
-    child.on('close', (code, childSignal) => {
-      clearTimeout(timeout); clearTimeout(forced); signal?.removeEventListener('abort', terminate);
-      log.end(() => resolve({code, signal: childSignal, stdout, output: stdout + '\n' + stderr, liveLog: true}));
+    const logFinished = finished(log, {cleanup: true}).catch(error => { failure ??= error; terminate(); });
+    if (signal?.aborted) {
+      log.destroy();
+      logFinished.then(() => reject(Error('Command cancelled')));
+      return;
+    }
+    const cancel = () => { failure ??= Error('Command cancelled'); terminate(); };
+    child = spawn(step.command, step.args, {cwd: root, env: {...environment, ...step.env},
+      detached: true, stdio: ['ignore', 'pipe', 'pipe']});
+    const timeout = setTimeout(() => {
+      failure ??= Error(`${step.id ?? step.command} timed out`); terminate();
+    }, step.timeoutMs ?? 45 * 60 * 1000);
+    signal?.addEventListener('abort', cancel, {once: true});
+    child.stdout.on('data', chunk => { stdout += chunk.toString(); if (!log.destroyed) log.write(chunk); });
+    child.stderr.on('data', chunk => { stderr += chunk.toString(); if (!log.destroyed) log.write(chunk); });
+    child.on('error', error => { failure ??= error; });
+    child.on('close', async (code, childSignal) => {
+      clearTimeout(timeout); clearTimeout(forced); signal?.removeEventListener('abort', cancel);
+      if (!log.destroyed) log.end();
+      await logFinished;
+      clearTimeout(forced);
+      if (failure) reject(failure);
+      else resolve({code, signal: childSignal, stdout, output: stdout + '\n' + stderr, liveLog: true});
     });
   });
 }
@@ -164,6 +182,9 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
     }
     // Re-read private bytes at the end too; source stability alone is insufficient.
     if (!isDeepStrictEqual(await preflight(), receipt.inputs)) throw Error('Private inputs changed during suite');
+    if (cancellation.signal.aborted) throw Error('Suite cancelled');
+    if (await sourceFingerprint() !== receipt.sourceSHA256) throw Error('Source changed during suite; rerun candidate');
+    if (cancellation.signal.aborted) throw Error('Suite cancelled');
     receipt.status = 'software_suite_passed';
     return receipt;
   } catch (error) {
