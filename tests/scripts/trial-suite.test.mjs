@@ -4,6 +4,7 @@ import {mkdtemp, writeFile, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {Writable} from 'node:stream';
+import {spawn} from 'node:child_process';
 import * as suiteModule from '../../scripts/trial-suite.mjs';
 import {runSuite, checkXCTestLog, suiteSteps, compareHistory} from '../../scripts/trial-suite.mjs';
 
@@ -153,4 +154,25 @@ test('failed preflight still finalizes resources and finalization cancellation c
     preflight: async () => [], execute: async () => ({code: 0, output: 'done'}),
     finalize: async () => { process.emit('SIGTERM'); }}), /cancelled/);
   assert.equal(JSON.parse(await readFile(path.join(second.dir, 'suite.json'))).status, 'cancelled');
+});
+
+test('an OS cancellation queued during cleanup cannot publish a successful receipt', async t => {
+  const {dir} = await harness(t);
+  const script = `import {runSuite} from ${JSON.stringify(new URL('../../scripts/trial-suite.mjs', import.meta.url).href)};
+    import {spawnSync} from 'node:child_process';
+    try {
+      await runSuite({directory: ${JSON.stringify(dir)}, steps: [{id:'one',command:'fake',args:[]}],
+        fingerprint:async()=> 'same', preflight:async()=> [], execute:async()=> ({code:0,output:'done'}),
+        finalize:async()=> { console.log('READY_FOR_SIGNAL'); spawnSync(process.execPath, ['-e','setTimeout(()=>{},800)']); }});
+      process.exit(0);
+    } catch(error) { console.error(error.message); process.exit(1); }`;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', script], {stdio: ['ignore', 'pipe', 'pipe']});
+  const timeout = setTimeout(() => child.kill('SIGKILL'), 5000);
+  t.after(() => { clearTimeout(timeout); if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL'); });
+  let signalled = false;
+  child.stdout.on('data', chunk => { if (!signalled && chunk.toString().includes('READY_FOR_SIGNAL')) { signalled = true; child.kill('SIGTERM'); } });
+  const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+  assert.equal(signalled, true);
+  assert.equal(code, 1);
+  assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'cancelled');
 });

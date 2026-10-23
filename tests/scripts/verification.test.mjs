@@ -118,26 +118,26 @@ test('private batch consumers must use the pinned files, not unpinned siblings',
   }
 });
 
-test('full verification owns isolated simulators and never deletes existing or explicit devices', () => {
+test('full verification owns isolated simulators and never deletes existing or explicit devices', async () => {
   const info = {simulators: {'runtime-test': [
     {udid: 'existing-pad', name: 'Custom tablet', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch'},
     {udid: 'existing-phone', name: 'Custom phone', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}]}};
   const calls = []; let n = 0;
   const execute = (command, args) => { calls.push(args); return args[1] === 'create' ? `00000000-0000-0000-0000-00000000000${++n}` : ''; };
-  const lease = developmentEnvironment.allocateSimulators(info, {execute, overrides: {}});
+  const lease = await developmentEnvironment.allocateSimulators(info, {execute, overrides: {}});
   assert.equal(lease.created.length, 2);
   assert.notEqual(lease.devices.ipad, 'existing-pad');
-  developmentEnvironment.releaseSimulators(lease, execute);
+  await developmentEnvironment.releaseSimulators(lease, execute);
   assert.equal(calls.filter(args => args[1] === 'delete').length, 2);
   assert.ok(calls.every(args => !args.includes('existing-pad') && !args.includes('existing-phone')));
   calls.length = 0;
-  const explicit = developmentEnvironment.allocateSimulators(info, {execute, overrides: {ipad: 'existing-pad', iphone: 'existing-phone'}});
+  const explicit = await developmentEnvironment.allocateSimulators(info, {execute, overrides: {ipad: 'existing-pad', iphone: 'existing-phone'}});
   assert.deepEqual(explicit.devices, {ipad: 'existing-pad', iphone: 'existing-phone'});
-  developmentEnvironment.releaseSimulators(explicit, execute);
+  await developmentEnvironment.releaseSimulators(explicit, execute);
   assert.equal(calls.length, 0);
 });
 
-test('partial simulator allocation cleans only owned instances and cleanup failures are explicit', () => {
+test('partial simulator allocation cleans only owned instances and cleanup failures are explicit', async () => {
   const info = {simulators: {'runtime-test': [
     {udid: 'pad', name: 'iPad', deviceTypeIdentifier: 'type.iPad-Pro-11-inch'},
     {udid: 'phone', name: 'iPhone', deviceTypeIdentifier: 'type.iPhone-17-Pro'}]}};
@@ -148,10 +148,10 @@ test('partial simulator allocation cleans only owned instances and cleanup failu
     if (args[1] === 'create') { if (++n === 2) throw Error('creation unavailable'); return owned; }
     return '';
   };
-  assert.throws(() => developmentEnvironment.allocateSimulators(info, {execute, overrides: {}}), /creation unavailable/);
+  await assert.rejects(developmentEnvironment.allocateSimulators(info, {execute, overrides: {}}), /creation unavailable/);
   assert.ok(calls.some(args => args[1] === 'delete' && args[2] === owned));
-  assert.throws(() => developmentEnvironment.releaseSimulators({created: [owned]}, () => { throw Error('cleanup unavailable'); }), /cleanup/);
-  assert.doesNotThrow(() => developmentEnvironment.releaseSimulators({created: [owned]}, (command, args) => {
+  await assert.rejects(developmentEnvironment.releaseSimulators({created: [owned]}, () => { throw Error('cleanup unavailable'); }), /cleanup/);
+  await assert.doesNotReject(developmentEnvironment.releaseSimulators({created: [owned]}, (command, args) => {
     if (args[1] === 'shutdown') throw Error('Unable to shutdown device in current state: Shutdown');
   }));
 });

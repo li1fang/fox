@@ -150,7 +150,8 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
   };
   const cancellation = new AbortController();
   const cancel = () => cancellation.abort();
-  process.once('SIGINT', cancel); process.once('SIGTERM', cancel);
+  process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
+  let failure;
   try {
     receipt.inputs = await preflight();
     if (!steps.length) throw Error('Empty verification scope');
@@ -188,24 +189,34 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
     if (await sourceFingerprint() !== receipt.sourceSHA256) throw Error('Source changed during suite; rerun candidate');
     if (cancellation.signal.aborted) throw Error('Suite cancelled');
     receipt.status = 'software_suite_passed';
-    return receipt;
   } catch (error) {
-    receipt.status = cancellation.signal.aborted ? 'cancelled' : 'failed'; receipt.error = error.message; throw error;
+    receipt.status = cancellation.signal.aborted ? 'cancelled' : 'failed'; receipt.error = error.message; failure = error;
   } finally {
     try {
       await finalize?.();
-      if (cancellation.signal.aborted && receipt.status === 'software_suite_passed') {
-        receipt.status = 'cancelled'; throw Error('Suite cancelled during finalization');
-      }
     } catch (error) {
       receipt.finalizationError = error.message;
       if (receipt.status !== 'cancelled') receipt.status = 'failed';
-      throw error;
+      failure ??= error;
+    }
+    const applyCancellation = () => {
+      if (!cancellation.signal.aborted) return false;
+      receipt.status = 'cancelled'; receipt.error ??= 'Suite cancelled during finalization';
+      failure ??= Error(receipt.error); return true;
+    };
+    try {
+      // Yield to queued OS signals too; process.emit alone does not test this boundary.
+      await new Promise(setImmediate);
+      applyCancellation();
+      receipt.finishedAt = new Date().toISOString(); await save();
+      await new Promise(setImmediate);
+      if (receipt.status !== 'cancelled' && applyCancellation()) await save();
     } finally {
       process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
-      receipt.finishedAt = new Date().toISOString(); await save();
     }
   }
+  if (failure) throw failure;
+  return receipt;
 }
 
 async function main() {

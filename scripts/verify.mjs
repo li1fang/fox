@@ -51,7 +51,7 @@ export async function runVerification({scope = 'fast', component = 'all', output
       const info = doctor({native: component !== 'web'});
       Object.assign(metadata.environment, info);
       if (component !== 'web' && scope !== 'fast') {
-        lease = allocateSimulators(info);
+        lease = await allocateSimulators(info);
         metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
       }
       const devices = lease?.devices ?? {};
@@ -66,10 +66,10 @@ export async function runVerification({scope = 'fast', component = 'all', output
     }
     return inputs;
   };
-  const finalize = () => {
+  const finalize = async () => {
     if (!lease) return;
     try {
-      releaseSimulators(lease);
+      await releaseSimulators(lease);
       metadata.environment.simulatorLifecycle.status = 'released';
     } catch (error) {
       metadata.environment.simulatorLifecycle.status = 'cleanup_failed';
