@@ -1403,12 +1403,14 @@
     {
       "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticFixturePTSDoesNotConvertHostDelayIntoMotionLoss",
       "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "surface": "ipad",
       "scope": "public",
       "reason": "Synthetic capture time is independent of delayed host delivery; real arrival freshness remains intact"
     },
     {
       "id": "FoxAppTests/VisionControllerReplayTests/testRealCaptureGapsStillDiscardIncompleteMotionCycles",
       "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "surface": "ipad",
       "scope": "public",
       "reason": "Actual capture gaps still invalidate incomplete cycles and cannot fabricate phase durations"
     },

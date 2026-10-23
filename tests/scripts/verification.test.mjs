@@ -8,6 +8,7 @@ import {validatePrivateInputs} from '../../scripts/private-inputs.mjs';
 import * as privateInputs from '../../scripts/private-inputs.mjs';
 import {discoverTests} from '../../scripts/test-inventory.mjs';
 import * as developmentEnvironment from '../../scripts/development-environment.mjs';
+import * as verificationContracts from '../../scripts/verification-contracts.mjs';
 import {auditInventory, auditNativeCoverage, auditReceipt, auditCommandOutput, classifyDeviceError} from '../../scripts/verification-contracts.mjs';
 
 test('private inputs are explicit, complete, pinned and rechecked, never an implicit local cache', async t => {
@@ -30,11 +31,42 @@ test('private inputs are explicit, complete, pinned and rechecked, never an impl
 });
 
 test('new or removed native cases and unknown classifications fail the inventory gate', () => {
-  const found = [{id: 'Core/Example/testOne', file: 'Example.swift'}];
+  const found = [{id: 'FoxTrainingCoreTests/Example/testOne', file: 'Example.swift', surface: 'host'}];
   assert.throws(() => auditInventory(found, []), /Unclassified/);
   assert.throws(() => auditInventory([], [{...found[0], scope: 'public'}]), /Missing/);
   assert.throws(() => auditInventory(found, [{...found[0], scope: 'maybe'}]), /scope/);
   assert.doesNotThrow(() => auditInventory(found, [{...found[0], scope: 'public'}]));
+});
+
+test('missing or incompatible execution surfaces cannot silently exclude classified tests', () => {
+  for (const [id, valid] of [['FoxTrainingCoreTests/Example/testOne', ['host']],
+    ['FoxJournalCoreTests/Example/testOne', ['host']], ['FoxAppTests/Example/testOne', ['ipad', 'iphone']],
+    ['FoxUITests/Example/testOne', ['ipad', 'iphone']], ['tests/scripts/example.test.mjs', ['host']]]) {
+    const row = {id, file: 'Example', scope: 'public'};
+    for (const surface of [undefined, '', 'watch', ...['host', 'ipad', 'iphone'].filter(x => !valid.includes(x))]) {
+      assert.throws(() => auditInventory([row], [{...row, surface}]), /surface/, `${id}: ${surface}`);
+    }
+    for (const surface of valid) assert.doesNotThrow(() => auditInventory([row], [{...row, surface}]));
+  }
+});
+
+test('native selection must cover the declared tier and component, with exclusions explicit', () => {
+  const catalogue = [
+    ['FoxTrainingCoreTests/A/testOne', 'public'], ['FoxTrainingCoreTests/A/testPrivate', 'private'],
+    ['FoxJournalCoreTests/A/testOne', 'public'], ['FoxAppTests/A/testOne', 'public'],
+    ['FoxAppTests/A/testPrivate', 'private'], ['FoxUITests/A/testOne', 'public'],
+    ['FoxAppTests/A/testSpeech', 'real-speech'], ['FoxAppTests/A/testDevice', 'physical']
+  ].map(([id, scope]) => ({id, scope}));
+  for (const scope of ['fast', 'public', 'private']) for (const component of ['all', 'web', 'native']) {
+    const expected = component === 'web' ? [] : catalogue.filter(x => x.scope === 'public'
+      || scope === 'private' && ['private', 'real-speech'].includes(x.scope))
+      .filter(x => scope !== 'fast' || /^(FoxTrainingCoreTests|FoxJournalCoreTests)\//.test(x.id)).map(x => x.id);
+    const steps = [{expectedNative: expected}];
+    const audit = rows => verificationContracts.auditNativeSelection(catalogue, rows, {scope, component});
+    assert.doesNotThrow(() => audit(steps));
+    if (expected.length) assert.throws(() => audit([{expectedNative: expected.slice(1)}]), /selection.*missing/);
+    assert.throws(() => audit([{expectedNative: [...expected, 'FoxAppTests/A/testDevice']}]), /selection.*unexpected/);
+  }
 });
 
 test('a native batch must execute every selected case once without unexpected extras or skips', () => {

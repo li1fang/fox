@@ -4,7 +4,11 @@ export const scopes = ['public', 'private', 'real-speech', 'physical'];
 export function auditInventory(found, catalogue) {
   const expected = new Map(catalogue.map(x => [x.id, x]));
   if (expected.size !== catalogue.length) throw Error('Duplicate test classification');
-  for (const row of catalogue) if (!scopes.includes(row.scope)) throw Error(`Unknown scope: ${row.id}`);
+  for (const row of catalogue) {
+    if (!scopes.includes(row.scope)) throw Error(`Unknown scope: ${row.id}`);
+    const surfaces = /^(FoxAppTests|FoxUITests)\//.test(row.id) ? ['ipad', 'iphone'] : ['host'];
+    if (!surfaces.includes(row.surface)) throw Error(`Missing or incompatible execution surface: ${row.id}`);
+  }
   for (const row of found) {
     const entry = expected.get(row.id);
     if (!entry) throw Error(`Unclassified test: ${row.id}`);
@@ -12,6 +16,16 @@ export function auditInventory(found, catalogue) {
     expected.delete(row.id);
   }
   if (expected.size) throw Error(`Missing test: ${[...expected.keys()].join(', ')}`);
+}
+
+export function auditNativeSelection(catalogue, steps, {scope, component}) {
+  const wanted = new Set(catalogue.filter(row => component !== 'web' && row.id.startsWith('Fox')
+    && (row.scope === 'public' || scope === 'private' && ['private', 'real-speech'].includes(row.scope))
+    && (scope !== 'fast' || /^(FoxTrainingCoreTests|FoxJournalCoreTests)\//.test(row.id))).map(row => row.id));
+  const selected = new Set(steps.flatMap(step => step.expectedNative ?? []));
+  const missing = [...wanted].filter(id => !selected.has(id));
+  const unexpected = [...selected].filter(id => !wanted.has(id));
+  if (missing.length || unexpected.length) throw Error(`Native selection mismatch; missing: ${missing.join(', ')}; unexpected: ${unexpected.join(', ')}`);
 }
 
 export function auditNativeCoverage(output, expected) {

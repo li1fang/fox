@@ -8,7 +8,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isDeepStrictEqual} from 'node:util';
 import {artifact} from './trial-readiness.mjs';
-import {auditNativeCoverage, auditCommandOutput} from './verification-contracts.mjs';
+import {auditNativeCoverage, auditNativeSelection, auditCommandOutput} from './verification-contracts.mjs';
 import {environment} from './development-environment.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -79,6 +79,7 @@ export function suiteSteps(directory, devices, inputs = [], {scope = 'private', 
     ui('iphone-ui', [...selected('FoxAppTests', 'iphone'), ...selected('FoxUITests', 'iphone'),
       'FoxUITests/FoxVisionUITests/testGuidanceOverlayAndMuteRemainAvailableAcrossRotation'].join(','), devices.iphone));
   if (privateScope) steps.push(ui('real-speech', catalogue.filter(x => x.scope === 'real-speech').map(x => x.id).join(','), devices.ipad));
+  auditNativeSelection(catalogue, steps, {scope, component});
   return steps;
 }
 
