@@ -30,7 +30,9 @@ export function auditNativeCoverage(output, expected) {
 }
 
 export function auditReceipt(receipt, expected) {
-  if (receipt.status !== 'software_suite_passed' || receipt.deviceVerified !== false || !receipt.steps?.length
+  if (receipt.status !== 'software_suite_passed' || receipt.finalizationError
+      || (receipt.environment?.simulatorLifecycle && receipt.environment.simulatorLifecycle.status !== 'released')
+      || receipt.deviceVerified !== false || !receipt.steps?.length
       || receipt.steps.some(s => s.status !== 'passed')) throw Error('Incomplete software receipt');
   for (const key of ['commit', 'sourceSHA256', 'scope']) if (receipt[key] !== expected[key]) throw Error(`Receipt ${key} mismatch`);
   if (expected.component && receipt.component !== expected.component) throw Error('Receipt component mismatch');

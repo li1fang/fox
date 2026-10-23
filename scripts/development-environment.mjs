@@ -1,4 +1,5 @@
 import {spawnSync} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
 import {existsSync, mkdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -40,15 +41,43 @@ export function doctor({native = process.platform === 'darwin', dependencies = t
   return result;
 }
 
-export function simulatorSelection(info = doctor()) {
-  const devices = Object.values(info.simulators ?? {}).flat();
-  const select = (family, override) => {
-    const device = override ? devices.find(d => d.udid === override && d.name.includes(family))
-      : devices.find(d => d.name.includes(family) && (family !== 'iPad' || d.name.includes('11-inch'))) ?? devices.find(d => d.name.includes(family));
-    if (!device) throw Error(`environment_failure: missing ${family} simulator runtime; install a compatible runtime in Xcode`);
-    return device.udid;
-  };
-  return {ipad: select('iPad', process.env.FOX_TRIAL_IPAD_SIMULATOR), iphone: select('iPhone', process.env.FOX_TRIAL_IPHONE_SIMULATOR)};
+export function allocateSimulators(info, {execute = capture, overrides = {
+  ipad: process.env.FOX_TRIAL_IPAD_SIMULATOR, iphone: process.env.FOX_TRIAL_IPHONE_SIMULATOR}} = {}) {
+  const available = Object.entries(info.simulators ?? {}).flatMap(([runtime, devices]) => devices.map(d => ({...d, runtime})));
+  const lease = {devices: {}, created: [], selection: {}};
+  try {
+    for (const [key, family] of [['ipad', 'iPad'], ['iphone', 'iPhone']]) {
+      const candidates = available.filter(d => d.deviceTypeIdentifier?.includes(`.${family}-`));
+      const template = overrides[key] ? candidates.find(d => d.udid === overrides[key])
+        : candidates.find(d => family !== 'iPad' || d.deviceTypeIdentifier.includes('11-inch')) ?? candidates[0];
+      if (!template) throw Error(`environment_failure: missing ${family} simulator runtime or invalid override; install a compatible runtime in Xcode`);
+      const id = overrides[key] ?? execute('xcrun', ['simctl', 'create', `FoxVerification-${family}-${randomUUID()}`,
+        template.deviceTypeIdentifier, template.runtime]).trim();
+      if (!overrides[key]) {
+        if (!/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id)) throw Error('environment_failure: simulator creation returned an invalid identifier');
+        lease.created.push(id);
+      }
+      lease.devices[key] = id;
+      lease.selection[key] = {id, runtime: template.runtime, deviceType: template.deviceTypeIdentifier, owned: !overrides[key]};
+    }
+    return lease;
+  } catch (error) {
+    try { releaseSimulators(lease, execute); }
+    catch (cleanup) { throw Error(`${error.message}; ${cleanup.message}`); }
+    throw error;
+  }
+}
+
+export function releaseSimulators(lease, execute = capture) {
+  const errors = [];
+  // Only IDs created by this invocation belong to this invocation. Overrides are never deleted.
+  for (const id of lease.created) {
+    try { execute('xcrun', ['simctl', 'shutdown', id]); }
+    catch (error) { if (!/current state: Shutdown/i.test(error.message)) errors.push(`${id}: ${error.message}`); }
+    try { execute('xcrun', ['simctl', 'delete', id]); }
+    catch (error) { errors.push(`${id}: ${error.message}`); }
+  }
+  if (errors.length) throw Error(`simulator cleanup failed: ${errors.join('; ')}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

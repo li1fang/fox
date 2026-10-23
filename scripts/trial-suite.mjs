@@ -137,7 +137,7 @@ export async function execute(step, {logPath, signal, openLog = openLogFile} = {
   });
 }
 
-export async function runSuite({directory, steps, fingerprint: sourceFingerprint = fingerprint, preflight, execute: run = execute, metadata = {}}) {
+export async function runSuite({directory, steps, fingerprint: sourceFingerprint = fingerprint, preflight, execute: run = execute, finalize, metadata = {}}) {
   await mkdir(directory, {recursive: true});
   const filename = path.join(directory, 'suite.json');
   const receipt = {schema: 'fox.trial_suite.v1', status: 'running', startedAt: new Date().toISOString(),
@@ -192,8 +192,19 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
   } catch (error) {
     receipt.status = cancellation.signal.aborted ? 'cancelled' : 'failed'; receipt.error = error.message; throw error;
   } finally {
-    process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
-    receipt.finishedAt = new Date().toISOString(); await save();
+    try {
+      await finalize?.();
+      if (cancellation.signal.aborted && receipt.status === 'software_suite_passed') {
+        receipt.status = 'cancelled'; throw Error('Suite cancelled during finalization');
+      }
+    } catch (error) {
+      receipt.finalizationError = error.message;
+      if (receipt.status !== 'cancelled') receipt.status = 'failed';
+      throw error;
+    } finally {
+      process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
+      receipt.finishedAt = new Date().toISOString(); await save();
+    }
   }
 }
 

@@ -19,6 +19,8 @@
 
 可加 `-- --output .tmp/verification/<unique-run>`。公开层可用 `--component web` 或 `--component native` 分工，CI 必须两者都通过；单一 component 不代表完整 public。private 不允许分片绕过公开覆盖。
 
+完整原生运行默认创建专属临时 iPad/iPhone 模拟器，使用已安装的机型/运行时，完成、失败或取消后仅清理本次创建的实例。已有模拟器和真机不删除。回执记录实例、运行时、所有权及清理状态；清理失败也不能通过。`doctor` 只读，fast/Web 不创建实例。诊断时可用 `FOX_TRIAL_IPAD_SIMULATOR` / `FOX_TRIAL_IPHONE_SIMULATOR` 指定已有 UDID；它们不会被清理，但其原有状态会影响结果，不属于干净环境证明。
+
 原生每个测试方法、其他测试每个文件都有明确分类。新增/删除/移动须更新目录并审核原因；文件内的全部 JS/浏览器/Python 用例会执行。公共层按分类不选择私人/语音/设备测试，并在回执中列出未覆盖，不通过 XCTest skip 假装成功。已选测试缺失、失败、重复或 skip 均失败。
 
 Swift 方法扫描包括修饰符/属性后的 `test...` 声明，不认识的命名或多 XCTestCase 文件会明确失败；实际原生运行再次核对每个方法。Python 按分类清单逐文件加载，嵌套目录不依赖 `__init__.py`，任何空测试文件、skip 或 expected failure 都不能借其他文件的通过而变绿。
@@ -40,6 +42,8 @@ Swift 方法扫描包括修饰符/属性后的 `test...` 声明，不认识的�
 每次运行独占目录，输出 `suite.json` 及实时追加的逐步日志。包含 scope/component、commit、源码指纹、dirty 状态、工具版本、输入哈希、选择/未覆盖用例、时间、结果和明确的 `deviceVerified: false`。开始、完成、失败、取消都保留。禁止复用旧目录；源码/提交/输入变化会使运行失效。源码指纹覆盖全部非忽略文件，包含 docs 和 Git commit 身份。
 
 不得重试到绿后隐去失败；修正必须说明原因并新建运行。GitHub 使用无重试的浏览器与原生批次；上传范围仅公开 suite/log，不上传 `.data`、私有 xcresult 或用户截图。
+
+本轮遇到一次旧模拟器旋转后窗口仍为竖屏：同一原断言在旧实例复现失败，在同型号/运行时的新实例通过。这证明结果受实例状态影响，尚未证明系统根因。因此增加实例隔离而不修改产品或放宽横屏断言；原失败、对照运行及最终完整运行分别保留。
 
 再次使用回执前运行 `npm run verify:receipt -- <suite.json> --scope public`（分片加 `--component web` 或 `native`，私人回归用 `--scope private`）。它重新核对当前提交/源码、输入、所有步骤、日志哈希、所选测试覆盖和历史事件；跨提交的旧绿色不能复用。
 

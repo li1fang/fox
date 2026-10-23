@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {validatePrivateInputs} from '../../scripts/private-inputs.mjs';
 import * as privateInputs from '../../scripts/private-inputs.mjs';
 import {discoverTests} from '../../scripts/test-inventory.mjs';
+import * as developmentEnvironment from '../../scripts/development-environment.mjs';
 import {auditInventory, auditNativeCoverage, auditReceipt, auditCommandOutput, classifyDeviceError} from '../../scripts/verification-contracts.mjs';
 
 test('private inputs are explicit, complete, pinned and rechecked, never an implicit local cache', async t => {
@@ -50,7 +51,8 @@ test('cross-commit, wrong-scope, cancelled, incomplete and physical claims canno
     deviceVerified: false, steps: [{status: 'passed'}]};
   const expected = {commit: 'abc', sourceSHA256: 'hash', scope: 'public'};
   assert.doesNotThrow(() => auditReceipt(receipt, expected));
-  for (const changed of [{commit: 'def'}, {scope: 'private'}, {status: 'cancelled'}, {steps: []}, {deviceVerified: true}]) {
+  for (const changed of [{commit: 'def'}, {scope: 'private'}, {status: 'cancelled'}, {steps: []}, {deviceVerified: true},
+    {finalizationError: 'cleanup failed'}, {environment: {simulatorLifecycle: {status: 'allocated'}}}]) {
     assert.throws(() => auditReceipt({...receipt, ...changed}, expected));
   }
 });
@@ -114,4 +116,42 @@ test('private batch consumers must use the pinned files, not unpinned siblings',
     await assert.rejects(privateInputs.privateBatchFolders('sample', file, contract), /binding/);
     row.path = original;
   }
+});
+
+test('full verification owns isolated simulators and never deletes existing or explicit devices', () => {
+  const info = {simulators: {'runtime-test': [
+    {udid: 'existing-pad', name: 'Custom tablet', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch'},
+    {udid: 'existing-phone', name: 'Custom phone', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}]}};
+  const calls = []; let n = 0;
+  const execute = (command, args) => { calls.push(args); return args[1] === 'create' ? `00000000-0000-0000-0000-00000000000${++n}` : ''; };
+  const lease = developmentEnvironment.allocateSimulators(info, {execute, overrides: {}});
+  assert.equal(lease.created.length, 2);
+  assert.notEqual(lease.devices.ipad, 'existing-pad');
+  developmentEnvironment.releaseSimulators(lease, execute);
+  assert.equal(calls.filter(args => args[1] === 'delete').length, 2);
+  assert.ok(calls.every(args => !args.includes('existing-pad') && !args.includes('existing-phone')));
+  calls.length = 0;
+  const explicit = developmentEnvironment.allocateSimulators(info, {execute, overrides: {ipad: 'existing-pad', iphone: 'existing-phone'}});
+  assert.deepEqual(explicit.devices, {ipad: 'existing-pad', iphone: 'existing-phone'});
+  developmentEnvironment.releaseSimulators(explicit, execute);
+  assert.equal(calls.length, 0);
+});
+
+test('partial simulator allocation cleans only owned instances and cleanup failures are explicit', () => {
+  const info = {simulators: {'runtime-test': [
+    {udid: 'pad', name: 'iPad', deviceTypeIdentifier: 'type.iPad-Pro-11-inch'},
+    {udid: 'phone', name: 'iPhone', deviceTypeIdentifier: 'type.iPhone-17-Pro'}]}};
+  const calls = []; let n = 0;
+  const owned = '00000000-0000-0000-0000-000000000001';
+  const execute = (command, args) => {
+    calls.push(args);
+    if (args[1] === 'create') { if (++n === 2) throw Error('creation unavailable'); return owned; }
+    return '';
+  };
+  assert.throws(() => developmentEnvironment.allocateSimulators(info, {execute, overrides: {}}), /creation unavailable/);
+  assert.ok(calls.some(args => args[1] === 'delete' && args[2] === owned));
+  assert.throws(() => developmentEnvironment.releaseSimulators({created: [owned]}, () => { throw Error('cleanup unavailable'); }), /cleanup/);
+  assert.doesNotThrow(() => developmentEnvironment.releaseSimulators({created: [owned]}, (command, args) => {
+    if (args[1] === 'shutdown') throw Error('Unable to shutdown device in current state: Shutdown');
+  }));
 });

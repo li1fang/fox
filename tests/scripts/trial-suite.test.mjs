@@ -133,3 +133,24 @@ test('a mid-stream logging error terminates the child and retains a failed recei
   assert.throws(() => process.kill(pid, 0), {code: 'ESRCH'});
   assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'failed');
 });
+
+test('failed resource cleanup cannot leave a successful suite receipt', async t => {
+  const {dir, steps} = await harness(t);
+  await assert.rejects(runSuite({directory: dir, steps, fingerprint: async () => 'same', preflight: async () => [],
+    execute: async () => ({code: 0, output: 'done'}), finalize: async () => { throw Error('simulator cleanup failed'); }}), /cleanup/);
+  const receipt = JSON.parse(await readFile(path.join(dir, 'suite.json')));
+  assert.equal(receipt.status, 'failed');
+  assert.match(receipt.finalizationError, /cleanup/);
+});
+
+test('failed preflight still finalizes resources and finalization cancellation cannot pass', async t => {
+  const first = await harness(t); let cleaned = false;
+  await assert.rejects(runSuite({directory: first.dir, steps: first.steps, preflight: async () => { throw Error('preflight failed'); },
+    finalize: async () => { cleaned = true; }}), /preflight failed/);
+  assert.equal(cleaned, true);
+  const second = await harness(t);
+  await assert.rejects(runSuite({directory: second.dir, steps: second.steps, fingerprint: async () => 'same',
+    preflight: async () => [], execute: async () => ({code: 0, output: 'done'}),
+    finalize: async () => { process.emit('SIGTERM'); }}), /cancelled/);
+  assert.equal(JSON.parse(await readFile(path.join(second.dir, 'suite.json'))).status, 'cancelled');
+});

@@ -4,7 +4,7 @@ import {spawnSync} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {isDeepStrictEqual} from 'node:util';
 import {runSuite, suiteSteps, fingerprint, compareHistory} from './trial-suite.mjs';
-import {doctor, root, simulatorSelection} from './development-environment.mjs';
+import {doctor, root, allocateSimulators, releaseSimulators} from './development-environment.mjs';
 import {checkedCatalogue} from './test-inventory.mjs';
 import {validatePrivateInputs} from './private-inputs.mjs';
 import {artifact} from './trial-readiness.mjs';
@@ -42,6 +42,7 @@ export async function runVerification({scope = 'fast', component = 'all', output
     dirty: !!git(['status', '--porcelain']), environment: {}, excludedTests: [],
     evidenceBoundary: 'Software verification only. No device installation, camera accuracy, audibility, or human acceptance claim.'};
   const steps = [];
+  let lease;
   const preflight = async () => {
     if (scope !== 'private' && process.env.FOX_PRIVATE_INPUT_MANIFEST) throw Error('Public/fast runs must not receive private input locations');
     const inputs = scope === 'private' ? await validatePrivateInputs(process.env.FOX_PRIVATE_INPUT_MANIFEST) : [];
@@ -49,7 +50,11 @@ export async function runVerification({scope = 'fast', component = 'all', output
       const catalogue = await checkedCatalogue();
       const info = doctor({native: component !== 'web'});
       Object.assign(metadata.environment, info);
-      const devices = component !== 'web' && scope !== 'fast' ? simulatorSelection(info) : {};
+      if (component !== 'web' && scope !== 'fast') {
+        lease = allocateSimulators(info);
+        metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
+      }
+      const devices = lease?.devices ?? {};
       steps.push(...suiteSteps(directory, devices, inputs, {scope, component, catalogue}));
       const selected = new Set(steps.flatMap(s => s.expectedNative ?? []));
       for (const row of catalogue) {
@@ -61,8 +66,18 @@ export async function runVerification({scope = 'fast', component = 'all', output
     }
     return inputs;
   };
+  const finalize = () => {
+    if (!lease) return;
+    try {
+      releaseSimulators(lease);
+      metadata.environment.simulatorLifecycle.status = 'released';
+    } catch (error) {
+      metadata.environment.simulatorLifecycle.status = 'cleanup_failed';
+      throw error;
+    }
+  };
   try {
-    const result = await runSuite({directory, steps, preflight, metadata});
+    const result = await runSuite({directory, steps, preflight, finalize, metadata});
     console.log(JSON.stringify({status: result.status, scope, component, receipt: path.join(directory, 'suite.json'), deviceVerified: false}));
     return result;
   } catch (error) { console.error(`Receipt retained: ${path.join(directory, 'suite.json')}`); throw error; }
