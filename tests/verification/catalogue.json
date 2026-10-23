@@ -2219,6 +2219,12 @@
       "surface": "host"
     },
     {
+      "id": "tests/scripts/native-ui-diagnostic.test.mjs",
+      "file": "tests/scripts/native-ui-diagnostic.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
       "id": "tests/scripts/test_workflow_schema.py",
       "file": "tests/scripts/test_workflow_schema.py",
       "scope": "public",

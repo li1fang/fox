@@ -16,7 +16,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         app.buttons["start-training"].tap(); app.buttons["begin-set"].tap(); app.buttons["complete-set"].tap()
         let count = app.textFields["actual-reps"]
         XCTAssertTrue(count.waitForExistence(timeout: 5)); count.tap(); count.typeText("2")
-        visible(app.buttons["feedback-dismiss-keyboard"], in: app)
+        visible(app.buttons["feedback-dismiss-keyboard"], in: app, diagnosticID: "feedback-dismiss-keyboard")
         app.buttons["feedback-dismiss-keyboard"].tap()
         for (index, id) in ["trial-information", "trial-software-issue", "trial-training-feeling"].enumerated() {
             let orientation: UIDeviceOrientation = index == 1 ? .landscapeLeft : .portrait
@@ -35,7 +35,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 4))
             field.typeText("test \(index)")
             XCTAssertEqual(field.value as? String, "test \(index)")
-            visible(app.buttons["feedback-dismiss-keyboard"], in: app)
+            visible(app.buttons["feedback-dismiss-keyboard"], in: app, diagnosticID: "feedback-dismiss-keyboard")
             app.buttons["feedback-dismiss-keyboard"].tap()
             visible(app.buttons["submit-feedback"], in: app)
             screenshot("phone-feedback-\(index)", app: app)
@@ -116,12 +116,42 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         }
     }
 
-    private func visible(_ element: XCUIElement, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+    private func visible(_ element: XCUIElement, in app: XCUIApplication, diagnosticID: String? = nil,
+                         file: StaticString = #filePath, line: UInt = #line) {
+        var observations: [[String: Any]] = []
         let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            guard element.exists && element.isHittable else { return false }
-            return app.frame.insetBy(dx: -0.5, dy: -0.5).contains(element.frame)
+            let start = ProcessInfo.processInfo.systemUptime
+            var row: [String: Any] = [:]
+            defer {
+                row["elapsedSeconds"] = ProcessInfo.processInfo.systemUptime - start
+                observations.append(row)
+            }
+            let exists = element.exists
+            row["exists"] = exists
+            row["existsQuerySeconds"] = ProcessInfo.processInfo.systemUptime - start
+            guard exists else { return false }
+            let hittableStart = ProcessInfo.processInfo.systemUptime
+            let hittable = element.isHittable
+            row["hittable"] = hittable
+            row["hittableQuerySeconds"] = ProcessInfo.processInfo.systemUptime - hittableStart
+            guard hittable else { return false }
+            let window = app.frame.insetBy(dx: -0.5, dy: -0.5), frame = element.frame
+            row["window"] = [window.minX, window.minY, window.width, window.height]
+            row["frame"] = [frame.minX, frame.minY, frame.width, frame.height]
+            row["contained"] = window.contains(frame)
+            return window.contains(frame)
         }, object: nil)
         let result = XCTWaiter.wait(for: [settled], timeout: 4)
+        let synthetic = app.launchEnvironment["FOX_UI_TESTING"] == "1"
+            && app.launchArguments.contains("--ui-testing-reset")
+            && ProcessInfo.processInfo.environment["FOX_PRIVATE_INPUT_MANIFEST", default: ""].isEmpty
+        if let diagnosticID, synthetic {
+            let diagnostic: [String: Any] = ["schema": "fox.ui_visibility_probe.v1", "id": diagnosticID,
+                "completed": result == .completed, "deadlineSeconds": 4, "observations": observations]
+            if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) { print("FOX_UI_VISIBILITY \(json)") }
+            if result != .completed { print("FOX_SYNTHETIC_UI_FAILURE_AX\n\(app.debugDescription)") }
+        }
         if result != .completed { screenshot("not-visible-\(element.identifier)", app: app) }
         XCTAssertEqual(result, .completed, element.identifier, file: file, line: line)
         XCTAssertTrue(element.exists, file: file, line: line)

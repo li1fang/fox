@@ -37,6 +37,7 @@
     "verify:repository": "node scripts/repository-checks.mjs",
     "verify:receipt": "node scripts/verify.mjs receipt",
     "verify:history": "node scripts/public-history-audit.mjs",
+    "diagnose:phone-feedback": "node scripts/native-ui-diagnostic.mjs",
     "build:simulator": "node scripts/ipad.mjs build-simulator",
     "ipad:doctor": "node scripts/ipad.mjs doctor",
     "iphone:doctor": "node scripts/iphone.mjs doctor",
