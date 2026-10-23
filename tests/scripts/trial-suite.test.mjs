@@ -9,14 +9,16 @@ import {runSuite, checkXCTestLog, suiteSteps, compareHistory} from '../../script
 
 test('suite has actual controller, phone/pad UI, real speech, wire and per-event history gates', () => {
   const steps = suiteSteps('/run', {ipad: 'pad', iphone: 'phone'}, [], {catalogue: [
-    {id: 'FoxAppTests/Example/testOne', scope: 'public', surface: 'ipad'},
-    {id: 'FoxAppTests/NativeSpeechTests/testSpeech', scope: 'real-speech', surface: 'ipad'}]});
+    {id: 'FoxAppTests/Example/testOne', file: 'apps/ipad/FoxAppTests/Example.swift', scope: 'public', surface: 'ipad'},
+    {id: 'FoxAppTests/NativeSpeechTests/testSpeech', file: 'apps/ipad/FoxAppTests/NativeSpeechTests.swift', scope: 'real-speech', surface: 'ipad'},
+    {id: 'tests/scripts/nested/test_example.py', file: 'tests/scripts/nested/test_example.py', scope: 'public'}]});
   for (const id of ['core', 'journal', 'wire', 'history', 'app-host', 'ipad-ui', 'iphone-ui', 'real-speech', 'web', 'web-flow']) {
     assert.ok(steps.some(x => x.id === id), id);
   }
   assert.equal(steps.find(x => x.id === 'core').env.FOX_GUIDANCE_REQUIRE_PRIVATE, '1');
   assert.match(steps.find(x => x.id === 'app-host').env.FOX_IOS_UI_TEST, /FoxAppTests/);
   assert.match(steps.find(x => x.id === 'real-speech').env.FOX_IOS_UI_TEST, /NativeSpeechTests/);
+  assert.deepEqual(steps.find(x => x.id === 'mapping').args, ['scripts/run-python-tests.py', 'tests/scripts/nested/test_example.py']);
 });
 
 test('zero tests, unexpected skips and failures cannot pass XCTest audit', () => {

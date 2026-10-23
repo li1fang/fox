@@ -78,12 +78,13 @@ test('nested tests are discovered across native, Python and browser directories'
   const folders = ['apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests', 'apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests',
     'apps/ipad/FoxAppTests', 'apps/ipad/FoxUITests', 'tests/scripts', 'tests/e2e', 'packages/core/test', 'apps/api/test'];
   for (const folder of folders) await mkdir(path.join(dir, folder, 'nested'), {recursive: true});
-  await writeFile(path.join(dir, folders[0], 'nested/Example.swift'), 'final class Example: XCTestCase {\nfunc testNested() {}\n}');
+  await writeFile(path.join(dir, folders[0], 'nested/Example.swift'), 'final class Example: XCTestCase {\nfunc testNested() {}\n@MainActor func testActor() {}\npublic func testPublic() {}\n}');
   await writeFile(path.join(dir, 'tests/scripts/nested/test_extra.py'), '');
   await writeFile(path.join(dir, 'tests/e2e/nested/extra.spec.ts'), '');
   const found = await discoverTests(dir);
-  assert.equal(found.length, 3);
-  for (const id of ['FoxTrainingCoreTests/Example/testNested', 'tests/scripts/nested/test_extra.py', 'tests/e2e/nested/extra.spec.ts']) {
+  assert.equal(found.length, 5);
+  for (const id of ['FoxTrainingCoreTests/Example/testNested', 'FoxTrainingCoreTests/Example/testActor', 'FoxTrainingCoreTests/Example/testPublic',
+    'tests/scripts/nested/test_extra.py', 'tests/e2e/nested/extra.spec.ts']) {
     assert.ok(found.some(row => row.id === id), id);
   }
   assert.throws(() => auditInventory(found, []), /Unclassified/);

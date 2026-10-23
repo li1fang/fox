@@ -25,7 +25,14 @@ export async function discoverTests(directory = root) {
       const file = `${folder}/${name}`, source = await readFile(path.join(directory, file), 'utf8');
       const classes = [...source.matchAll(/(?:final\s+)?class\s+(\w+)\s*:\s*XCTestCase/g)];
       if (classes.length !== 1 || /@Test\b/.test(source)) throw Error(`Unrecognized test layout (one XCTestCase per file): ${file}`);
-      for (const method of source.matchAll(/^\s*func (test\w+)\(/gm)) found.push({id: `${target}/${classes[0][1]}/${method[1]}`, file});
+      // Attributes/modifiers may precede func. Do not silently filter those methods out of execution.
+      for (const method of source.matchAll(/\bfunc\s+([^\s(]+)\s*\(/g)) {
+        const name = method[1].replace(/^`|`$/g, '');
+        if (name.startsWith('test')) {
+          if (!/^test\w+$/.test(name)) throw Error(`Unrecognized test method: ${file}: ${name}`);
+          found.push({id: `${target}/${classes[0][1]}/${name}`, file});
+        }
+      }
     }
   }
   for (const [folder, extensions] of [['tests/scripts', /\.test\.mjs$|^test_.*\.py$/],

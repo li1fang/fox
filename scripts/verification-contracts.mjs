@@ -49,7 +49,7 @@ export function auditCommandOutput(raw, kind) {
   }
   if (kind === 'browser' && (!/\b[1-9]\d* passed/.test(output) || /\d+ (?:skipped|flaky|failed)/.test(output))) throw Error('Browser tests incomplete');
   if (kind === 'python') {
-    const ran = output.match(/Ran ([1-9]\d*) tests/);
+    const ran = output.match(/Ran ([1-9]\d*) tests?\b/);
     if (!ran || !/^OK\s*$/m.test(output) || /(?:skipped|expected failures|unexpected successes)=[1-9]/.test(output)
         || /^FAILED\b/m.test(output)) throw Error('Python tests incomplete');
     return {passed: Number(ran[1]), skipped: []};

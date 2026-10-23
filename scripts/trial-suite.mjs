@@ -40,6 +40,8 @@ export function suiteSteps(directory, devices, inputs = [], {scope = 'private', 
   const selected = (target, surface) => catalogue.filter(x => x.id.startsWith(`${target}/`) && (!surface || x.surface === surface)
     && (x.scope === 'public' || privateScope && x.scope === 'private')).map(x => x.id);
   const coreTests = selected('FoxTrainingCoreTests');
+  const pythonTests = catalogue.filter(x => x.file.startsWith('tests/scripts/') && x.file.endsWith('.py')
+    && (x.scope === 'public' || privateScope && x.scope === 'private')).map(x => x.file);
   const ui = (id, tests, device, allowedSkipClasses = []) => ({id, command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
     native: true, allowedSkipClasses, expectedNative: tests.split(','), env: {FOX_IOS_UI_TEST: tests, FOX_IOS_SIMULATOR: device,
       TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: privateScope ? process.env.FOX_PRIVATE_INPUT_MANIFEST : '',
@@ -59,7 +61,7 @@ export function suiteSteps(directory, devices, inputs = [], {scope = 'private', 
       FOX_SWIFT_TEST_FILTER: coreTests.map(x => x.split('/').slice(-2).join('/')).join('|'),
       FOX_R2_EVIDENCE_DIR: directory, FOX_M3_EVIDENCE_DIR: directory}, expectedNative: coreTests},
     {id: 'journal', command: 'npm', args: ['run', 'test:journal'], native: true, expectedNative: selected('FoxJournalCoreTests')},
-    {id: 'mapping', command: python, args: ['-m', 'unittest', 'discover', '-s', 'tests/scripts', '-p', 'test_*.py'], audit: 'python'},
+    {id: 'mapping', command: python, args: ['scripts/run-python-tests.py', ...pythonTests], audit: 'python'},
     {id: 'wire', command: python, args: ['scripts/validate-vision-schema.py', directory, ...(privateScope ? [asset('history.trials')] : [])]},
     {id: 'pulldown-wire', command: python, args: ['scripts/validate-pulldown-schema.py', directory]},
     {id: 'strategy-wire', command: python, args: ['scripts/validate-motion-contracts.py']});
