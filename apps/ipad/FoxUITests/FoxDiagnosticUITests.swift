@@ -40,6 +40,27 @@ final class FoxDiagnosticUITests: XCTestCase {
         XCTAssertTrue(app.buttons["diagnostic-discard"].exists)
     }
 
+    private func readyToTap(_ element: XCUIElement, in app: XCUIApplication) {
+        var previous: CGRect?, stableSince: TimeInterval?
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            guard element.exists, element.isEnabled, element.isHittable,
+                  app.frame.contains(element.frame) else { previous = nil; stableSince = nil; return false }
+            let frame = element.frame, now = ProcessInfo.processInfo.systemUptime
+            if previous != frame { previous = frame; stableSince = now; return false }
+            return now - (stableSince ?? now) >= 0.25
+        }, object: nil)
+        let result = XCTWaiter.wait(for: [ready], timeout: 5)
+        if result != .completed { failureEvidence(app, phase: "start-target-not-ready") }
+        XCTAssertEqual(result, .completed)
+    }
+
+    private func failureEvidence(_ app: XCUIApplication, phase: String) {
+        // This test resets to synthetic data; expose state in public CI logs without exporting video.
+        print("FOX_DIAGNOSTIC_UI_FAILURE \(phase)\n\(app.debugDescription)")
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = phase; shot.lifetime = .keepAlways; add(shot)
+    }
+
     func testFailedPreparationCanBeKeptAfterReviewAndCancelledExportPreservesIt() {
         let app = launch("no_person")
         app.buttons["vision-start"].tap()
@@ -100,9 +121,20 @@ final class FoxDiagnosticUITests: XCTestCase {
 
     func testNormalCountCanReviewThenDiscardVideoWithoutChangingTrainingReport() {
         let app = launch("normal")
-        app.buttons["vision-start"].tap()
+        let start = app.buttons["vision-start"]
+        readyToTap(start, in: app)
+        start.tap()
+        let deadline = ProcessInfo.processInfo.systemUptime + 15
+        let started = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.buttons["vision-cancel-start"].exists || app.buttons["vision-pause"].exists
+        }, object: nil)
+        let startResult = XCTWaiter.wait(for: [started], timeout: 5)
+        if startResult != .completed { failureEvidence(app, phase: "start-not-applied") }
+        XCTAssertEqual(startResult, .completed)
         let counted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '2'"), object: app.staticTexts["vision-count"])
-        XCTAssertEqual(XCTWaiter.wait(for: [counted], timeout: 15), .completed)
+        let countResult = XCTWaiter.wait(for: [counted], timeout: max(0, deadline - ProcessInfo.processInfo.systemUptime))
+        if countResult != .completed { failureEvidence(app, phase: "count-not-two-within-original-deadline") }
+        XCTAssertEqual(countResult, .completed)
         app.buttons["vision-finish"].tap()
         XCTAssertTrue(app.buttons["vision-save-report"].waitForExistence(timeout: 8))
         review(app)

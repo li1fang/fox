@@ -12,6 +12,28 @@ final class FoxNativeUITests: XCTestCase {
         return app
     }
 
+    private func readyToTap(_ element: XCUIElement, in app: XCUIApplication, keyboardDismissed: Bool = false) {
+        var previous: CGRect?, stableSince: TimeInterval?
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            guard element.exists, element.isEnabled, element.isHittable,
+                  app.frame.contains(element.frame), (!keyboardDismissed || !app.keyboards.firstMatch.exists) else {
+                previous = nil; stableSince = nil; return false
+            }
+            let frame = element.frame, now = ProcessInfo.processInfo.systemUptime
+            if previous != frame { previous = frame; stableSince = now; return false }
+            return now - (stableSince ?? now) >= 0.25
+        }, object: nil)
+        let result = XCTWaiter.wait(for: [ready], timeout: 5)
+        if result != .completed { failureEvidence(app, phase: "target-not-ready-\(element.identifier)") }
+        XCTAssertEqual(result, .completed)
+    }
+
+    private func failureEvidence(_ app: XCUIApplication, phase: String) {
+        print("FOX_NATIVE_UI_FAILURE \(phase)\n\(app.debugDescription)")
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = phase; shot.lifetime = .keepAlways; add(shot)
+    }
+
     func testOfflineTrainingLoopAndConfirmedRecordSurviveRelaunch() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .landscapeLeft
@@ -28,7 +50,18 @@ final class FoxNativeUITests: XCTestCase {
         add(planScreenshot)
         app.buttons["start-training"].tap()
         for index in 0..<4 {
-            if index > 0 { app.buttons["rest-ready"].tap() }
+            if index > 0 {
+                let rest = app.buttons["rest-ready"]
+                readyToTap(rest, in: app, keyboardDismissed: true)
+                XCTAssertFalse(app.scrollViews["set-feedback"].exists)
+                rest.tap()
+                let transitioned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    !rest.exists && app.buttons["begin-set"].exists
+                }, object: nil)
+                let result = XCTWaiter.wait(for: [transitioned], timeout: 5)
+                if result != .completed { failureEvidence(app, phase: "rest-did-not-become-ready-\(index)") }
+                XCTAssertEqual(result, .completed)
+            }
             if index == 0 {
                 let confirm = app.buttons["confirm-set-weight"]
                 XCTAssertTrue(confirm.waitForExistence(timeout: 5))
@@ -36,7 +69,9 @@ final class FoxNativeUITests: XCTestCase {
                 confirm.tap()
                 XCTAssertFalse(confirm.isEnabled)
             }
-            app.buttons["begin-set"].tap()
+            let begin = app.buttons["begin-set"]
+            readyToTap(begin, in: app)
+            begin.tap()
             if index == 0 {
                 let activeScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
                 activeScreenshot.name = "offline-training-landscape"
