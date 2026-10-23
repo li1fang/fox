@@ -47,6 +47,7 @@ final class VisionLabController: ObservableObject {
     private let sessionSettingsURL: URL
     private var unreadableSessionSettings = false
     private var fixtureTimer: Timer?
+    private var fixtureTimeline = PoseFixtureTimeline()
     private var watchdog: Timer?
     private var fixtureTick = 0
     private var fixturePreparationTick = 0
@@ -296,7 +297,8 @@ final class VisionLabController: ObservableObject {
                 onCameraStateChanged?(cameraState); return
             }
             cameraState = .running
-            fixtureTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            fixtureTimeline = PoseFixtureTimeline()
+            fixtureTimer = Timer.scheduledTimer(withTimeInterval: PoseFixtureTimeline.frameInterval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.receiveFixture() }
             }
             onCameraStateChanged?(cameraState)
@@ -709,7 +711,8 @@ final class VisionLabController: ObservableObject {
             if fixtureTick % 2 == 0 { people.insert(BodyPose(points: background), at: 0) }
             else { people.append(BodyPose(points: background)) }
         }
-        let frame = PoseFrame(timestamp: ProcessInfo.processInfo.systemUptime, width: 720, height: 1280, people: people)
+        let frame = PoseFrame(timestamp: fixtureTimeline.next(receivedAt: ProcessInfo.processInfo.systemUptime),
+                              width: 720, height: 1280, people: people)
         if diagnosticCapture.isActive && !diagnosticCapture.finishing { camera.diagnosticFixtureFrame(frame) }
         receive(CapturedPose(frame: frame,
             latencyMs: 1, revision: 1, cameraGeometry: VisionCameraGeometry(deviceType: "fixture", zoomFactor: 1, reportedFormatFieldOfViewDegrees: 60)))

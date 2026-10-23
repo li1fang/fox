@@ -50,6 +50,50 @@ final class VisionControllerReplayTests: XCTestCase {
         }
     }
 
+    func testSyntheticFixturePTSDoesNotConvertHostDelayIntoMotionLoss() throws {
+        for exercise in [VisionExercise.curl, .lateralRaise] { for side in ArmSide.allCases {
+            var reference: [CurlRepetition]?
+            for delayed in [false, true] {
+                let (c, clock) = try controller(exercise, side)
+                defer { c.stopCamera() }
+                var timeline = PoseFixtureTimeline()
+                let bottom = exercise == .curl ? 160.0 : 10.0
+                let cycle = exercise == .curl ? curlCycle : raiseCycle
+                let angles = Array(repeating: bottom, count: 36) + cycle + cycle
+                var finalArrival = 0.0
+                for (i, angle) in angles.enumerated() {
+                    let delay = delayed ? (i >= 18 ? 2.0 : 0) + (i >= 45 ? 1.0 : 0) + (i >= 71 ? 1.0 : 0) : 0
+                    let arrival = 1000 + Double(i) / 10 + delay
+                    let pts = timeline.next(receivedAt: arrival)
+                    clock.uptime = arrival
+                    c.replayFrame(CapturedPose(frame: frame(exercise, side, angle, pts), latencyMs: 1, revision: 1, cameraGeometry: nil))
+                    finalArrival = arrival
+                }
+                XCTAssertTrue(c.isCounting)
+                XCTAssertEqual(c.automaticCount, 2, "\(exercise)/\(side), delayed=\(delayed)")
+                XCTAssertEqual(c.metrics.interruptions, 0)
+                XCTAssertEqual(c.observationReceivedUptime, finalArrival, "Arrival freshness must still use the host clock")
+                if let reference { XCTAssertEqual(c.repetitions, reference, "Synthetic count and phase facts must be scheduling-independent") }
+                else { reference = c.repetitions }
+            }
+        } }
+    }
+
+    func testRealCaptureGapsStillDiscardIncompleteMotionCycles() throws {
+        let (c, clock) = try controller()
+        defer { c.stopCamera() }
+        let angles = Array(repeating: 160.0, count: 36) + curlCycle + curlCycle
+        for (i, angle) in angles.enumerated() {
+            let gap = (i >= 45 ? 1.0 : 0) + (i >= 71 ? 1.0 : 0)
+            let timestamp = 1000 + Double(i) / 10 + gap
+            clock.uptime = timestamp
+            c.replayFrame(CapturedPose(frame: frame(.curl, .left, angle, timestamp), latencyMs: 1, revision: 1, cameraGeometry: nil))
+        }
+        XCTAssertEqual(c.automaticCount, 0)
+        XCTAssertGreaterThan(c.metrics.interruptions, 0)
+        XCTAssertTrue(c.repetitions.isEmpty, "Actual missing capture time must not gain invented phase measurements")
+    }
+
     func testPreparationReacquiresAfterWalkingBackWithoutAnotherTap() throws {
         for exercise in [VisionExercise.curl, .lateralRaise] { for side in ArmSide.allCases {
             let (c, clock) = try controller(exercise, side)
