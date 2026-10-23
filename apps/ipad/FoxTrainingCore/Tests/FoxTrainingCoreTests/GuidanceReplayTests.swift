@@ -1,13 +1,10 @@
 import CryptoKit
 import Foundation
 import XCTest
+import FoxTestSupport
 @testable import FoxTrainingCore
 
 final class GuidanceReplayTests: XCTestCase {
-    private var root: URL {
-        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    }
     private struct CaseEvidence: Encodable {
         var name: String
         var inputSHA256: String
@@ -22,17 +19,12 @@ final class GuidanceReplayTests: XCTestCase {
 
     func testExistingVideoCachesGuidanceCausalAndMotionFactsUnchanged() throws {
         let caches = [
-            (".tmp/pose-comparison-20261017/ipad-r1/vision.jsonl", "84f2651a2f8b5fc1fd71c6a98e5b43f66ac8afb70ae3f8d12e6db2948af7f7f7"),
-            (".data/vision-replay/results/CFCCA7B7-7E58-494C-B041-38A6374870E8/vision.jsonl", "991eada7dff21ced337ecf44d792b0cc0e48dc5eecbd2f8b48bb334f04f7ceea")
+            ("reference.cache", "84f2651a2f8b5fc1fd71c6a98e5b43f66ac8afb70ae3f8d12e6db2948af7f7f7"),
+            ("pulldown.cache", "991eada7dff21ced337ecf44d792b0cc0e48dc5eecbd2f8b48bb334f04f7ceea")
         ]
         var decoded: [[PoseVideoRow]] = []
         for (path, digest) in caches {
-            let url = root.appendingPathComponent(path)
-            if ProcessInfo.processInfo.environment["FOX_GUIDANCE_REQUIRE_PRIVATE"] == "1" {
-                XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "Required release input missing: \(path)")
-            } else {
-                try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "Private corpus absent; not a release pass")
-            }
+            let url = try PrivateFixtures.url(path)
             let bytes = try Data(contentsOf: url)
             XCTAssertEqual(SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined(), digest)
             let lines = String(decoding: bytes, as: UTF8.self).split(separator: "\n")

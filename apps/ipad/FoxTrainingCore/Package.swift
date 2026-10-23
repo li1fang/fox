@@ -5,6 +5,7 @@ let package = Package(
     name: "FoxTrainingCore",
     platforms: [.iOS(.v16), .macOS(.v13)],
     products: [.library(name: "FoxTrainingCore", targets: ["FoxTrainingCore"]),
+               .library(name: "FoxTestSupport", targets: ["FoxTestSupport"]),
                .library(name: "FoxPoseExperimentKit", targets: ["FoxPoseExperimentKit"]),
                .executable(name: "fox-pose-replay", targets: ["FoxPoseReplay"]),
                .executable(name: "fox-video-replay", targets: ["FoxVideoReplay"]),
@@ -15,6 +16,7 @@ let package = Package(
         .executableTarget(name: "FoxVideoReplay", dependencies: ["FoxTrainingCore"]),
         .target(name: "FoxPoseExperimentKit", dependencies: ["FoxTrainingCore"]),
         .executableTarget(name: "FoxPoseExperiment", dependencies: ["FoxPoseExperimentKit"]),
-        .testTarget(name: "FoxTrainingCoreTests", dependencies: ["FoxTrainingCore"])
+        .target(name: "FoxTestSupport", resources: [.process("Resources")]),
+        .testTarget(name: "FoxTrainingCoreTests", dependencies: ["FoxTrainingCore", "FoxTestSupport"])
     ]
 )

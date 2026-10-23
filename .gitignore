@@ -9,6 +9,10 @@ playwright-report/
 .playwright-cli/
 
 .DS_Store
+.venv/
+__pycache__/
+*.pyc
+*.private.json
 *.log
 .env
 .env.*

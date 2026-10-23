@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import XCTest
+import FoxTestSupport
 @testable import FoxTrainingCore
 
 final class PoseEccentricVideoTests: XCTestCase {
@@ -17,14 +18,9 @@ final class PoseEccentricVideoTests: XCTestCase {
         var returnEndpointVideoSeconds: [Double]
         var expectedStatus: PoseEccentricStatus
     }
-    private var root: URL {
-        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    }
     private func sha(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
     private func labels() throws -> [Label] {
-        try JSONDecoder().decode(Labels.self, from: Data(contentsOf: root.appendingPathComponent(
-            "docs/fitness/experiments/eccentric-r2-labels-20261023.json"))).labels
+        try JSONDecoder().decode(Labels.self, from: Data(contentsOf: PrivateFixtures.url("eccentric.labels"))).labels
     }
     private func assertLabel(_ label: Label, _ result: PoseEccentricMeasurement?, origin: Double) throws {
         let result = try XCTUnwrap(result, label.name)
@@ -42,15 +38,13 @@ final class PoseEccentricVideoTests: XCTestCase {
         } else { XCTAssertNil(result.durationSeconds) }
     }
     func testPrivateLiveVideoLabelsAndGapAbstention() throws {
-        let archive = root.appendingPathComponent(".tmp/live-trial-review-20261023/ipad-records/vision-trials.v1.json")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: archive.path), "Private archive absent; timing is NOT verified")
+        let archive = try PrivateFixtures.url("history.trials")
         let trials = try VisionTrialRepository(fileURL: archive).trials
-        let folders = ["BF5C6F4F-C1CA-47EA-A790-E733E227C672": "EE2A6E61-3241-4272-BE33-9DBD298D51F8",
-                       "1ACF2BA4-E5D1-46A0-A541-CCBCAD50066E": "D7C81796-A099-45EA-AE1C-B68DEF887315"]
+        let folders = ["BF5C6F4F-C1CA-47EA-A790-E733E227C672": "curl-left",
+                       "1ACF2BA4-E5D1-46A0-A541-CCBCAD50066E": "curl-right"]
         for label in try labels() where label.trialID != nil {
             let id = label.trialID!, folder = try XCTUnwrap(folders[id])
-            let video = root.appendingPathComponent(".data/vision-diagnostics/inbox/\(folder)/video.mp4")
-            try XCTSkipUnless(FileManager.default.fileExists(atPath: video.path), "Private labeled video absent")
+            let video = try PrivateFixtures.url("\(folder).video")
             XCTAssertEqual(sha(try Data(contentsOf: video)), label.videoSHA256)
             let trial = try XCTUnwrap(trials.first { $0.id.uuidString == id })
             let tracker = try PoseReplay.replay(trial, runtimePolicy: .standard)
@@ -59,8 +53,7 @@ final class PoseEccentricVideoTests: XCTestCase {
         }
     }
     func testPrivateA03BothArmsAgainstVideoIntervals() throws {
-        let url = root.appendingPathComponent(".tmp/pose-comparison-20261017/ipad-r1/vision.jsonl")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "Private M4 observations absent; timing is NOT verified")
+        let url = try PrivateFixtures.url("reference.cache")
         let bytes = try Data(contentsOf: url)
         XCTAssertEqual(sha(bytes), "84f2651a2f8b5fc1fd71c6a98e5b43f66ac8afb70ae3f8d12e6db2948af7f7f7")
         let lines = String(decoding: bytes, as: UTF8.self).split(separator: "\n")

@@ -1,6 +1,7 @@
 import CryptoKit
 import FoxTrainingCore
 import XCTest
+import FoxTestSupport
 @testable import Fox
 
 @MainActor
@@ -176,9 +177,7 @@ final class VisionReplayBatchTests: XCTestCase {
     }
 
     func testPrivateM4CacheBatchPreservesFourControllerCountsAndMeasuredPhases() async throws {
-        let project = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let input = project.appendingPathComponent(".tmp/pose-comparison-20261017/ipad-r1/vision.jsonl")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: input.path), "Private M4 cache unavailable; not a device accuracy pass")
+        let input = try PrivateFixtures.url("reference.cache")
         let (documents, id) = try fixture()
         let file = documents.appendingPathComponent("FoxReplay/Jobs/\(id.uuidString)/input.jsonl")
         let data = try Data(contentsOf: input)
@@ -206,9 +205,7 @@ final class VisionReplayBatchTests: XCTestCase {
     }
 
     func testPrivatePulldownFullControllerSixPeaksAndNoTerminalDuration() async throws {
-        let project = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let input = project.appendingPathComponent(".data/vision-replay/results/CFCCA7B7-7E58-494C-B041-38A6374870E8/vision.jsonl")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: input.path), "Private iPad pulldown cache absent; not a dataset pass")
+        let input = try PrivateFixtures.url("pulldown.cache")
         let (documents, id) = try fixture()
         let file = documents.appendingPathComponent("FoxReplay/Jobs/\(id.uuidString)/input.jsonl")
         let data = try Data(contentsOf: input)
@@ -223,7 +220,7 @@ final class VisionReplayBatchTests: XCTestCase {
             } }
         }
         let result = try await VisionReplayBatch.run(id: id, documents: documents)
-        let evidence = project.appendingPathComponent(".tmp/lat-pulldown-m3")
+        let evidence = URL(fileURLWithPath: try XCTUnwrap(ProcessInfo.processInfo.environment["FOX_M3_EVIDENCE_DIR"]))
         try FileManager.default.createDirectory(at: evidence, withIntermediateDirectories: true)
         try VisionDiagnosticArchive.encode(result).write(to: evidence.appendingPathComponent("controller-cache-result.json"))
         for item in result.cases {

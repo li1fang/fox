@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "A clean public checkout can reproduce software checks without private data or an Apple account",
+  "nonGoals": ["Device deployment", "New motion algorithms", "Regenerate historical expected results"],
+  "invariants": ["Preserve original records and trial candidate", "No fabricated eccentric duration", "No private evidence in public artifacts"],
+  "modules": ["scripts", "tests", "docs", ".github"],
+  "acceptance": ["verify:fast", "verify:public", "verify:private"],
+  "stopConditions": ["Unknown redistribution rights", "Input digest drift", "Data loss risk", "Missing required toolchain"],
+  "evidence": ["commit-bound suite receipts", "fresh-context review", "remote CI"],
+  "humanUnknowns": ["Real training guidance timing and audibility remain outside software acceptance"]
+}

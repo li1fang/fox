@@ -2,7 +2,7 @@
 
 评审日期：2026-10-22，Asia/Bangkok。
 
-评审对象：[作者正式 v0.2](references/AI_Agent_Constraint_Driven_UI_Design_Review_v0.2_Author_2026-10-21.md)，标识 `UI-Review-v0.2-author-20261021`，作者标注日期 2026-10-21。对照：[Fox-Practice-01](UI_REVIEW_PRACTICE_FEEDBACK_20261021.zh-CN.md)。
+评审对象：作者正式 v0.2（原稿未获再分发许可，仅保存在私人归档），标识 `UI-Review-v0.2-author-20261021`，作者标注日期 2026-10-21。对照：[Fox-Practice-01](UI_REVIEW_PRACTICE_FEEDBACK_20261021.zh-CN.md)。
 
 ## 1. 总体判断
 

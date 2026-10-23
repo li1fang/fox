@@ -2,70 +2,71 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  public-web:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Verify workspace
-        run: npm run verify
-
-      - name: Install Playwright browser
+      - name: Bootstrap clean public checkout
+        run: npm run bootstrap
+      - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Public Web and repository gates
+        run: npm run verify:public -- --component web --output .tmp/verification/ci-web
+      - name: Public dependency audit
+        run: npm audit --audit-level=high
+      - name: Public evidence only (including failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-${{ github.sha }}
+          path: |
+            .tmp/verification/ci-web/suite.json
+            .tmp/verification/ci-web/*.log
+          if-no-files-found: warn
+          retention-days: 14
 
-      - name: Run Playwright e2e
-        run: npm run test:e2e
-
-  native-core:
-    runs-on: macos-latest
+  public-native:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Test offline training core
-        env:
-          FOX_R2_EVIDENCE_DIR: /tmp/fox-r2-schema-fixtures
-          FOX_M3_EVIDENCE_DIR: /tmp/fox-m3-schema-fixtures
-        run: swift test --package-path apps/ipad/FoxTrainingCore
-      - name: Set up Node for journal test entrypoint
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Set up Python for schema validation
-        uses: actions/setup-python@v5
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install schema test dependency
-        run: python -m pip install -r scripts/journal-schema-requirements.txt
-      - name: Validate native vision report schemas
-        run: python scripts/validate-vision-schema.py /tmp/fox-r2-schema-fixtures
-      - name: Validate pulldown peak and return contracts
-        run: python scripts/validate-pulldown-schema.py /tmp/fox-m3-schema-fixtures
-      - name: Validate action strategy contracts
-        run: python scripts/validate-motion-contracts.py
-      - name: Test journal storage and portable schema
-        run: npm run test:journal
-      - name: Install XcodeGen for native application integration tests
-        run: brew install xcodegen
-      - name: Test journal application layer with real local storage
-        env:
-          FOX_IOS_UI_DERIVED_DATA: .tmp/ci-journal-app-tests
-        run: npm run test:home
-      - name: Test visual preparation and batch launch flows
-        env:
-          FOX_IOS_UI_DERIVED_DATA: .tmp/ci-journal-app-tests
-        run: npm run test:vision:flow
+          python-version-file: .python-version
+      - name: Required native toolchain (never fall back to default Xcode)
+        run: |
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          brew install xcodegen
+      - name: Bootstrap clean public checkout
+        run: npm run bootstrap
+      - name: Public native contracts, both apps and phone/pad UI
+        run: npm run verify:public -- --component native --output .tmp/verification/ci-native
+      - name: Public evidence only (no xcresult or private corpus)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-native-${{ github.sha }}
+          path: |
+            .tmp/verification/ci-native/suite.json
+            .tmp/verification/ci-native/*.log
+          if-no-files-found: warn
+          retention-days: 14

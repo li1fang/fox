@@ -6,7 +6,9 @@ import path from 'node:path';
 import {runSuite, checkXCTestLog, suiteSteps, compareHistory} from '../../scripts/trial-suite.mjs';
 
 test('suite has actual controller, phone/pad UI, real speech, wire and per-event history gates', () => {
-  const steps = suiteSteps('/run', {ipad: 'pad', iphone: 'phone'}, '/baseline');
+  const steps = suiteSteps('/run', {ipad: 'pad', iphone: 'phone'}, [], {catalogue: [
+    {id: 'FoxAppTests/Example/testOne', scope: 'public', surface: 'ipad'},
+    {id: 'FoxAppTests/NativeSpeechTests/testSpeech', scope: 'real-speech', surface: 'ipad'}]});
   for (const id of ['core', 'journal', 'wire', 'history', 'app-host', 'ipad-ui', 'iphone-ui', 'real-speech', 'web', 'web-flow']) {
     assert.ok(steps.some(x => x.id === id), id);
   }
@@ -69,4 +71,18 @@ test('successful software receipt does not claim trial readiness or device accep
   assert.equal(result.deviceVerified, false);
   await assert.rejects(runSuite({directory: dir, steps, fingerprint: async () => 'same',
     preflight: async () => [], execute: async () => ({code: 0, output: ''})}), /already exists/);
+});
+
+test('cancellation during the last successful command cannot become a passed suite', async t => {
+  const {dir, steps} = await harness(t);
+  await assert.rejects(runSuite({directory:dir, steps:steps.slice(0,1), fingerprint:async()=> 'same', preflight:async()=>[],
+    execute:async()=> { process.emit('SIGTERM'); return {code:0,output:'command completed after cancellation'}; }}), /cancelled/);
+  assert.equal(JSON.parse(await readFile(path.join(dir,'suite.json'))).status,'cancelled');
+});
+
+test('private bytes changing after otherwise green steps invalidate the receipt', async t => {
+  const {dir, steps} = await harness(t); let n = 0;
+  await assert.rejects(runSuite({directory:dir, steps, fingerprint:async()=> 'same', preflight:async()=>[++n],
+    execute:async()=>({code:0,output:'done'})}), /inputs changed/);
+  assert.equal(JSON.parse(await readFile(path.join(dir,'suite.json'))).status,'failed');
 });

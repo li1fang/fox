@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import CryptoKit
+import FoxTestSupport
 @testable import FoxTrainingCore
 
 final class PoseLiveR2Tests: XCTestCase {
@@ -86,10 +87,7 @@ final class PoseLiveR2Tests: XCTestCase {
     }
 
     func testPrivateLiveReportsCandidateAndFrozenReplay() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let url = root.appendingPathComponent(".tmp/live-trial-review-20261023/ipad-records/vision-trials.v1.json")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: url.path), "Private live archive absent; not live accuracy acceptance")
+        let url = try PrivateFixtures.url("history.trials")
         let data = try Data(contentsOf: url)
         XCTAssertEqual(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
                        "829d409caddb1b5bbb3b14864a8e589e46f1721d40b54123be57a1cacfdf5a7f")

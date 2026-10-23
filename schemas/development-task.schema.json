@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/development-task.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "outcome", "nonGoals", "invariants", "modules", "acceptance", "stopConditions", "evidence", "humanUnknowns"],
+  "properties": {
+    "schema": {"const": "fox.development_task.v1"},
+    "outcome": {"type": "string", "minLength": 1},
+    "nonGoals": {"$ref": "#/$defs/list"},
+    "invariants": {"$ref": "#/$defs/list"},
+    "modules": {"$ref": "#/$defs/list"},
+    "acceptance": {"$ref": "#/$defs/list"},
+    "stopConditions": {"$ref": "#/$defs/list"},
+    "evidence": {"$ref": "#/$defs/list"},
+    "humanUnknowns": {"$ref": "#/$defs/list"}
+  },
+  "$defs": {"list": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}
+}

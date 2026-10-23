@@ -89,6 +89,8 @@ targets:
     dependencies:
       - target: Fox
       - package: FoxJournalCore
+      - package: FoxTrainingCore
+        product: FoxTestSupport
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.whipa.fox.apptests

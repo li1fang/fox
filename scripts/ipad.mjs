@@ -5,6 +5,7 @@ import { tmpdir, networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 import { selectPairedDevice } from "./ios-device-selection.mjs";
 import { iosLaunchArguments } from "./ios-launch-policy.mjs";
+import {classifyDeviceError} from './verification-contracts.mjs';
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const ipadDir = join(root, "apps", "ipad");
@@ -197,6 +198,7 @@ function generate() {
 }
 
 function build(apps = Object.values(ipadApps)) {
+  if (!process.env.FOX_DEVELOPMENT_TEAM) throw new Error("Set FOX_DEVELOPMENT_TEAM locally for a signed physical build. Simulator verification needs no Apple account.");
   const registration = process.env.FOX_IOS_REGISTER_DEVICE === "1";
   const selected = registration ? selectedDeviceDetails() : null;
   if (selected && inspectDevice(deviceIdentifier(selected))?.deviceProperties?.developerModeStatus !== "enabled") {
@@ -220,6 +222,7 @@ function build(apps = Object.values(ipadApps)) {
       derivedDataPath,
       "-allowProvisioningUpdates",
       ...(registration ? ["-allowProvisioningDeviceRegistration"] : []),
+      `DEVELOPMENT_TEAM=${process.env.FOX_DEVELOPMENT_TEAM}`,
       "build"
     ]);
     const path = appPath(app);
@@ -445,7 +448,17 @@ async function runIpad() {
 }
 
 function testNativeCore() {
-  run("xcrun", ["swift", "test", "--package-path", join(ipadDir, "FoxTrainingCore"), "--scratch-path", join(root, ".tmp", "native-core-build")]);
+  run("xcrun", ["swift", "test", "--package-path", join(ipadDir, "FoxTrainingCore"), "--scratch-path", join(root, ".tmp", "native-core-build"),
+    ...(process.env.FOX_SWIFT_TEST_FILTER ? ['--filter', process.env.FOX_SWIFT_TEST_FILTER] : [])]);
+}
+
+function buildSimulator() {
+  generate();
+  for (const app of Object.values(ipadApps)) {
+    run('xcodebuild', ['-project', projectPath, '-scheme', app.scheme, '-configuration', 'Debug',
+      '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', join(root, '.tmp/ipad-simulator-data'),
+      'CODE_SIGNING_ALLOWED=NO', 'build']);
+  }
 }
 
 function testNativeUI() {
@@ -461,6 +474,7 @@ function testNativeUI() {
   run("xcrun", ["simctl", "uninstall", deviceId, "com.whipa.fox.uitests.xctrunner"]);
   const derivedData = process.env.FOX_IOS_UI_DERIVED_DATA ?? join(root, ".tmp", "ipad-simulator-data");
   const tests = (process.env.FOX_IOS_UI_TEST ?? "FoxUITests").split(",").map((value) => value.trim()).filter(Boolean);
+  if (!tests.length) throw new Error('No native tests selected');
   run("xcodebuild", ["-project", projectPath, "-scheme", "Fox", "-configuration", "Debug",
     "-destination", `platform=iOS Simulator,id=${deviceId}`, "-derivedDataPath", derivedData,
     "-parallel-testing-enabled", "NO", ...tests.map((value) => `-only-testing:${value}`), "CODE_SIGNING_ALLOWED=NO", "test"]);
@@ -487,10 +501,15 @@ try {
     testNativeCore();
   } else if (command === "test-ui") {
     testNativeUI();
+  } else if (command === "build-simulator") {
+    buildSimulator();
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
 } catch (error) {
+  if (['doctor', 'build', 'install', 'open', 'smoke', 'run'].includes(command)) {
+    console.error(`device_condition=${classifyDeviceError(error.message ?? String(error))}; this is not a motion-algorithm result`);
+  }
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 }

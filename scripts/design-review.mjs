@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-const env = { ...process.env, DEVELOPER_DIR: '/Applications/Xcode.app/Contents/Developer' };
+const env = { ...process.env, DEVELOPER_DIR: process.env.DEVELOPER_DIR ?? '/Applications/Xcode.app/Contents/Developer' };
 const groups = { home: ['testHomeScenarios', 'testColumnAffinitySurvivesComposerGrowth'],
   'home-smoke': ['testHomeSmokeScenarios', 'testColumnAffinitySurvivesComposerGrowth'],
   records: ['testRecordScenarios', 'testFullPhotoCanZoomAndReturnToUnchangedRecord'],

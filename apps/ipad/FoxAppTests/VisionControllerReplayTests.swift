@@ -1,6 +1,7 @@
 import CryptoKit
 import FoxTrainingCore
 import XCTest
+import FoxTestSupport
 @testable import Fox
 
 @MainActor
@@ -415,20 +416,18 @@ final class VisionControllerReplayTests: XCTestCase {
     }
 
     func testPrivateLiveCurlPackagesThroughActualController() throws {
-        let project = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         for (id, side, expected, hash) in [
             ("EE2A6E61-3241-4272-BE33-9DBD298D51F8", ArmSide.left, 7, "f203b235d89ceeb60a4a7232b6698f1249fd94ec746c4c668ee4f9b909facb7b"),
             ("D7C81796-A099-45EA-AE1C-B68DEF887315", .right, 6, "3f1f9ba910cd18cfd629d8837ccdb07c4042d5511b228c938f260714656df8cb")
         ] {
-            let folder = project.appendingPathComponent(".data/vision-diagnostics/inbox/\(id)")
-            let input = folder.appendingPathComponent("poses.jsonl")
-            try XCTSkipUnless(FileManager.default.fileExists(atPath: input.path), "Private camera package absent; not a real-device pass")
+            let assetID = side == .left ? "curl-left" : "curl-right"
+            let input = try PrivateFixtures.url("\(assetID).poses")
             let bytes = try Data(contentsOf: input)
             XCTAssertEqual(SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined(), hash)
             let rows = try String(decoding: bytes, as: UTF8.self).split(separator: "\n").map {
                 try JSONDecoder().decode(VisionDiagnosticPose.self, from: Data($0.utf8))
             }
-            let events = try String(contentsOf: folder.appendingPathComponent("events.jsonl"), encoding: .utf8).split(separator: "\n").map {
+            let events = try String(contentsOf: PrivateFixtures.url("\(assetID).events"), encoding: .utf8).split(separator: "\n").map {
                 try JSONDecoder().decode(VisionDiagnosticEvent.self, from: Data($0.utf8))
             }
             var rebinds = events.filter { $0.kind == "prepareRequested" }.dropFirst().compactMap(\.lastCapturePTS)
@@ -454,7 +453,7 @@ final class VisionControllerReplayTests: XCTestCase {
             XCTAssertTrue(rebinds.isEmpty)
             if side == .right { XCTAssertEqual(c.repetitions.first?.eccentric?.status, .trackingGap) }
             let reportID = side == .left ? "BF5C6F4F-C1CA-47EA-A790-E733E227C672" : "1ACF2BA4-E5D1-46A0-A541-CCBCAD50066E"
-            let baselineURL = project.appendingPathComponent(".tmp/live-reliability-r2-20261023/candidate-\(reportID).json")
+            let baselineURL = try PrivateFixtures.url("\(assetID).baseline")
             let baseline = try LocalTrainingRepository.decoder().decode(VisionTrial.self, from: Data(contentsOf: baselineURL))
             let offset = try XCTUnwrap(rows.first(where: \.isCounting)?.capturePTS) - XCTUnwrap(origin)
             XCTAssertEqual(c.repetitions.count, baseline.repetitions.count)
@@ -487,9 +486,7 @@ final class VisionControllerReplayTests: XCTestCase {
     }
 
     func testPrivateM4CacheThroughActualControllerMatchesCorePerFrame() throws {
-        let project = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let input = project.appendingPathComponent(".tmp/pose-comparison-20261017/ipad-r1/vision.jsonl")
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: input.path), "Private M4 cache unavailable; this is NOT a camera accuracy pass")
+        let input = try PrivateFixtures.url("reference.cache")
         let bytes = try Data(contentsOf: input)
         let digest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
         XCTAssertEqual(digest, "84f2651a2f8b5fc1fd71c6a98e5b43f66ac8afb70ae3f8d12e6db2948af7f7f7")

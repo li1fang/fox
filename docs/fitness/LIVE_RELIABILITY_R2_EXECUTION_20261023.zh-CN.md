@@ -42,7 +42,7 @@
 
 因果检测：2° 近峰值带、6° 转向幅度、0.2 秒确认；起点区间从最后近峰值样本到首个持续转向样本。`startedAtSeconds` 是较晚边界，减去 `onsetUncertaintySeconds` 得较早边界。时长区间为 `durationSeconds` 至 `durationSeconds + onsetUncertaintySeconds`。终点为已观察到的计数返回端点，不含端点确认等待。
 
-在运行估计器之前，按现有视频 2 fps 联系表人工划定宽时间区间；标注原件见 [视频区间](experiments/eccentric-r2-labels-20261023.json)。
+在运行估计器之前，按现有视频 2 fps 联系表人工划定宽时间区间；标注原件属于私人输入 `eccentric.labels`，通过[显式输入契约](../../apps/ipad/FoxTrainingCore/Sources/FoxTestSupport/Resources/private-inputs.contract.json)核对，不随公开仓库分发。
 
 | 视频样本 | 下放起点估计（视频秒） | 下放时长估计 | 从较早边界至确认延迟 |
 | --- | --- | --- | --- |
