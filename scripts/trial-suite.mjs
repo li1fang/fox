@@ -2,6 +2,7 @@
 import {spawn, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {mkdir, readFile, writeFile, rename, lstat, open} from 'node:fs/promises';
+import {renameSync} from 'node:fs';
 import {finished} from 'node:stream/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -43,6 +44,7 @@ export function suiteSteps(directory, devices, inputs = [], {scope = 'private', 
   const pythonTests = catalogue.filter(x => x.file.startsWith('tests/scripts/') && x.file.endsWith('.py')
     && (x.scope === 'public' || privateScope && x.scope === 'private')).map(x => x.file);
   const ui = (id, tests, device, allowedSkipClasses = []) => ({id, command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
+    timeoutMs: (id === 'ipad-ui' ? 60 : 45) * 60 * 1000,
     native: true, allowedSkipClasses, expectedNative: tests.split(','), env: {FOX_IOS_UI_TEST: tests, FOX_IOS_SIMULATOR: device,
       TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: privateScope ? process.env.FOX_PRIVATE_INPUT_MANIFEST : '',
       TEST_RUNNER_FOX_M3_EVIDENCE_DIR: directory,
@@ -137,15 +139,15 @@ export async function execute(step, {logPath, signal, openLog = openLogFile} = {
   });
 }
 
-export async function runSuite({directory, steps, fingerprint: sourceFingerprint = fingerprint, preflight, execute: run = execute, finalize, metadata = {}}) {
+export async function runSuite({directory, steps, fingerprint: sourceFingerprint = fingerprint, preflight, execute: run = execute, finalize, writeReceipt = writeFile, metadata = {}}) {
   await mkdir(directory, {recursive: true});
   const filename = path.join(directory, 'suite.json');
   const receipt = {schema: 'fox.trial_suite.v1', status: 'running', startedAt: new Date().toISOString(),
     ...metadata, sourceSHA256: null, inputs: [], steps: [], deviceVerified: false};
-  try { await writeFile(filename, JSON.stringify(receipt, null, 2) + '\n', {flag: 'wx'}); }
+  try { await writeReceipt(filename, JSON.stringify(receipt, null, 2) + '\n', {flag: 'wx'}); }
   catch (error) { if (error.code === 'EEXIST') throw Error('Suite receipt already exists; use a fresh run directory'); throw error; }
   const save = async () => {
-    await writeFile(filename + '.tmp', JSON.stringify(receipt, null, 2) + '\n');
+    await writeReceipt(filename + '.tmp', JSON.stringify(receipt, null, 2) + '\n');
     await rename(filename + '.tmp', filename);
   };
   const cancellation = new AbortController();
@@ -208,9 +210,17 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
       // Yield to queued OS signals too; process.emit alone does not test this boundary.
       await new Promise(setImmediate);
       applyCancellation();
-      receipt.finishedAt = new Date().toISOString(); await save();
-      await new Promise(setImmediate);
-      if (receipt.status !== 'cancelled' && applyCancellation()) await save();
+      receipt.finishedAt = new Date().toISOString();
+      let writtenStatus;
+      do {
+        writtenStatus = receipt.status;
+        await writeReceipt(filename + '.terminal.tmp', JSON.stringify(receipt, null, 2) + '\n');
+        await new Promise(setImmediate);
+        applyCancellation();
+      } while (writtenStatus !== receipt.status);
+      // Single completion commit point. Until this rename, the public receipt is still running.
+      // No asynchronous work or cancellation-dependent correction follows the commit.
+      renameSync(filename + '.terminal.tmp', filename);
     } finally {
       process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
     }

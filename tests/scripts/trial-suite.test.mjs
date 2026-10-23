@@ -7,6 +7,7 @@ import {Writable} from 'node:stream';
 import {spawn} from 'node:child_process';
 import * as suiteModule from '../../scripts/trial-suite.mjs';
 import {runSuite, checkXCTestLog, suiteSteps, compareHistory} from '../../scripts/trial-suite.mjs';
+import {auditReceipt} from '../../scripts/verification-contracts.mjs';
 
 test('suite has actual controller, phone/pad UI, real speech, wire and per-event history gates', () => {
   const steps = suiteSteps('/run', {ipad: 'pad', iphone: 'phone'}, [], {catalogue: [
@@ -19,6 +20,7 @@ test('suite has actual controller, phone/pad UI, real speech, wire and per-event
   assert.equal(steps.find(x => x.id === 'core').env.FOX_GUIDANCE_REQUIRE_PRIVATE, '1');
   assert.match(steps.find(x => x.id === 'app-host').env.FOX_IOS_UI_TEST, /FoxAppTests/);
   assert.match(steps.find(x => x.id === 'real-speech').env.FOX_IOS_UI_TEST, /NativeSpeechTests/);
+  assert.equal(steps.find(x => x.id === 'ipad-ui').timeoutMs, 60 * 60 * 1000);
   assert.deepEqual(steps.find(x => x.id === 'mapping').args, ['scripts/run-python-tests.py', 'tests/scripts/nested/test_example.py']);
 });
 
@@ -175,4 +177,20 @@ test('an OS cancellation queued during cleanup cannot publish a successful recei
   assert.equal(signalled, true);
   assert.equal(code, 1);
   assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'cancelled');
+});
+
+test('cancellation plus a failed final write never leaves a reusable success', async t => {
+  const {dir, steps} = await harness(t); let cancelling = false;
+  await assert.rejects(runSuite({directory: dir, steps, fingerprint: async () => 'same', preflight: async () => [],
+    execute: async () => ({code: 0, output: 'done'}),
+    writeReceipt: async (file, content, options) => {
+      const state = JSON.parse(content).status;
+      if (cancelling && state === 'cancelled') throw Object.assign(Error('synthetic disk full'), {code: 'ENOSPC'});
+      await writeFile(file, content, options);
+      if (state === 'software_suite_passed') { cancelling = true; process.emit('SIGTERM'); }
+    }}), /disk full/);
+  assert.equal(cancelling, true);
+  const receipt = JSON.parse(await readFile(path.join(dir, 'suite.json')));
+  assert.notEqual(receipt.status, 'software_suite_passed');
+  assert.throws(() => auditReceipt(receipt, {commit: undefined, sourceSHA256: 'same', scope: undefined}), /Incomplete/);
 });
