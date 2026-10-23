@@ -37,6 +37,7 @@ jobs:
             .tmp/verification/ci-web/suite.json
             .tmp/verification/ci-web/*.log
           if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 14
 
   public-native:
@@ -59,7 +60,10 @@ jobs:
         run: |
           test -d "$DEVELOPER_DIR"
           xcodebuild -version
-          brew install xcodegen
+          curl --fail --location --output "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip
+          printf '%s  %s\n' '0c90f4d28ca57335f9fa78cf5bf6dabfe20a232036dabe36de2eef79cb7c0878' "$RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP/fox-tools"
+          echo "$RUNNER_TEMP/fox-tools/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Bootstrap clean public checkout
         run: npm run bootstrap
       - name: Public native contracts, both apps and phone/pad UI
@@ -73,4 +77,5 @@ jobs:
             .tmp/verification/ci-native/suite.json
             .tmp/verification/ci-native/*.log
           if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 14

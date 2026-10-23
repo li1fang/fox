@@ -4,7 +4,7 @@
 
 使用 Node 22（`.node-version`），然后 `npm run bootstrap`。macOS 另需 Python 3.12、Xcode 26.3 / 17C529、XcodeGen 2.45.x，以及已安装的 iPhone/iPad 模拟器运行时。
 
-初始化安装仓库锁定的 npm 依赖、Playwright Chromium 及 `.venv` 中的 schema 依赖；不安装/切换全局 Xcode、不读取签名账户、不连接物理设备。Python 可通过 `FOX_BOOTSTRAP_PYTHON` 指定 3.12 可执行文件。XcodeGen 使用 `brew install xcodegen`；如果版本不匹配，停止并明确选择所需版本，不静默接受升级。Linux 首次运行浏览器可能还需 `npx playwright install --with-deps chromium` 安装系统库。
+初始化安装仓库锁定的 npm 依赖、Playwright Chromium 及 `.venv` 中的 schema 依赖；不安装/切换全局 Xcode、不读取签名账户、不连接物理设备。Python 可通过 `FOX_BOOTSTRAP_PYTHON` 指定 3.12 可执行文件。XcodeGen 使用 [官方 2.45.3 发布包](https://github.com/yonaskolb/XcodeGen/releases/tag/2.45.3)；安装及 SHA-256 校验步骤见 [CI 配置](../../.github/workflows/ci.yml)。可解压到本地工具目录并将 `xcodegen/bin` 加到当前进程 PATH，不需全局安装。不要使用会浮动升级的 Homebrew 最新版本；不匹配时检查应停止。Linux 首次运行浏览器可能还需 `npx playwright install --with-deps chromium` 安装系统库。
 
 `npm run doctor` 输出实际 Node、npm、Python、Swift、Xcode、SDK、XcodeGen 和可用模拟器版本。`DEVELOPER_DIR` 可指向对应 Xcode。模拟器构建 Fox 和 Fox Say 不需要 Apple 账号；实际设备构建另需本地 `FOX_DEVELOPMENT_TEAM`，不能把 Team ID 提交到仓库。
 
