@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
-import {doctor, allocateSimulators, releaseSimulators, root} from './development-environment.mjs';
+import {doctor, allocateSimulators, releaseSimulators, isolateSimulatorStep, root} from './development-environment.mjs';
 import {checkedCatalogue} from './test-inventory.mjs';
 import {runSuite, execute} from './trial-suite.mjs';
 
@@ -158,11 +158,13 @@ export async function runPhoneDiagnostic(output, includeVision = false) {
   const directory = path.resolve(output), steps = [];
   const git = args => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
   const metadata = {scope: 'diagnostic', component: includeVision ? 'native-readiness' : 'phone-readiness', commit: git(['rev-parse', 'HEAD']),
-    dirty: !!git(['status', '--porcelain']), environment: {},
+    dirty: !!git(['status', '--porcelain']), environment: {simulatorIsolation: []},
     evidenceBoundary: 'Fixed synthetic UI diagnostics, not full public/private acceptance or physical-device evidence.'};
   let lease;
   return runSuite({directory, steps, metadata,
     execute: async (step, options) => {
+      const isolation = await isolateSimulatorStep(lease, step);
+      if (isolation) metadata.environment.simulatorIsolation.push(isolation);
       const result = await execute(step, options);
       if (result.code === 0) {
         if (step.id === 'pad-exercise-switch') auditVisionCountObservations(result.output);

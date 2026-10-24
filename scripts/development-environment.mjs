@@ -74,6 +74,20 @@ export async function allocateSimulators(info, {execute = captureAsync, override
   }
 }
 
+export async function isolateSimulatorStep(lease, step, execute = captureAsync) {
+  const target = step.env?.FOX_IOS_SIMULATOR;
+  if (!target) return;
+  if (!lease || !Object.values(lease.devices).includes(target)) throw Error('Simulator target does not belong to this lease');
+  const parked = [];
+  // Keep the selected simulator's data; stop only peers created by this run, never user overrides.
+  for (const id of lease.created.filter(id => id !== target)) {
+    try { await execute('xcrun', ['simctl', 'shutdown', id]); }
+    catch (error) { if (!/current state: Shutdown/i.test(error.message)) throw error; }
+    parked.push(id);
+  }
+  return {step: step.id, target, parked};
+}
+
 export async function releaseSimulators(lease, execute = captureAsync) {
   const errors = [];
   // Only IDs created by this invocation belong to this invocation. Overrides are never deleted.

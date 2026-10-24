@@ -169,6 +169,38 @@ test('full verification owns isolated simulators and never deletes existing or e
   assert.equal(calls.length, 0);
 });
 
+test('native steps park only owned peer simulators before switching between phone and pad', async () => {
+  const lease = {devices: {ipad: 'owned-pad', iphone: 'owned-phone'}, created: ['owned-pad', 'owned-phone']};
+  const calls = [], execute = async (command, args) => { calls.push([command, ...args]); return ''; };
+  const phone = await developmentEnvironment.isolateSimulatorStep(lease, {id: 'phone', env: {FOX_IOS_SIMULATOR: 'owned-phone'}}, execute);
+  assert.deepEqual(calls, [['xcrun', 'simctl', 'shutdown', 'owned-pad']]);
+  assert.deepEqual(phone, {step: 'phone', target: 'owned-phone', parked: ['owned-pad']});
+  calls.length = 0;
+  await developmentEnvironment.isolateSimulatorStep(lease, {id: 'speech', env: {FOX_IOS_SIMULATOR: 'owned-pad'}}, execute);
+  assert.deepEqual(calls, [['xcrun', 'simctl', 'shutdown', 'owned-phone']]);
+});
+
+test('simulator isolation preserves overrides and refuses unknown targets without any commands', async () => {
+  const lease = {devices: {ipad: 'existing-pad', iphone: 'owned-phone'}, created: ['owned-phone']};
+  const calls = [], execute = async (command, args) => { calls.push([command, ...args]); return ''; };
+  await developmentEnvironment.isolateSimulatorStep(lease, {id: 'phone', env: {FOX_IOS_SIMULATOR: 'owned-phone'}}, execute);
+  assert.equal(calls.length, 0);
+  assert.equal(await developmentEnvironment.isolateSimulatorStep(lease, {id: 'web'}, execute), undefined);
+  await assert.rejects(developmentEnvironment.isolateSimulatorStep(lease, {id: 'bad', env: {FOX_IOS_SIMULATOR: 'unrelated'}}, execute), /lease/);
+  assert.equal(calls.length, 0);
+});
+
+test('simulator isolation accepts already stopped peers but fails closed on shutdown failure', async () => {
+  const lease = {devices: {ipad: 'pad', iphone: 'phone'}, created: ['pad', 'phone']};
+  const step = {id: 'phone', env: {FOX_IOS_SIMULATOR: 'phone'}};
+  await assert.doesNotReject(developmentEnvironment.isolateSimulatorStep(lease, step, async () => {
+    throw Error('Unable to shutdown device in current state: Shutdown');
+  }));
+  await assert.rejects(developmentEnvironment.isolateSimulatorStep(lease, step, async () => {
+    throw Error('service unavailable');
+  }), /service unavailable/);
+});
+
 test('partial simulator allocation cleans only owned instances and cleanup failures are explicit', async () => {
   const info = {simulators: {'runtime-test': [
     {udid: 'pad', name: 'iPad', deviceTypeIdentifier: 'type.iPad-Pro-11-inch'},

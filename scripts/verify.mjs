@@ -3,8 +3,8 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {isDeepStrictEqual} from 'node:util';
-import {runSuite, suiteSteps, fingerprint, compareHistory} from './trial-suite.mjs';
-import {doctor, root, allocateSimulators, releaseSimulators} from './development-environment.mjs';
+import {runSuite, suiteSteps, fingerprint, compareHistory, execute} from './trial-suite.mjs';
+import {doctor, root, allocateSimulators, releaseSimulators, isolateSimulatorStep} from './development-environment.mjs';
 import {checkedCatalogue} from './test-inventory.mjs';
 import {validatePrivateInputs} from './private-inputs.mjs';
 import {artifact} from './trial-readiness.mjs';
@@ -39,7 +39,7 @@ export async function runVerification({scope = 'fast', component = 'all', output
     return p.stdout.trim();
   };
   const metadata = {scope, component, commit: git(['rev-parse', 'HEAD']),
-    dirty: !!git(['status', '--porcelain']), environment: {}, excludedTests: [],
+    dirty: !!git(['status', '--porcelain']), environment: {simulatorIsolation: []}, excludedTests: [],
     evidenceBoundary: 'Software verification only. No device installation, camera accuracy, audibility, or human acceptance claim.'};
   const steps = [];
   let lease;
@@ -77,7 +77,13 @@ export async function runVerification({scope = 'fast', component = 'all', output
     }
   };
   try {
-    const result = await runSuite({directory, steps, preflight, finalize, metadata});
+    const result = await runSuite({directory, steps, preflight, finalize, metadata,
+      execute: async (step, options) => {
+        const isolation = await isolateSimulatorStep(lease, step);
+        if (isolation) metadata.environment.simulatorIsolation.push(isolation);
+        return execute(step, options);
+      }
+    });
     console.log(JSON.stringify({status: result.status, scope, component, receipt: path.join(directory, 'suite.json'), deviceVerified: false}));
     return result;
   } catch (error) { console.error(`Receipt retained: ${path.join(directory, 'suite.json')}`); throw error; }
