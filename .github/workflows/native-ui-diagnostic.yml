@@ -9,7 +9,8 @@ permissions:
 jobs:
   native-readiness-diagnostic:
     runs-on: macos-26
-    timeout-minutes: 25
+    # Two cold-start batches (25 minutes each), plus bootstrap and owned-simulator cleanup.
+    timeout-minutes: 60
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       FOX_DIAGNOSTIC_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-4

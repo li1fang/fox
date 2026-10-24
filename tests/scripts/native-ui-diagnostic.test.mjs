@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {phoneDiagnosticCase, phoneDiagnosticStep, checkDiagnosticContext} from '../../scripts/native-ui-diagnostic.mjs';
 import * as diagnostic from '../../scripts/native-ui-diagnostic.mjs';
 import {auditReceipt} from '../../scripts/verification-contracts.mjs';
@@ -14,7 +15,7 @@ test('phone diagnostic covers fixed input and framing cases, never a full-suite 
   assert.equal(step.env.FOX_IOS_SIMULATOR, 'owned-phone');
   assert.equal(step.env.TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST, '');
   assert.equal(step.env.TEST_RUNNER_FOX_REAL_SPEECH, '0');
-  assert.equal(step.timeoutMs, 15 * 60 * 1000);
+  assert.equal(step.timeoutMs, 25 * 60 * 1000);
   assert.throws(() => auditReceipt({status: 'software_suite_passed', scope: 'diagnostic',
     commit: 'same', sourceSHA256: 'same', deviceVerified: false, steps: [{status: 'passed'}]},
     {scope: 'public', commit: 'same', sourceSHA256: 'same'}), /scope/);
@@ -119,7 +120,7 @@ test('native diagnostic adds the exact pad exercise-switch case without dropping
   assert.equal(step.env.FOX_IOS_UI_TEST, step.expectedNative.join(','));
   assert.equal(step.env.FOX_IOS_SIMULATOR, 'owned-pad');
   assert.equal(step.env.TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST, '');
-  assert.equal(step.timeoutMs, 15 * 60 * 1000);
+  assert.equal(step.timeoutMs, 25 * 60 * 1000);
   const catalogue = diagnostic.phoneDiagnosticCases.map(id => ({id, scope: 'public', surface: 'iphone'}));
   assert.throws(() => checkDiagnosticContext({}, catalogue, true), /classification/);
   const vision = {id: step.expectedNative[0], scope: 'public', surface: 'ipad'};
@@ -154,4 +155,11 @@ test('diagnostic CLI rejects unknown, duplicate or ambiguous arguments before ru
     ['out', 'other'], ['--vision', 'out', '--vision'], ['out', '-v'], ['--output', 'out']]) {
     assert.throws(() => diagnostic.parseDiagnosticArguments(args), /arguments/);
   }
+});
+
+test('the single diagnostic job budgets both cold-start batches plus setup and cleanup', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/native-ui-diagnostic.yml', import.meta.url), 'utf8');
+  const budgets = [...workflow.matchAll(/^    timeout-minutes: (\d+)\s*$/gm)].map(x => Number(x[1]));
+  const required = Math.ceil((phoneDiagnosticStep('phone').timeoutMs + diagnostic.visionDiagnosticStep('pad').timeoutMs) / 60000) + 10;
+  assert.deepEqual(budgets, [required], 'The outer job must not terminate either inner batch before its own timeout');
 });

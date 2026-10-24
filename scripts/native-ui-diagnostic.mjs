@@ -23,14 +23,14 @@ export function checkDiagnosticContext(env, catalogue, includeVision = false) {
 }
 export function phoneDiagnosticStep(device) {
   return {id: 'phone-readiness', command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
-    timeoutMs: 15 * 60 * 1000, native: true, expectedNative: phoneDiagnosticCases,
+    timeoutMs: 25 * 60 * 1000, native: true, expectedNative: phoneDiagnosticCases,
     env: {FOX_IOS_UI_TEST: phoneDiagnosticCases.join(','), FOX_IOS_SIMULATOR: device,
       TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: '', TEST_RUNNER_FOX_REAL_SPEECH: '0'}};
 }
 
 export function visionDiagnosticStep(device) {
   return {id: 'pad-exercise-switch', command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
-    timeoutMs: 15 * 60 * 1000, native: true, expectedNative: [visionDiagnosticCase],
+    timeoutMs: 25 * 60 * 1000, native: true, expectedNative: [visionDiagnosticCase],
     env: {FOX_IOS_UI_TEST: visionDiagnosticCase, FOX_IOS_SIMULATOR: device,
       TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: '', TEST_RUNNER_FOX_REAL_SPEECH: '0'}};
 }
