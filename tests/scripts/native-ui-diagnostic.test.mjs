@@ -87,18 +87,30 @@ test('framing observations retain all rotations and the original per-channel tol
   assert.throws(() => diagnostic.auditFramingObservations(log([...rows, rows[2]])), /framing/);
 });
 
-test('input diagnostics retain the original exact-value result even if it later settles', () => {
+test('input completion requires exact text within four seconds with the first reading retained', () => {
   const ids = ['trial-information', 'trial-software-issue', 'trial-training-feeling'];
-  const rows = ids.map((id, index) => ({schema: 'fox.ui_input_probe.v1', id, expected: `test ${index}`,
-    immediateValue: `test ${index}`, immediateMatched: true, deadlineSeconds: 4, observations: []}));
+  const rows = ids.map((id, index) => ({schema: 'fox.ui_input_probe.v2', id, expected: `test ${index}`,
+    immediateValue: 'test ', finalValue: `test ${index}`, completed: true, deadlineSeconds: 4, elapsedSeconds: 1.2,
+    observations: [{value: 'test ', elapsedSeconds: 0.1, querySeconds: 0.1},
+      {value: `test ${index}`, elapsedSeconds: 1.1, querySeconds: 0.1}]}));
   const log = values => values.map(value => `FOX_UI_INPUT ${JSON.stringify(value)}`).join('\n');
   assert.doesNotThrow(() => diagnostic.auditPhoneInputObservations(log(rows)));
+  assert.doesNotThrow(() => diagnostic.auditPhoneInputObservations(log(rows.map(x => ({...x,
+    immediateValue: x.expected, observations: [{value: x.expected, elapsedSeconds: 0.1, querySeconds: 0.1}]})))));
   for (const invalid of [rows.slice(0, 2), [...rows, rows[0]],
-    rows.map((x, index) => index === 2 ? {...x, immediateValue: 'test ', immediateMatched: false,
-      observations: [{value: 'test 2', elapsedSeconds: 0.2}]} : x),
     rows.map(x => ({...x, immediateValue: 'wrong'})), rows.map(x => ({...x, expected: 'changed'})),
-    rows.map(x => ({...x, immediateMatched: false})), rows.map(x => ({...x, deadlineSeconds: 8})),
-    rows.map(x => ({...x, observations: [{value: x.expected, elapsedSeconds: 0.2}]}))]) {
+    rows.map(x => ({...x, finalValue: 'test '})), rows.map(x => ({...x, completed: false})),
+    rows.map(x => ({...x, elapsedSeconds: 4.1})), rows.map(x => ({...x, elapsedSeconds: 0.5})),
+    rows.map(x => ({...x, elapsedSeconds: 4.2, observations: [x.observations[0],
+      {value: x.expected, elapsedSeconds: 4.1, querySeconds: 0.2}]})),
+    rows.map(x => ({...x, observations: [x.observations[0], {...x.observations[1], querySeconds: 1.05}]})),
+    rows.map(x => ({...x, deadlineSeconds: 8})), rows.map(x => ({...x, observations: []})),
+    rows.map(x => ({...x, observations: [{value: 'test ', elapsedSeconds: 0.1, querySeconds: 0.1}]})),
+    rows.map(x => ({...x, observations: [...x.observations, {value: x.expected, elapsedSeconds: 1.15, querySeconds: 0.1}]})),
+    rows.map(x => ({...x, observations: x.observations.map(y => ({...y, querySeconds: -1}))})),
+    rows.map(x => ({...x, schema: 'fox.ui_input_probe.v1', immediateMatched: false})),
+    rows.map(x => ({schema: 'fox.ui_input_probe.v1', id: x.id, expected: x.expected,
+      immediateValue: x.expected, immediateMatched: true, deadlineSeconds: 4, observations: []}))]) {
     assert.throws(() => diagnostic.auditPhoneInputObservations(log(invalid)), /input observations/);
   }
 });

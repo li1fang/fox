@@ -34,11 +34,10 @@ final class FoxPhoneLayoutUITests: XCTestCase {
             XCTAssertFalse(app.buttons["rest-ready"].exists)
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 4))
             field.typeText("test \(index)")
-            let immediateValue = field.value as? String
-            observeInputFailure(field, id: id, expected: "test \(index)", immediateValue: immediateValue, in: app)
-            XCTAssertEqual(immediateValue, "test \(index)")
+            requireInputCompletion(field, id: id, expected: "test \(index)", in: app)
             visible(app.buttons["feedback-dismiss-keyboard"], in: app, diagnosticID: "feedback-dismiss-keyboard")
             app.buttons["feedback-dismiss-keyboard"].tap()
+            XCTAssertEqual(field.value as? String, "test \(index)", "Dismissing the keyboard must preserve the exact input")
             visible(app.buttons["submit-feedback"], in: app)
             screenshot("phone-feedback-\(index)", app: app)
         }
@@ -46,29 +45,35 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         XCTAssertTrue(app.buttons["rest-ready"].waitForExistence(timeout: 5))
     }
 
-    private func observeInputFailure(_ field: XCUIElement, id: String, expected: String,
-                                     immediateValue: String?, in app: XCUIApplication) {
-        guard app.launchEnvironment["FOX_UI_TESTING"] == "1",
-              app.launchArguments.contains("--ui-testing-reset"),
-              ProcessInfo.processInfo.environment["FOX_PRIVATE_INPUT_MANIFEST", default: ""].isEmpty else { return }
+    private func requireInputCompletion(_ field: XCUIElement, id: String, expected: String, in app: XCUIApplication) {
+        let start = ProcessInfo.processInfo.systemUptime, deadline = start + 4
         var observations: [[String: Any]] = []
-        if immediateValue != expected {
-            let start = ProcessInfo.processInfo.systemUptime
-            let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-                let value = field.exists ? field.value as? String : nil
-                observations.append(["value": value.map { $0 as Any } ?? NSNull(),
-                                     "elapsedSeconds": ProcessInfo.processInfo.systemUptime - start])
-                return value == expected
-            }, object: nil)
-            // Observe only: the original immediate assertion below must still fail.
-            _ = XCTWaiter.wait(for: [settled], timeout: 4)
+        var finalValue: String?
+        let predicate = NSPredicate { _, _ in
+            let queryStart = ProcessInfo.processInfo.systemUptime
+            finalValue = field.exists ? field.value as? String : nil
+            let now = ProcessInfo.processInfo.systemUptime
+            observations.append(["value": finalValue.map { $0 as Any } ?? NSNull(),
+                "elapsedSeconds": now - start, "querySeconds": now - queryStart])
+            return finalValue == expected
         }
-        let diagnostic: [String: Any] = ["schema": "fox.ui_input_probe.v1", "id": id, "expected": expected,
-            "immediateValue": immediateValue.map { $0 as Any } ?? NSNull(), "immediateMatched": immediateValue == expected,
-            "deadlineSeconds": 4, "observations": observations]
-        if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]),
-           let json = String(data: data, encoding: .utf8) { print("FOX_UI_INPUT \(json)") }
-        if immediateValue != expected { print("FOX_SYNTHETIC_UI_INPUT_FAILURE_AX\n\(app.debugDescription)") }
+        // typeText delivery and the AX value update are asynchronous; never retype or clear on a mismatch.
+        let immediate = predicate.evaluate(with: nil), remaining = deadline - ProcessInfo.processInfo.systemUptime
+        let result: XCTWaiter.Result = immediate ? .completed : remaining > 0
+            ? XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: remaining) : .timedOut
+        let elapsed = ProcessInfo.processInfo.systemUptime - start
+        let completed = result == .completed && elapsed <= 4
+        if app.launchEnvironment["FOX_UI_TESTING"] == "1", app.launchArguments.contains("--ui-testing-reset"),
+           ProcessInfo.processInfo.environment["FOX_PRIVATE_INPUT_MANIFEST", default: ""].isEmpty {
+            let diagnostic: [String: Any] = ["schema": "fox.ui_input_probe.v2", "id": id, "expected": expected,
+                "immediateValue": observations.first?["value"] ?? NSNull(), "finalValue": finalValue.map { $0 as Any } ?? NSNull(),
+                "completed": completed, "deadlineSeconds": 4, "elapsedSeconds": elapsed, "observations": observations]
+            if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) { print("FOX_UI_INPUT \(json)") }
+            if !completed { print("FOX_SYNTHETIC_UI_INPUT_FAILURE_AX\n\(app.debugDescription)") }
+        }
+        XCTAssertTrue(completed, "Exact input must complete within four seconds: \(id)")
+        XCTAssertEqual(finalValue, expected)
     }
 
     private func scrollFeedback(_ form: XCUIElement, target: XCUIElement, above footer: XCUIElement,

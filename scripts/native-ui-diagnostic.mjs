@@ -83,11 +83,19 @@ export function auditPhoneObservations(output) {
 export function auditPhoneInputObservations(output) {
   const rows = [...output.matchAll(/FOX_UI_INPUT (\{[^\n]*\})/g)].map(x => JSON.parse(x[1]));
   const ids = ['trial-information', 'trial-software-issue', 'trial-training-feeling'];
-  if (rows.length !== ids.length || rows.some((row, index) => row.schema !== 'fox.ui_input_probe.v1'
-    || row.id !== ids[index] || row.expected !== `test ${index}` || row.immediateValue !== row.expected
-    || row.immediateMatched !== true || row.deadlineSeconds !== 4
-    || !Array.isArray(row.observations) || row.observations.length !== 0)) {
-    throw Error('Phone input observations missing or original assertion failed');
+  if (rows.length !== ids.length || rows.some((row, index) => row.schema !== 'fox.ui_input_probe.v2'
+    || row.id !== ids[index] || row.expected !== `test ${index}` || row.finalValue !== row.expected
+    || row.completed !== true || row.deadlineSeconds !== 4
+    || !Number.isFinite(row.elapsedSeconds) || row.elapsedSeconds < 0 || row.elapsedSeconds > 4
+    || !Array.isArray(row.observations) || !row.observations.length
+    || row.observations.some((x, i) => !x || (x.value !== null && typeof x.value !== 'string')
+      || !Number.isFinite(x.elapsedSeconds) || x.elapsedSeconds < 0 || x.elapsedSeconds > row.elapsedSeconds
+      || !Number.isFinite(x.querySeconds) || x.querySeconds < 0 || x.querySeconds > x.elapsedSeconds
+      || i > 0 && x.elapsedSeconds < row.observations[i - 1].elapsedSeconds
+      || i > 0 && x.querySeconds > x.elapsedSeconds - row.observations[i - 1].elapsedSeconds + 0.000001
+      || i < row.observations.length - 1 && x.value === row.expected)
+    || row.immediateValue !== row.observations[0].value || row.observations.at(-1).value !== row.finalValue)) {
+    throw Error('Phone input observations missing or bounded exact completion failed');
   }
   return rows;
 }
