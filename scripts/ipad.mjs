@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir, networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 import { selectPairedDevice } from "./ios-device-selection.mjs";
 import { iosLaunchArguments } from "./ios-launch-policy.mjs";
 import {classifyDeviceError} from './verification-contracts.mjs';
+import {allocateSimulators, releaseSimulators, isolateSimulatorStep, readSimulatorSession,
+  assertSimulatorAvailability, simulatorRuntime, simulatorCandidates} from './development-environment.mjs';
+import {execute as executeTestCommand} from './trial-suite.mjs';
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const ipadDir = join(root, "apps", "ipad");
@@ -461,23 +464,61 @@ function buildSimulator() {
   }
 }
 
-function testNativeUI() {
-  generate();
-  const devices = JSON.parse(run("xcrun", ["simctl", "list", "devices", "available", "--json"], { capture: true }));
-  const ipads = Object.values(devices.devices ?? {}).flat().filter((device) => device.name.includes("iPad"));
-  const deviceId = process.env.FOX_IOS_SIMULATOR ?? ipads.find((device) => device.name.includes("11-inch"))?.udid ?? ipads[0]?.udid;
-  if (!deviceId) {
-    throw new Error("No available iPad simulator. Install an iOS simulator runtime in Xcode first.");
+async function testNativeUI() {
+  const cancellation = new AbortController();
+  const cancel = () => cancellation.abort();
+  process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
+  let lease;
+  try {
+    mkdirSync(join(root, '.tmp'), {recursive: true});
+    const logs = mkdtempSync(join(root, '.tmp', 'native-ui-command-'));
+    let sequence = 0;
+    const command = async (name, args, timeoutMs = 60_000, captureOutput = false) => {
+      cancellation.signal.throwIfAborted();
+      // The enclosing suite owns the process group and budget. Do not nest detached runners.
+      if (process.env.FOX_SIMULATOR_SESSION_TOKEN) return run(name, args, {capture: captureOutput});
+      const logPath = join(logs, `${++sequence}.log`);
+      const result = await executeTestCommand({command: name, args, timeoutMs},
+        {logPath, signal: cancellation.signal, forwardOutput: !captureOutput});
+      if (result.code !== 0) throw Error(`${name} failed (${result.code}); see ${logPath}`);
+      return result.stdout;
+    };
+    const devices = JSON.parse(await command('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], 60_000, true));
+    let deviceId = process.env.FOX_IOS_SIMULATOR;
+    if (process.env.FOX_SIMULATOR_SESSION_TOKEN) {
+      const owner = readSimulatorSession(process.env.FOX_SIMULATOR_SESSION_TOKEN);
+      if (owner.root !== root || owner.developerDir !== developerDir || !Object.values(owner.devices).includes(deviceId)) {
+        throw Error('Simulator session ownership does not match checkout, toolchain or target');
+      }
+      await assertSimulatorAvailability([deviceId]);
+    } else {
+      const info = {simulators: devices.devices, simulatorRuntime};
+      const selected = deviceId ? simulatorCandidates(info).find(d => d.udid === deviceId) : undefined;
+      if (deviceId && !selected) throw Error('Explicit simulator unavailable in pinned runtime; no fallback');
+      const family = selected?.deviceTypeIdentifier.includes('.iPhone-') ? 'iphone' : 'ipad';
+      lease = await allocateSimulators(info, {families: [family], overrides: deviceId ? {[family]: deviceId} : {}});
+      deviceId = lease.devices[family];
+    }
+    cancellation.signal.throwIfAborted();
+    if (lease) await isolateSimulatorStep(lease, {id: 'direct-native-ui', env: {FOX_IOS_SIMULATOR: deviceId}});
+    await command('xcodegen', ['generate', '--spec', join(ipadDir, 'project.yml'), '--project', ipadDir]);
+    // Reload only the simulator test harness; preserve the Fox app and its data.
+    await command("xcrun", ["simctl", "bootstatus", deviceId, "-b"], 180_000);
+    await command("xcrun", ["simctl", "uninstall", deviceId, "com.whipa.fox.uitests.xctrunner"]);
+    const derivedData = process.env.FOX_IOS_UI_DERIVED_DATA ?? join(root, ".tmp", "ipad-simulator-data");
+    const tests = (process.env.FOX_IOS_UI_TEST ?? "FoxUITests").split(",").map((value) => value.trim()).filter(Boolean);
+    if (!tests.length) throw new Error('No native tests selected');
+    await command("xcodebuild", ["-project", projectPath, "-scheme", "Fox", "-configuration", "Debug",
+      "-destination", `platform=iOS Simulator,id=${deviceId}`, "-derivedDataPath", derivedData,
+      "-parallel-testing-enabled", "NO", ...tests.map((value) => `-only-testing:${value}`), "CODE_SIGNING_ALLOWED=NO", "test"], 60 * 60_000);
+    cancellation.signal.throwIfAborted();
+  } finally {
+    try {
+      if (lease) await releaseSimulators(lease);
+      cancellation.signal.throwIfAborted();
+    }
+    finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }
   }
-  // Reload only the simulator test harness; preserve the Fox app and its data.
-  run("xcrun", ["simctl", "bootstatus", deviceId, "-b"]);
-  run("xcrun", ["simctl", "uninstall", deviceId, "com.whipa.fox.uitests.xctrunner"]);
-  const derivedData = process.env.FOX_IOS_UI_DERIVED_DATA ?? join(root, ".tmp", "ipad-simulator-data");
-  const tests = (process.env.FOX_IOS_UI_TEST ?? "FoxUITests").split(",").map((value) => value.trim()).filter(Boolean);
-  if (!tests.length) throw new Error('No native tests selected');
-  run("xcodebuild", ["-project", projectPath, "-scheme", "Fox", "-configuration", "Debug",
-    "-destination", `platform=iOS Simulator,id=${deviceId}`, "-derivedDataPath", derivedData,
-    "-parallel-testing-enabled", "NO", ...tests.map((value) => `-only-testing:${value}`), "CODE_SIGNING_ALLOWED=NO", "test"]);
 }
 
 const command = process.argv[2] ?? "doctor";
@@ -500,7 +541,7 @@ try {
   } else if (command === "test-core") {
     testNativeCore();
   } else if (command === "test-ui") {
-    testNativeUI();
+    await testNativeUI();
   } else if (command === "build-simulator") {
     buildSimulator();
   } else {

@@ -49,7 +49,7 @@ export function diagnosticRuntime(info, runtime) {
   const devices = info.simulators[runtime];
   const phone = devices?.find(x => x.deviceTypeIdentifier === 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro');
   if (!phone) throw Error('Requested diagnostic runtime/model unavailable; no fallback');
-  return {...info, simulators: {[runtime]: devices.filter(x => x === phone || x.deviceTypeIdentifier?.includes('.iPad-'))}};
+  return {...info, simulatorRuntime: runtime, simulators: {[runtime]: devices.filter(x => x === phone || x.deviceTypeIdentifier?.includes('.iPad-'))}};
 }
 
 export function auditPhoneObservations(output) {
@@ -187,9 +187,9 @@ export async function runPhoneDiagnostic(output, includeVision = false) {
     preflight: async () => {
       checkDiagnosticContext(process.env, await checkedCatalogue(), includeVision);
       if (!steps.length) {
-        const info = doctor({native: true});
+        const info = diagnosticRuntime(doctor({native: true}), process.env.FOX_DIAGNOSTIC_RUNTIME);
         Object.assign(metadata.environment, info);
-        lease = await allocateSimulators(diagnosticRuntime(info, process.env.FOX_DIAGNOSTIC_RUNTIME));
+        lease = await allocateSimulators(info);
         metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
         if (includeVision) steps.push(visionDiagnosticStep(lease.devices.ipad));
         steps.push(phoneDiagnosticStep(lease.devices.iphone));

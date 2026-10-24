@@ -81,7 +81,9 @@ npm run verify:candidate -- private --commit "$candidate" --output .tmp/verifica
 
 可加 `-- --output .tmp/verification/<unique-run>`。公开层可用 `--component web` 或 `--component native` 分工，CI 必须两者都通过；单一 component 不代表完整 public。private 不允许分片绕过公开覆盖。
 
-完整原生运行默认创建专属临时 iPad/iPhone 模拟器，使用已安装的机型/运行时，完成、失败或取消后仅清理本次创建的实例。已有模拟器和真机不删除。回执记录实例、运行时、所有权及清理状态；清理失败也不能通过。`doctor` 只读，fast/Web 不创建实例。诊断时可用 `FOX_TRIAL_IPAD_SIMULATOR` / `FOX_TRIAL_IPHONE_SIMULATOR` 指定已有 UDID；它们不会被清理，但其原有状态会影响结果，不属于干净环境证明。
+完整原生运行默认创建专属临时 iPad/iPhone 模拟器，固定本地 iOS 26.3、云端 iOS 26.4、iPhone 17 Pro 与 iPad Pro 11-inch M5 12GB。目标缺失直接失败，不按列表顺序回退；`FOX_SIMULATOR_RUNTIME` 可显式选运行时。完成、失败或正常套件取消后仅清理本次创建的实例。已有模拟器和真机不删除。回执记录实例、运行时、所有权及清理状态；清理失败也不能通过。`doctor` 只读，fast/Web 不创建实例。诊断时可用 `FOX_TRIAL_IPAD_SIMULATOR` / `FOX_TRIAL_IPHONE_SIMULATOR` 指定已有 UDID；它们不会被清理，但其原有状态会影响结果，不属于干净环境证明。
+
+套件、诊断及直接 UI 入口共享本用户的模拟器会话，跨工作树争用立即失败。每步若有外部启动实例则停止，不自动关闭。直接 UI 默认也使用临时实例；继承套件目标时核对 token、工作树、工具链和 UDID，不另抢锁。强制终止与异常创建/清理保留 owner 待核查，恢复步骤及工具链并存的退出条件见 [过渡计划](TOOLCHAIN_TRANSITION.zh-CN.md)。人工 Xcode 操作和旧脚本不受互斥约束。
 
 原生批次执行前，只关闭本次拥有的其他模拟器，避免 iPad 测完后继续与 iPhone 同时运行；不清除数据，切回系统语音批次时重新启动原 iPad。回执的 `environment.simulatorIsolation` 逐项记录目标和已停止的同批实例。显式指定的已有实例不会被这一步关闭；关闭错误使检查失败，不重试或吞掉非“已关闭”错误。这是资源隔离措施，不等于已证明此前超时的系统根因，也不改变交互断言期限。
 

@@ -1,13 +1,16 @@
 import {spawnSync, execFile} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {existsSync, mkdirSync, readFileSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync} from 'node:fs';
+import {homedir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 
-export const root = fileURLToPath(new URL('..', import.meta.url));
+export const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const developerDir = process.env.DEVELOPER_DIR ?? '/Applications/Xcode.app/Contents/Developer';
 export const python = process.env.FOX_JOURNAL_PYTHON ?? path.join(root, '.venv/bin/python');
+export const simulatorRuntime = process.env.FOX_SIMULATOR_RUNTIME ?? 'com.apple.CoreSimulator.SimRuntime.iOS-26-3';
+const sessionDirectory = path.join(homedir(), '.cache', 'fox', 'simulator-session');
 export const environment = {...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH}`,
   DEVELOPER_DIR: developerDir, FOX_JOURNAL_PYTHON: python, PYTHONDONTWRITEBYTECODE: '1'};
 
@@ -43,28 +46,85 @@ export function doctor({native = process.platform === 'darwin', dependencies = t
     result.swift = capture('xcrun', ['swift', '--version']);
     result.sdk = capture('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-version']);
     result.simulators = JSON.parse(capture('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).devices;
+    result.simulatorRuntime = simulatorRuntime;
   }
   return result;
 }
 
-export async function allocateSimulators(info, {execute = captureAsync, overrides = {
+export function simulatorCandidates(info, runtime = info.simulatorRuntime ?? simulatorRuntime) {
+  const devices = info.simulators?.[runtime];
+  if (!devices?.length) throw Error(`environment_failure: simulator runtime unavailable: ${runtime}; no fallback`);
+  return devices.map(d => ({...d, runtime}));
+}
+
+// One claim across worktrees. Never steal a stale claim: a dead parent may still have live test children.
+export function acquireSimulatorSession(directory = sessionDirectory) {
+  mkdirSync(path.dirname(directory), {recursive: true});
+  try { mkdirSync(directory); }
+  catch (error) {
+    if (error.code === 'EEXIST') throw Error(`environment_failure: simulator session busy; inspect ${path.join(directory, 'owner.json')} and its processes before recovery`);
+    throw error;
+  }
+  const session = {directory, token: randomUUID(), pid: process.pid, root, developerDir, startedAt: new Date().toISOString()};
+  try { writeFileSync(path.join(directory, 'owner.json'), JSON.stringify({...session, created: [], devices: {}}, null, 2)); }
+  catch (error) { rmSync(directory, {recursive: true}); throw error; }
+  return session;
+}
+
+export function readSimulatorSession(token, directory = sessionDirectory) {
+  const owner = JSON.parse(readFileSync(path.join(directory, 'owner.json'), 'utf8'));
+  if (!token || owner.token !== token || owner.directory !== directory) throw Error('Simulator session ownership mismatch');
+  return owner;
+}
+
+export function saveSimulatorSession(session, lease) {
+  const owner = readSimulatorSession(session.token, session.directory);
+  const file = path.join(session.directory, 'owner.json');
+  writeFileSync(`${file}.next`, JSON.stringify({...owner, created: lease.created, devices: lease.devices,
+    selection: lease.selection, creationIntents: lease.creationIntents, released: lease.released}, null, 2));
+  renameSync(`${file}.next`, file);
+}
+
+export function releaseSimulatorSession(session) {
+  readSimulatorSession(session.token, session.directory);
+  rmSync(session.directory, {recursive: true});
+}
+
+export async function assertSimulatorAvailability(allowed, execute = captureAsync) {
+  const inventory = JSON.parse(await execute('xcrun', ['simctl', 'list', 'devices', '--json']));
+  const foreign = Object.values(inventory.devices).flat().filter(d => d.state !== 'Shutdown' && !allowed.includes(d.udid));
+  if (foreign.length) throw Error(`environment_failure: other simulators active: ${foreign.map(d => `${d.udid} (${d.name ?? d.state})`).join(', ')}; coordinate shutdown with their owner; nothing was stopped`);
+}
+
+export async function allocateSimulators(info, {execute = captureAsync, coordinate = true, sessionPath = sessionDirectory, families = ['ipad', 'iphone'], models = {
+  ipad: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB',
+  iphone: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}, overrides = {
   ipad: process.env.FOX_TRIAL_IPAD_SIMULATOR, iphone: process.env.FOX_TRIAL_IPHONE_SIMULATOR}} = {}) {
-  const available = Object.entries(info.simulators ?? {}).flatMap(([runtime, devices]) => devices.map(d => ({...d, runtime})));
-  const lease = {devices: {}, created: [], selection: {}};
+  const available = simulatorCandidates(info);
+  const lease = {devices: {}, created: [], selection: {}, creationIntents: []};
+  if (coordinate) lease.session = acquireSimulatorSession(sessionPath);
   try {
-    for (const [key, family] of [['ipad', 'iPad'], ['iphone', 'iPhone']]) {
+    if (coordinate) await assertSimulatorAvailability(Object.values(overrides).filter(Boolean), execute);
+    for (const [key, family] of [['ipad', 'iPad'], ['iphone', 'iPhone']].filter(([key]) => families.includes(key))) {
       const candidates = available.filter(d => d.deviceTypeIdentifier?.includes(`.${family}-`));
       const template = overrides[key] ? candidates.find(d => d.udid === overrides[key])
-        : candidates.find(d => family !== 'iPad' || d.deviceTypeIdentifier.includes('11-inch')) ?? candidates[0];
+        : candidates.find(d => d.deviceTypeIdentifier === models[key]);
       if (!template) throw Error(`environment_failure: missing ${family} simulator runtime or invalid override; install a compatible runtime in Xcode`);
-      const id = overrides[key] ?? (await execute('xcrun', ['simctl', 'create', `FoxVerification-${family}-${randomUUID()}`,
+      const name = `FoxVerification-${family}-${randomUUID()}`;
+      if (!overrides[key]) {
+        lease.creationIntents.push({name, runtime: template.runtime, deviceType: template.deviceTypeIdentifier});
+        if (lease.session) saveSimulatorSession(lease.session, lease);
+      }
+      const id = overrides[key] ?? (await execute('xcrun', ['simctl', 'create', name,
         template.deviceTypeIdentifier, template.runtime])).trim();
       if (!overrides[key]) {
         if (!/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id)) throw Error('environment_failure: simulator creation returned an invalid identifier');
         lease.created.push(id);
+        lease.creationIntents.at(-1).id = id;
       }
       lease.devices[key] = id;
       lease.selection[key] = {id, runtime: template.runtime, deviceType: template.deviceTypeIdentifier, owned: !overrides[key]};
+      if (lease.session) saveSimulatorSession(lease.session, lease);
     }
     return lease;
   } catch (error) {
@@ -85,19 +145,30 @@ export async function isolateSimulatorStep(lease, step, execute = captureAsync) 
     catch (error) { if (!/current state: Shutdown/i.test(error.message)) throw error; }
     parked.push(id);
   }
+  if (lease.session) {
+    await assertSimulatorAvailability([target], execute);
+    step.env.FOX_SIMULATOR_SESSION_TOKEN = lease.session.token;
+  }
   return {step: step.id, target, parked};
 }
 
 export async function releaseSimulators(lease, execute = captureAsync) {
   const errors = [];
   // Only IDs created by this invocation belong to this invocation. Overrides are never deleted.
-  for (const id of lease.created) {
+  lease.released ??= [];
+  for (const id of lease.created.filter(id => !lease.released.includes(id))) {
     try { await execute('xcrun', ['simctl', 'shutdown', id]); }
     catch (error) { if (!/current state: Shutdown/i.test(error.message)) errors.push(`${id}: ${error.message}`); }
-    try { await execute('xcrun', ['simctl', 'delete', id]); }
+    try {
+      await execute('xcrun', ['simctl', 'delete', id]);
+      lease.released.push(id);
+      if (lease.session) saveSimulatorSession(lease.session, lease);
+    }
     catch (error) { errors.push(`${id}: ${error.message}`); }
   }
+  if (lease.session && lease.creationIntents?.some(intent => !intent.id)) errors.push('creation outcome uncertain; inspect exact creationIntents names before releasing session');
   if (errors.length) throw Error(`simulator cleanup failed: ${errors.join('; ')}`);
+  if (lease.session) releaseSimulatorSession(lease.session);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

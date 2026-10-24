@@ -49,6 +49,7 @@ jobs:
     timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      FOX_SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-4
     steps:
       - uses: actions/checkout@v4
         with:

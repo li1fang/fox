@@ -101,7 +101,7 @@ export async function fingerprint() {
 
 const openLogFile = async filename => (await open(filename, 'wx')).createWriteStream();
 
-export async function execute(step, {logPath, signal, openLog = openLogFile} = {}) {
+export async function execute(step, {logPath, signal, openLog = openLogFile, forwardOutput = false} = {}) {
   signal?.throwIfAborted();
   // Secure the log before spawning; a broken log is a failed run, even when the child exits zero.
   const log = await openLog(logPath);
@@ -126,8 +126,8 @@ export async function execute(step, {logPath, signal, openLog = openLogFile} = {
       failure ??= Error(`${step.id ?? step.command} timed out`); terminate();
     }, step.timeoutMs ?? 45 * 60 * 1000);
     signal?.addEventListener('abort', cancel, {once: true});
-    child.stdout.on('data', chunk => { stdout += chunk.toString(); if (!log.destroyed) log.write(chunk); });
-    child.stderr.on('data', chunk => { stderr += chunk.toString(); if (!log.destroyed) log.write(chunk); });
+    child.stdout.on('data', chunk => { stdout += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stdout.write(chunk); });
+    child.stderr.on('data', chunk => { stderr += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stderr.write(chunk); });
     child.on('error', error => { failure ??= error; });
     child.on('close', async (code, childSignal) => {
       clearTimeout(timeout); clearTimeout(forced); signal?.removeEventListener('abort', cancel);

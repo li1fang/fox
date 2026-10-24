@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, writeFile, readFile, rm, cp} from 'node:fs/promises';
-import {spawnSync} from 'node:child_process';
+import {mkdtemp, mkdir, writeFile, readFile, rm, cp, chmod} from 'node:fs/promises';
+import {spawnSync, spawn} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -11,6 +11,7 @@ import {discoverTests} from '../../scripts/test-inventory.mjs';
 import * as developmentEnvironment from '../../scripts/development-environment.mjs';
 import * as verificationContracts from '../../scripts/verification-contracts.mjs';
 import * as verification from '../../scripts/verify.mjs';
+import {execute as executeSuiteCommand} from '../../scripts/trial-suite.mjs';
 import {auditInventory, auditNativeCoverage, auditReceipt, auditCommandOutput, classifyDeviceError} from '../../scripts/verification-contracts.mjs';
 
 test('private inputs are explicit, complete, pinned and rechecked, never an implicit local cache', async t => {
@@ -237,19 +238,19 @@ test('private batch consumers must use the pinned files, not unpinned siblings',
 });
 
 test('full verification owns isolated simulators and never deletes existing or explicit devices', async () => {
-  const info = {simulators: {'runtime-test': [
-    {udid: 'existing-pad', name: 'Custom tablet', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch'},
+  const info = {simulatorRuntime: 'runtime-test', simulators: {'runtime-test': [
+    {udid: 'existing-pad', name: 'Custom tablet', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB'},
     {udid: 'existing-phone', name: 'Custom phone', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}]}};
   const calls = []; let n = 0;
   const execute = (command, args) => { calls.push(args); return args[1] === 'create' ? `00000000-0000-0000-0000-00000000000${++n}` : ''; };
-  const lease = await developmentEnvironment.allocateSimulators(info, {execute, overrides: {}});
+  const lease = await developmentEnvironment.allocateSimulators(info, {execute, coordinate: false, overrides: {}});
   assert.equal(lease.created.length, 2);
   assert.notEqual(lease.devices.ipad, 'existing-pad');
   await developmentEnvironment.releaseSimulators(lease, execute);
   assert.equal(calls.filter(args => args[1] === 'delete').length, 2);
   assert.ok(calls.every(args => !args.includes('existing-pad') && !args.includes('existing-phone')));
   calls.length = 0;
-  const explicit = await developmentEnvironment.allocateSimulators(info, {execute, overrides: {ipad: 'existing-pad', iphone: 'existing-phone'}});
+  const explicit = await developmentEnvironment.allocateSimulators(info, {execute, coordinate: false, overrides: {ipad: 'existing-pad', iphone: 'existing-phone'}});
   assert.deepEqual(explicit.devices, {ipad: 'existing-pad', iphone: 'existing-phone'});
   await developmentEnvironment.releaseSimulators(explicit, execute);
   assert.equal(calls.length, 0);
@@ -288,9 +289,9 @@ test('simulator isolation accepts already stopped peers but fails closed on shut
 });
 
 test('partial simulator allocation cleans only owned instances and cleanup failures are explicit', async () => {
-  const info = {simulators: {'runtime-test': [
-    {udid: 'pad', name: 'iPad', deviceTypeIdentifier: 'type.iPad-Pro-11-inch'},
-    {udid: 'phone', name: 'iPhone', deviceTypeIdentifier: 'type.iPhone-17-Pro'}]}};
+  const info = {simulatorRuntime: 'runtime-test', simulators: {'runtime-test': [
+    {udid: 'pad', name: 'iPad', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB'},
+    {udid: 'phone', name: 'iPhone', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}]}};
   const calls = []; let n = 0;
   const owned = '00000000-0000-0000-0000-000000000001';
   const execute = (command, args) => {
@@ -298,10 +299,197 @@ test('partial simulator allocation cleans only owned instances and cleanup failu
     if (args[1] === 'create') { if (++n === 2) throw Error('creation unavailable'); return owned; }
     return '';
   };
-  await assert.rejects(developmentEnvironment.allocateSimulators(info, {execute, overrides: {}}), /creation unavailable/);
+  await assert.rejects(developmentEnvironment.allocateSimulators(info, {execute, coordinate: false, overrides: {}}), /creation unavailable/);
   assert.ok(calls.some(args => args[1] === 'delete' && args[2] === owned));
   await assert.rejects(developmentEnvironment.releaseSimulators({created: [owned]}, () => { throw Error('cleanup unavailable'); }), /cleanup/);
   await assert.doesNotReject(developmentEnvironment.releaseSimulators({created: [owned]}, (command, args) => {
     if (args[1] === 'shutdown') throw Error('Unable to shutdown device in current state: Shutdown');
   }));
+});
+
+test('simulator runtime is pinned regardless of installation order and overrides cannot cross it', () => {
+  const info = {simulators: {
+    newer: [{udid: 'new', deviceTypeIdentifier: 'type.iPhone-Duo'}],
+    stable: [{udid: 'old', deviceTypeIdentifier: 'type.iPhone-17-Pro'}]
+  }};
+  assert.deepEqual(developmentEnvironment.simulatorCandidates(info, 'stable').map(x => x.udid), ['old']);
+  assert.throws(() => developmentEnvironment.simulatorCandidates(info, 'missing'), /runtime unavailable/);
+});
+
+test('simulator session excludes other worktrees and retains ownership after incomplete cleanup', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fox-sim-lock-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const directory = path.join(dir, 'session');
+  const session = developmentEnvironment.acquireSimulatorSession(directory);
+  assert.throws(() => developmentEnvironment.acquireSimulatorSession(directory), /simulator session busy/);
+  assert.throws(() => developmentEnvironment.releaseSimulatorSession({...session, token: 'wrong'}), /ownership/);
+  developmentEnvironment.saveSimulatorSession(session, {created: ['owned'], devices: {ipad: 'owned'}});
+  assert.equal(JSON.parse(await readFile(path.join(directory, 'owner.json'), 'utf8')).created[0], 'owned');
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {acquireSimulatorSession} from ${JSON.stringify(new URL('../../scripts/development-environment.mjs', import.meta.url).href)}; acquireSimulatorSession(${JSON.stringify(directory)});`], {encoding: 'utf8'});
+  assert.notEqual(child.status, 0);
+  assert.match(child.stderr, /simulator session busy/);
+  developmentEnvironment.releaseSimulatorSession(session);
+  const next = developmentEnvironment.acquireSimulatorSession(directory);
+  developmentEnvironment.releaseSimulatorSession(next);
+});
+
+test('foreign booted or booting simulators block without shutdown or deletion', async () => {
+  const calls = [];
+  const execute = async (command, args) => {
+    calls.push(args);
+    return JSON.stringify({devices: {stable: [{udid: 'other', name: 'Another project', state: 'Booted'}]}});
+  };
+  await assert.rejects(developmentEnvironment.assertSimulatorAvailability(['ours'], execute), /other.*Another project/);
+  assert.deepEqual(calls, [['simctl', 'list', 'devices', '--json']]);
+  await assert.doesNotReject(developmentEnvironment.assertSimulatorAvailability(['other'], execute));
+  await assert.rejects(developmentEnvironment.assertSimulatorAvailability([], async () =>
+    JSON.stringify({devices: {stable: [{udid: 'booting', state: 'Booting'}]}})), /booting/);
+});
+
+test('coordinated allocation records ownership, hands token to children and keeps failed cleanup recoverable', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fox-sim-lifecycle-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const sessionPath = path.join(dir, 'session');
+  const info = {simulatorRuntime: 'stable', simulators: {stable: [
+    {udid: 'template', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}]}};
+  const owned = '00000000-0000-0000-0000-000000000001';
+  const execute = async (command, args) => args[1] === 'list' ? JSON.stringify({devices: {stable: []}})
+    : args[1] === 'create' ? owned : '';
+  const lease = await developmentEnvironment.allocateSimulators(info, {execute, sessionPath, families: ['iphone'], overrides: {}});
+  const step = {id: 'phone', env: {FOX_IOS_SIMULATOR: owned}};
+  await developmentEnvironment.isolateSimulatorStep(lease, step, execute);
+  const owner = developmentEnvironment.readSimulatorSession(step.env.FOX_SIMULATOR_SESSION_TOKEN, sessionPath);
+  assert.deepEqual(owner.created, [owned]);
+  assert.equal(owner.creationIntents.length, 1);
+  await assert.rejects(developmentEnvironment.releaseSimulators(lease, async () => {throw Error('unavailable');}), /cleanup failed/);
+  assert.throws(() => developmentEnvironment.acquireSimulatorSession(sessionPath), /busy/);
+  await developmentEnvironment.releaseSimulators(lease, execute);
+  assert.throws(() => developmentEnvironment.readSimulatorSession(lease.session.token, sessionPath), /ENOENT/);
+});
+
+test('runtime overrides and fixed models fail before creation instead of falling through to new devices', async () => {
+  const calls = [];
+  const execute = async (command, args) => {calls.push(args); return '';};
+  const info = {simulatorRuntime: 'stable', simulators: {
+    newer: [{udid: 'new', deviceTypeIdentifier: 'type.iPhone-Duo'}],
+    stable: [{udid: 'old', deviceTypeIdentifier: 'type.iPhone-Old'}]
+  }};
+  await assert.rejects(developmentEnvironment.allocateSimulators(info,
+    {coordinate: false, execute, families: ['iphone'], overrides: {iphone: 'new'}}), /invalid override/);
+  await assert.rejects(developmentEnvironment.allocateSimulators(info,
+    {coordinate: false, execute, families: ['iphone'], overrides: {}}), /missing iPhone/);
+  assert.equal(calls.length, 0);
+});
+
+test('partial successful cleanup persists progress and can resume without deleting an ID twice', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fox-sim-resume-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const session = developmentEnvironment.acquireSimulatorSession(path.join(dir, 'session'));
+  const lease = {session, devices: {}, created: ['a', 'b']};
+  developmentEnvironment.saveSimulatorSession(session, lease);
+  const deleted = new Set(); let fail = true;
+  const execute = async (command, args) => {
+    assert.ok(!deleted.has(args[2]), 'already deleted ID must not be retried');
+    if (args[1] === 'delete') {
+      if (args[2] === 'b' && fail) throw Error('temporary delete failure');
+      deleted.add(args[2]);
+    }
+  };
+  await assert.rejects(developmentEnvironment.releaseSimulators(lease, execute), /cleanup failed/);
+  assert.deepEqual(developmentEnvironment.readSimulatorSession(session.token, session.directory).released, ['a']);
+  fail = false;
+  await developmentEnvironment.releaseSimulators(lease, execute);
+  assert.deepEqual([...deleted], ['a', 'b']);
+});
+
+async function fakeNativeCommands(t) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fox-native-entry-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const bin = path.join(dir, 'bin'); await mkdir(bin);
+  const id = '00000000-0000-0000-0000-000000000001';
+  const body = `#!${process.execPath}
+import {appendFileSync,writeFileSync} from 'node:fs';
+import path from 'node:path';
+const name=path.basename(process.argv[1]), args=process.argv.slice(2);
+appendFileSync(process.env.FOX_TEST_TRACE,JSON.stringify({name,args})+'\\n');
+if(name==='xcrun' && args[1]==='list') console.log(JSON.stringify({devices:{'com.apple.CoreSimulator.SimRuntime.iOS-26-3':[{udid:'${id}',state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB'}]}}));
+if(name==='xcrun' && args[1]==='create') console.log('${id}');
+if(name==='xcodebuild') console.log('NATIVE_PARTIAL_OUTPUT');
+if(name==='xcodebuild' && process.env.FOX_TEST_WAIT==='1'){writeFileSync(process.env.FOX_TEST_READY,String(process.pid));if(process.env.FOX_TEST_RESIST==='1')process.on('SIGTERM',()=>{});setTimeout(()=>{},60000);}
+if(name==='xcrun' && args[1]==='delete' && process.env.FOX_TEST_CLEANUP_WAIT==='1'){writeFileSync(process.env.FOX_TEST_READY,'cleanup');setTimeout(()=>{},400);}
+`;
+  for (const name of ['xcrun', 'xcodegen', 'xcodebuild']) {
+    const file = path.join(bin, name); await writeFile(file, body); await chmod(file, 0o755);
+  }
+  return {dir, id, env: {...process.env, HOME: dir, PATH: `${bin}:${process.env.PATH}`,
+    FOX_SIMULATOR_SESSION_TOKEN: '', FOX_IOS_SIMULATOR: '', FOX_SIMULATOR_RUNTIME: 'com.apple.CoreSimulator.SimRuntime.iOS-26-3',
+    FOX_TEST_TRACE: path.join(dir, 'trace.jsonl'), FOX_TEST_READY: path.join(dir, 'ready')}};
+}
+
+test('real UI child entry accepts the parent lease without path-format rejection or reacquisition', async t => {
+  const fixture = await fakeNativeCommands(t);
+  const session = developmentEnvironment.acquireSimulatorSession(path.join(fixture.dir, '.cache/fox/simulator-session'));
+  developmentEnvironment.saveSimulatorSession(session, {created: [], devices: {ipad: fixture.id}});
+  const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_SIMULATOR_SESSION_TOKEN: session.token, FOX_IOS_SIMULATOR: fixture.id}, encoding: 'utf8', timeout: 10_000});
+  assert.equal(result.status, 0, result.stderr);
+  const calls = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.ok(calls.some(x => x.name === 'xcodebuild'));
+  assert.ok(!calls.some(x => ['create', 'delete'].includes(x.args[1])));
+  developmentEnvironment.releaseSimulatorSession(session);
+});
+
+test('direct UI entry cancels its command, releases owned simulators and frees the shared session', {timeout: 15_000}, async t => {
+  const fixture = await fakeNativeCommands(t);
+  const child = spawn(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_TEST_WAIT: '1'}, stdio: ['ignore', 'ignore', 'pipe']});
+  t.after(() => {if (child.exitCode === null) child.kill('SIGKILL');});
+  let stderr = ''; child.stderr.on('data', bytes => {stderr += bytes;});
+  const closed = new Promise(resolve => child.on('close', (code, signal) => resolve({code, signal})));
+  const deadline = Date.now() + 8000;
+  while (true) {
+    try {await readFile(fixture.env.FOX_TEST_READY); break;} catch {}
+    assert.equal(child.exitCode, null, stderr);
+    assert.ok(Date.now() < deadline, 'fake build did not start');
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  child.kill('SIGTERM');
+  const result = await closed;
+  assert.equal(result.code, 1, stderr);
+  const calls = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.ok(calls.some(x => x.args[1] === 'delete' && x.args[2] === fixture.id));
+  await assert.rejects(readFile(path.join(fixture.dir, '.cache/fox/simulator-session/owner.json')), /ENOENT/);
+});
+
+test('suite cancellation kills a resistant inherited native child and retains partial output', {timeout: 15_000}, async t => {
+  const fixture = await fakeNativeCommands(t);
+  const session = developmentEnvironment.acquireSimulatorSession(path.join(fixture.dir, '.cache/fox/simulator-session'));
+  developmentEnvironment.saveSimulatorSession(session, {created: [], devices: {ipad: fixture.id}});
+  const logPath = path.join(fixture.dir, 'outer.log');
+  await assert.rejects(executeSuiteCommand({command: process.execPath, args: ['scripts/ipad.mjs', 'test-ui'], timeoutMs: 2000,
+    env: {...fixture.env, FOX_TEST_WAIT: '1', FOX_TEST_RESIST: '1', FOX_SIMULATOR_SESSION_TOKEN: session.token,
+      FOX_IOS_SIMULATOR: fixture.id}}, {logPath}), /timed out/);
+  assert.match(await readFile(logPath, 'utf8'), /NATIVE_PARTIAL_OUTPUT/);
+  const pid = Number(await readFile(fixture.env.FOX_TEST_READY, 'utf8'));
+  assert.throws(() => process.kill(pid, 0), /ESRCH/);
+  developmentEnvironment.releaseSimulatorSession(session);
+});
+
+test('cancellation during direct cleanup cannot exit successfully', {timeout: 10_000}, async t => {
+  const fixture = await fakeNativeCommands(t);
+  const child = spawn(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_TEST_CLEANUP_WAIT: '1'}, stdio: 'ignore'});
+  t.after(() => {if (child.exitCode === null) child.kill('SIGKILL');});
+  const closed = new Promise(resolve => child.on('close', code => resolve(code)));
+  const deadline = Date.now() + 6000;
+  while (true) {
+    try {await readFile(fixture.env.FOX_TEST_READY); break;} catch {}
+    assert.equal(child.exitCode, null);
+    assert.ok(Date.now() < deadline);
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  child.kill('SIGTERM');
+  assert.equal(await closed, 1);
+  await assert.rejects(readFile(path.join(fixture.dir, '.cache/fox/simulator-session/owner.json')), /ENOENT/);
 });
