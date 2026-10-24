@@ -6,15 +6,20 @@ import {checkedCatalogue} from './test-inventory.mjs';
 import {runSuite, execute} from './trial-suite.mjs';
 
 export const phoneDiagnosticCase = 'FoxUITests/FoxPhoneLayoutUITests/testFeedbackKeyboardAndThreeCategoriesRemainReachableAfterRotation';
+export const phoneDiagnosticCases = [phoneDiagnosticCase,
+  'FoxUITests/FoxPhoneLayoutUITests/testFramingValidationRequiresEveryCorner',
+  'FoxUITests/FoxPhoneLayoutUITests/testVisionOptionsLockCorrectionAndSavedReportRemainUsable'];
 export function checkDiagnosticContext(env, catalogue) {
   if (env.FOX_PRIVATE_INPUT_MANIFEST || env.TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST) throw Error('Diagnostic must not receive private inputs');
-  const row = catalogue.find(x => x.id === phoneDiagnosticCase);
-  if (row?.scope !== 'public' || row.surface !== 'iphone') throw Error('Diagnostic case classification changed');
+  for (const id of phoneDiagnosticCases) {
+    const row = catalogue.find(x => x.id === id);
+    if (row?.scope !== 'public' || row.surface !== 'iphone') throw Error('Diagnostic case classification changed');
+  }
 }
 export function phoneDiagnosticStep(device) {
-  return {id: 'phone-feedback', command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
-    timeoutMs: 15 * 60 * 1000, native: true, expectedNative: [phoneDiagnosticCase],
-    env: {FOX_IOS_UI_TEST: phoneDiagnosticCase, FOX_IOS_SIMULATOR: device,
+  return {id: 'phone-readiness', command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
+    timeoutMs: 15 * 60 * 1000, native: true, expectedNative: phoneDiagnosticCases,
+    env: {FOX_IOS_UI_TEST: phoneDiagnosticCases.join(','), FOX_IOS_SIMULATOR: device,
       TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: '', TEST_RUNNER_FOX_REAL_SPEECH: '0'}};
 }
 
@@ -66,13 +71,56 @@ export function auditPhoneInputObservations(output) {
   return rows;
 }
 
+export function auditFramingObservations(output) {
+  const rows = [...output.matchAll(/FOX_UI_FRAMING (\{[^\n]*\})/g)].map(x => JSON.parse(x[1]));
+  const expected = [[0, 255, 0], [255, 0, 0], [255, 255, 0], [0, 0, 255]], orientations = [3, 4, 1];
+  const measured = colors => Array.isArray(colors) && colors.length === 4 && colors.every(c => Array.isArray(c)
+    && c.length === 3 && c.every(x => Number.isInteger(x) && x >= 0 && x <= 255));
+  const matches = colors => measured(colors) && colors.every((c, i) => c.every((x, j) => Math.abs(x - expected[i][j]) < 20));
+  const stableTrace = observations => {
+    if (!Array.isArray(observations) || !observations.length) return false;
+    const rectangle = x => Array.isArray(x) && x.length === 4 && x.every(Number.isFinite) && x[2] > 0 && x[3] > 0;
+    let previous, since;
+    return observations.every(x => {
+      let stable = 0;
+      if (!Array.isArray(x.cornerRGB)) return false;
+      if (x.cornerRGB.length === 0) {
+        if (x.window !== undefined || x.preview !== undefined) return false;
+        previous = undefined; since = undefined;
+      } else {
+        if (!measured(x.cornerRGB) || !rectangle(x.window) || !rectangle(x.preview)) return false;
+        if (matches(x.cornerRGB)) {
+          const key = JSON.stringify([x.cornerRGB, x.window, x.preview]);
+          if (key !== previous) { previous = key; since = x.elapsedSeconds; }
+          stable = x.elapsedSeconds - since;
+        } else { previous = undefined; since = undefined; }
+      }
+      return Math.abs(stable - x.stableSeconds) < 0.000001;
+    });
+  };
+  if (rows.length !== 3 || rows.some((row, index) => row.schema !== 'fox.ui_framing_probe.v1'
+    || row.orientation !== orientations[index] || row.completed !== true || row.deadlineSeconds !== 4
+    || !Number.isFinite(row.elapsedSeconds) || row.elapsedSeconds < 0 || row.elapsedSeconds > 4 || !matches(row.cornerRGB)
+    || !Number.isFinite(row.stableSeconds) || row.stableSeconds < 0.25 || row.stableSeconds > row.elapsedSeconds
+    || !stableTrace(row.observations)
+    || row.observations.some((x, i) => !Number.isFinite(x.elapsedSeconds) || x.elapsedSeconds < 0
+      || x.elapsedSeconds > row.elapsedSeconds || i > 0 && x.elapsedSeconds < row.observations[i - 1].elapsedSeconds
+      || !Number.isFinite(x.stableSeconds) || x.stableSeconds < 0 || x.stableSeconds > x.elapsedSeconds
+      || !Array.isArray(x.cornerRGB) || x.cornerRGB.length !== 0 && !measured(x.cornerRGB))
+    || row.observations.at(-1)?.stableSeconds !== row.stableSeconds
+    || JSON.stringify(row.observations.at(-1)?.cornerRGB) !== JSON.stringify(row.cornerRGB))) {
+    throw Error('Phone framing observations missing or incomplete');
+  }
+  return rows;
+}
+
 export async function runPhoneDiagnostic(output) {
   if (!output) throw Error('Diagnostic requires a fresh output directory');
   const directory = path.resolve(output), steps = [];
   const git = args => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
-  const metadata = {scope: 'diagnostic', component: 'phone-feedback', commit: git(['rev-parse', 'HEAD']),
+  const metadata = {scope: 'diagnostic', component: 'phone-readiness', commit: git(['rev-parse', 'HEAD']),
     dirty: !!git(['status', '--porcelain']), environment: {},
-    evidenceBoundary: 'One synthetic UI diagnostic, not full public/private acceptance or physical-device evidence.'};
+    evidenceBoundary: 'Fixed synthetic input/framing diagnostics, not full public/private acceptance or physical-device evidence.'};
   let lease;
   return runSuite({directory, steps, metadata,
     execute: async (step, options) => {
@@ -80,6 +128,7 @@ export async function runPhoneDiagnostic(output) {
       if (result.code === 0) {
         auditPhoneObservations(result.output);
         auditPhoneInputObservations(result.output);
+        auditFramingObservations(result.output);
       }
       return result;
     },

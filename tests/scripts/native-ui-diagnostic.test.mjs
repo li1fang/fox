@@ -4,10 +4,13 @@ import {phoneDiagnosticCase, phoneDiagnosticStep, checkDiagnosticContext} from '
 import * as diagnostic from '../../scripts/native-ui-diagnostic.mjs';
 import {auditReceipt} from '../../scripts/verification-contracts.mjs';
 
-test('phone diagnostic is one fixed synthetic case, never a full-suite substitute', () => {
+test('phone diagnostic covers fixed input and framing cases, never a full-suite substitute', () => {
   const step = phoneDiagnosticStep('owned-phone');
-  assert.deepEqual(step.expectedNative, [phoneDiagnosticCase]);
-  assert.equal(step.env.FOX_IOS_UI_TEST, phoneDiagnosticCase);
+  const cases = [phoneDiagnosticCase,
+    'FoxUITests/FoxPhoneLayoutUITests/testFramingValidationRequiresEveryCorner',
+    'FoxUITests/FoxPhoneLayoutUITests/testVisionOptionsLockCorrectionAndSavedReportRemainUsable'];
+  assert.deepEqual(step.expectedNative, cases);
+  assert.equal(step.env.FOX_IOS_UI_TEST, cases.join(','));
   assert.equal(step.env.FOX_IOS_SIMULATOR, 'owned-phone');
   assert.equal(step.env.TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST, '');
   assert.equal(step.env.TEST_RUNNER_FOX_REAL_SPEECH, '0');
@@ -49,14 +52,38 @@ test('a passing diagnostic must retain all four measured visibility observations
 });
 
 test('diagnostic refuses private inputs or changed case classification before device allocation', () => {
-  const catalogue = [{id: phoneDiagnosticCase, scope: 'public', surface: 'iphone'}];
+  const catalogue = [phoneDiagnosticCase,
+    'FoxUITests/FoxPhoneLayoutUITests/testFramingValidationRequiresEveryCorner',
+    'FoxUITests/FoxPhoneLayoutUITests/testVisionOptionsLockCorrectionAndSavedReportRemainUsable']
+    .map(id => ({id, scope: 'public', surface: 'iphone'}));
   assert.doesNotThrow(() => checkDiagnosticContext({}, catalogue));
   for (const key of ['FOX_PRIVATE_INPUT_MANIFEST', 'TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST']) {
     assert.throws(() => checkDiagnosticContext({[key]: '/private/manifest'}, catalogue), /private/i);
   }
-  for (const rows of [[], [{...catalogue[0], scope: 'private'}], [{...catalogue[0], surface: 'ipad'}]]) {
+  for (const rows of [[], catalogue.slice(0, 1), [{...catalogue[0], scope: 'private'}, ...catalogue.slice(1)],
+    catalogue.map((x, i) => i === 2 ? {...x, surface: 'ipad'} : x)]) {
     assert.throws(() => checkDiagnosticContext({}, rows), /classification/);
   }
+});
+
+test('framing observations retain all rotations and the original per-channel tolerance', () => {
+  const colors = [[0, 255, 0], [255, 0, 0], [255, 255, 0], [0, 0, 255]];
+  const geometry = {window: [0, 0, 874, 402], preview: [372, 12, 428, 358]};
+  const rows = [3, 4, 1].map(orientation => ({schema: 'fox.ui_framing_probe.v1', orientation,
+    completed: true, deadlineSeconds: 4, elapsedSeconds: 0.4, stableSeconds: 0.3, cornerRGB: colors,
+    observations: [{...geometry, elapsedSeconds: 0.1, stableSeconds: 0, cornerRGB: colors},
+      {...geometry, elapsedSeconds: 0.4, stableSeconds: 0.3, cornerRGB: colors}]}));
+  const log = values => values.map(x => `FOX_UI_FRAMING ${JSON.stringify(x)}`).join('\n');
+  assert.doesNotThrow(() => diagnostic.auditFramingObservations(log(rows)));
+  for (const change of [{orientation: 3}, {completed: false}, {deadlineSeconds: 8}, {elapsedSeconds: 4.1},
+    {cornerRGB: colors.slice(0, 3)}, {cornerRGB: [[0, 235, 0], ...colors.slice(1)]}, {observations: []},
+    {stableSeconds: 0}, {stableSeconds: 0.24}, {stableSeconds: 1}, {stableSeconds: undefined},
+    {observations: [rows[1].observations[1]]},
+    {observations: rows[1].observations.map((x, i) => i === 0 ? {...x, preview: [370, 12, 428, 358]} : x)}]) {
+    assert.throws(() => diagnostic.auditFramingObservations(log([rows[0], {...rows[1], ...change}, rows[2]])), /framing/);
+  }
+  assert.throws(() => diagnostic.auditFramingObservations(log(rows.slice(0, 2))), /framing/);
+  assert.throws(() => diagnostic.auditFramingObservations(log([...rows, rows[2]])), /framing/);
 });
 
 test('input diagnostics retain the original exact-value result even if it later settles', () => {

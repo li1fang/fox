@@ -1841,6 +1841,12 @@
       "surface": "ipad"
     },
     {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testFramingValidationRequiresEveryCorner",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
       "id": "FoxUITests/FoxPhoneLayoutUITests/testFeedbackKeyboardAndThreeCategoriesRemainReachableAfterRotation",
       "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
       "scope": "public",

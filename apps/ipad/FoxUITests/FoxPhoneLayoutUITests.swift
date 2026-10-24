@@ -206,8 +206,40 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         XCTAssertLessThanOrEqual(rect.maxY, window.maxY, file: file, line: line)
     }
 
-    private func assertWholeFramingImage(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) throws {
+    private let framingColors: [[UInt8]] = [[0, 255, 0], [255, 0, 0], [255, 255, 0], [0, 0, 255]]
+
+    private func wholeFramingMatches(_ colors: [[UInt8]]) -> Bool {
+        colors.count == 4 && zip(colors, framingColors).allSatisfy { actual, expected in
+            actual.count == 3 && zip(actual, expected).allSatisfy { abs(Int($0) - Int($1)) < 20 }
+        }
+    }
+
+    func testFramingValidationRequiresEveryCorner() throws {
+        try requirePhone()
+        XCTAssertTrue(wholeFramingMatches(framingColors))
+        XCTAssertFalse(wholeFramingMatches(Array(framingColors.prefix(3))))
+        XCTAssertFalse(wholeFramingMatches(framingColors + [framingColors[0]]))
+        for corner in framingColors.indices {
+            var colors = framingColors
+            colors[corner] = [70, 70, 70]
+            XCTAssertFalse(wholeFramingMatches(colors))
+        }
+        var boundary = framingColors
+        boundary[0][1] = 236; XCTAssertTrue(wholeFramingMatches(boundary))
+        boundary[0][1] = 235; XCTAssertFalse(wholeFramingMatches(boundary))
+        boundary[0] = [0, 255]; XCTAssertFalse(wholeFramingMatches(boundary))
+    }
+
+    private struct FramingSample: Equatable {
+        let colors: [[UInt8]]
+        let window: CGRect
+        let preview: CGRect
+    }
+
+    private func framingPixels(in app: XCUIApplication) -> FramingSample? {
         let preview = app.otherElements["pose-preview"].frame
+        let window = app.windows.firstMatch.frame
+        guard preview.width > 0, preview.height > 0, window.width > 0, window.height > 0 else { return nil }
         let scale = min(preview.width / 720, preview.height / 1280)
         let imageRect = CGRect(x: preview.midX - 360 * scale, y: preview.midY - 640 * scale,
                                width: 720 * scale, height: 1280 * scale)
@@ -216,23 +248,66 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         let upright = UIGraphicsImageRenderer(size: captured.size, format: format).image { _ in
             captured.draw(in: CGRect(origin: .zero, size: captured.size))
         }
-        let screenshot = try XCTUnwrap(upright.cgImage)
-        let pixelScale = CGFloat(screenshot.width) / app.windows.firstMatch.frame.width
+        guard let screenshot = upright.cgImage,
+              app.windows.firstMatch.frame == window, app.otherElements["pose-preview"].frame == preview else { return nil }
+        let pixelScale = CGFloat(screenshot.width) / window.width
+        guard abs(pixelScale - CGFloat(screenshot.height) / window.height) < 0.01 else { return nil }
         let inset = 36 * scale
-        let samples: [(CGPoint, [UInt8])] = [
-            (CGPoint(x: imageRect.minX + inset, y: imageRect.minY + inset), [0, 255, 0]),
-            (CGPoint(x: imageRect.maxX - inset, y: imageRect.minY + inset), [255, 0, 0]),
-            (CGPoint(x: imageRect.minX + inset, y: imageRect.maxY - inset), [255, 255, 0]),
-            (CGPoint(x: imageRect.maxX - inset, y: imageRect.maxY - inset), [0, 0, 255])
+        let samples = [
+            CGPoint(x: imageRect.minX + inset, y: imageRect.minY + inset),
+            CGPoint(x: imageRect.maxX - inset, y: imageRect.minY + inset),
+            CGPoint(x: imageRect.minX + inset, y: imageRect.maxY - inset),
+            CGPoint(x: imageRect.maxX - inset, y: imageRect.maxY - inset)
         ]
-        for (point, expected) in samples {
-            let crop = try XCTUnwrap(screenshot.cropping(to: CGRect(x: point.x * pixelScale, y: point.y * pixelScale, width: 1, height: 1)))
+        var colors: [[UInt8]] = []
+        for point in samples {
+            guard let crop = screenshot.cropping(to: CGRect(x: (point.x - window.minX) * pixelScale,
+                y: (point.y - window.minY) * pixelScale, width: 1, height: 1)) else { return nil }
             var rgba = [UInt8](repeating: 0, count: 4)
-            let context = try XCTUnwrap(CGContext(data: &rgba, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            guard let context = CGContext(data: &rgba, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
             context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-            for index in 0..<3 { XCTAssertLessThan(abs(Int(rgba[index]) - Int(expected[index])), 20, "Image corner cropped/covered at \(point)", file: file, line: line) }
+            colors.append(Array(rgba.prefix(3)))
         }
+        return FramingSample(colors: colors, window: window, preview: preview)
+    }
+
+    private func assertWholeFramingImage(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) throws {
+        let start = ProcessInfo.processInfo.systemUptime, deadline = start + 4
+        var colors: [[UInt8]] = [], observations: [[String: Any]] = []
+        var previous: FramingSample?, stableSince: TimeInterval?, stableSeconds: TimeInterval = 0
+        let predicate = NSPredicate { _, _ in
+            let sample = self.framingPixels(in: app), now = ProcessInfo.processInfo.systemUptime
+            colors = sample?.colors ?? []
+            if self.wholeFramingMatches(colors) {
+                if sample != previous { previous = sample; stableSince = now }
+                stableSeconds = now - (stableSince ?? now)
+            } else { previous = nil; stableSince = nil; stableSeconds = 0 }
+            var observation: [String: Any] = ["elapsedSeconds": now - start, "stableSeconds": stableSeconds, "cornerRGB": colors]
+            if let sample {
+                observation["window"] = [sample.window.minX, sample.window.minY, sample.window.width, sample.window.height]
+                observation["preview"] = [sample.preview.minX, sample.preview.minY, sample.preview.width, sample.preview.height]
+            }
+            observations.append(observation)
+            return self.wholeFramingMatches(colors) && stableSeconds >= 0.25
+        }
+        // A hittable view may still be in the system rotation animation. Wait for rendered pixels, not a fixed sleep.
+        let immediate = predicate.evaluate(with: nil), remaining = deadline - ProcessInfo.processInfo.systemUptime
+        let result: XCTWaiter.Result = immediate ? .completed : remaining > 0
+            ? XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: remaining) : .timedOut
+        let elapsed = ProcessInfo.processInfo.systemUptime - start
+        let complete = result == .completed && elapsed <= 4
+        if app.launchEnvironment["FOX_UI_TESTING"] == "1",
+           ProcessInfo.processInfo.environment["FOX_PRIVATE_INPUT_MANIFEST", default: ""].isEmpty {
+            let diagnostic: [String: Any] = ["schema": "fox.ui_framing_probe.v1", "orientation": XCUIDevice.shared.orientation.rawValue,
+                "completed": complete, "deadlineSeconds": 4, "elapsedSeconds": elapsed, "stableSeconds": stableSeconds,
+                "cornerRGB": colors, "observations": observations]
+            if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) { print("FOX_UI_FRAMING \(json)") }
+        }
+        XCTAssertTrue(complete, "Whole preview did not finish rendering within four seconds", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(stableSeconds, 0.25, file: file, line: line)
+        XCTAssertTrue(wholeFramingMatches(colors), "All four image corners must match the original RGB tolerance: \(colors)", file: file, line: line)
     }
 
     private func previewIdentity(in app: XCUIApplication) throws -> String {
