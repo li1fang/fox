@@ -10,6 +10,59 @@ import {validatePrivateInputs} from './private-inputs.mjs';
 import {artifact} from './trial-readiness.mjs';
 import {auditReceipt, auditNativeCoverage, auditCommandOutput} from './verification-contracts.mjs';
 
+function checkCandidateCommit(commit) {
+  if (typeof commit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)) {
+    throw Error('Candidate commit must be an explicit full Git object ID, not HEAD or a branch');
+  }
+}
+
+export function checkCandidate(expectedCommit, cwd = root) {
+  checkCandidateCommit(expectedCommit);
+  const git = args => {
+    const result = spawnSync('git', args, {cwd, encoding: 'utf8'});
+    if (result.error || result.status !== 0) throw Error('Candidate Git inspection failed');
+    return result.stdout;
+  };
+  const commit = git(['rev-parse', '--verify', 'HEAD^{commit}']).trim();
+  if (commit !== expectedCommit) throw Error(`Candidate commit mismatch: expected ${expectedCommit}, current ${commit}`);
+  // NUL output is only checked for emptiness, so unusual filenames cannot hide changes.
+  if (git(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=none']).length) {
+    throw Error('Candidate worktree is dirty; preserve changes and finish the candidate before acceptance');
+  }
+  return {commit};
+}
+
+export function parseVerificationArgs(argv) {
+  const args = [...argv], mode = args.shift();
+  const result = {action: mode === 'receipt' ? 'receipt' : 'run'};
+  if (mode === 'receipt') {
+    result.filename = args.shift();
+    if (!result.filename || result.filename.startsWith('--')) throw Error('Receipt usage requires a filename');
+    result.scope = 'public';
+  } else result.scope = mode === 'candidate' ? args.shift() : mode;
+  result.component = 'all';
+  const allowed = mode === 'receipt' ? ['--scope', '--component']
+    : mode === 'candidate' ? ['--commit', '--component', '--output'] : ['--component', '--output'];
+  const seen = new Set();
+  while (args.length) {
+    const key = args.shift(), value = args.shift();
+    if (!allowed.includes(key) || seen.has(key) || !value || value.startsWith('--')) {
+      throw Error(`Invalid or duplicate verification option: ${key}`);
+    }
+    seen.add(key);
+    result[key === '--commit' ? 'candidateCommit' : key.slice(2)] = value;
+  }
+  if (!['fast', 'public', 'private'].includes(result.scope) || !['all', 'web', 'native'].includes(result.component)) {
+    throw Error('Invalid verification scope/component');
+  }
+  if (result.scope === 'private' && result.component !== 'all') throw Error('Private scope requires the complete suite');
+  if (mode === 'candidate') {
+    if (result.scope === 'fast') throw Error('Candidate acceptance requires public or private scope');
+    checkCandidateCommit(result.candidateCommit);
+  }
+  return result;
+}
+
 export async function verifyReceipt(filename, scope, component = 'all') {
   const file = path.resolve(filename), directory = path.dirname(file), receipt = JSON.parse(await readFile(file));
   const commit = spawnSync('git', ['rev-parse', 'HEAD'], {cwd:root,encoding:'utf8'});
@@ -29,9 +82,13 @@ export async function verifyReceipt(filename, scope, component = 'all') {
   return {status:'receipt_verified',scope,component,commit:receipt.commit,deviceVerified:false};
 }
 
-export async function runVerification({scope = 'fast', component = 'all', output} = {}) {
+export async function runVerification({scope = 'fast', component = 'all', output, candidateCommit} = {}) {
   if (!['fast', 'public', 'private'].includes(scope) || !['all', 'web', 'native'].includes(component)) throw Error('Invalid verification scope/component');
   if (scope === 'private' && component !== 'all') throw Error('Private acceptance requires the complete suite');
+  if (candidateCommit !== undefined) {
+    checkCandidateCommit(candidateCommit);
+    if (scope === 'fast') throw Error('Candidate acceptance requires public or private scope');
+  }
   const directory = path.resolve(output ?? path.join(root, '.tmp/verification', `${scope}-${component}-${new Date().toISOString().replace(/[:.]/g, '-')}`));
   const git = args => {
     const p = spawnSync('git', args, {cwd: root, encoding: 'utf8'});
@@ -39,11 +96,14 @@ export async function runVerification({scope = 'fast', component = 'all', output
     return p.stdout.trim();
   };
   const metadata = {scope, component, commit: git(['rev-parse', 'HEAD']),
+    ...(candidateCommit !== undefined ? {candidateCommit} : {}),
     dirty: !!git(['status', '--porcelain']), environment: {simulatorIsolation: []}, excludedTests: [],
     evidenceBoundary: 'Software verification only. No device installation, camera accuracy, audibility, or human acceptance claim.'};
   const steps = [];
   let lease;
   const preflight = async () => {
+    // Run before private input reads, catalogue scans, doctor or simulator allocation; recheck at completion.
+    if (candidateCommit !== undefined) checkCandidate(candidateCommit);
     if (scope !== 'private' && process.env.FOX_PRIVATE_INPUT_MANIFEST) throw Error('Public/fast runs must not receive private input locations');
     const inputs = scope === 'private' ? await validatePrivateInputs(process.env.FOX_PRIVATE_INPUT_MANIFEST) : [];
     if (!steps.length) {
@@ -89,10 +149,11 @@ export async function runVerification({scope = 'fast', component = 'all', output
   } catch (error) { console.error(`Receipt retained: ${path.join(directory, 'suite.json')}`); throw error; }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const args = process.argv.slice(2), option = key => args.includes(key) ? args[args.indexOf(key) + 1] : undefined;
-  const action = args[0] === 'receipt'
-    ? verifyReceipt(args[1],option('--scope') ?? 'public',option('--component') ?? 'all').then(x=>console.log(JSON.stringify(x)))
-    : runVerification({scope: args[0], component: option('--component'), output: option('--output')});
-  action
+  Promise.resolve().then(() => {
+    const options = parseVerificationArgs(process.argv.slice(2));
+    return options.action === 'receipt'
+      ? verifyReceipt(options.filename, options.scope, options.component).then(x=>console.log(JSON.stringify(x)))
+      : runVerification(options);
+  })
     .catch(error => { console.error(error.message); process.exitCode = 1; });
 }

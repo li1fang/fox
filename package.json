@@ -32,6 +32,7 @@
     "bootstrap": "node scripts/development-environment.mjs bootstrap",
     "doctor": "node scripts/development-environment.mjs doctor",
     "verify:fast": "node scripts/verify.mjs fast",
+    "verify:candidate": "node scripts/verify.mjs candidate",
     "verify:public": "node scripts/verify.mjs public",
     "verify:private": "node scripts/verify.mjs private",
     "verify:repository": "node scripts/repository-checks.mjs",

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, writeFile, readFile, rm} from 'node:fs/promises';
+import {mkdtemp, mkdir, writeFile, readFile, rm, cp} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -9,6 +10,7 @@ import * as privateInputs from '../../scripts/private-inputs.mjs';
 import {discoverTests} from '../../scripts/test-inventory.mjs';
 import * as developmentEnvironment from '../../scripts/development-environment.mjs';
 import * as verificationContracts from '../../scripts/verification-contracts.mjs';
+import * as verification from '../../scripts/verify.mjs';
 import {auditInventory, auditNativeCoverage, auditReceipt, auditCommandOutput, classifyDeviceError} from '../../scripts/verification-contracts.mjs';
 
 test('private inputs are explicit, complete, pinned and rechecked, never an implicit local cache', async t => {
@@ -87,6 +89,90 @@ test('cross-commit, wrong-scope, cancelled, incomplete and physical claims canno
     {finalizationError: 'cleanup failed'}, {environment: {simulatorLifecycle: {status: 'allocated'}}}]) {
     assert.throws(() => auditReceipt({...receipt, ...changed}, expected));
   }
+});
+
+async function candidateRepository(t) {
+  const cwd = await mkdtemp(path.join(tmpdir(), 'fox-candidate-test-'));
+  t.after(() => rm(cwd, {recursive: true, force: true}));
+  const git = (...args) => {
+    const result = spawnSync('git', args, {cwd, encoding: 'utf8'});
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  git('init', '-q');
+  await writeFile(path.join(cwd, '.gitignore'), '.tmp/\n');
+  await writeFile(path.join(cwd, 'source.txt'), 'original');
+  git('add', '.');
+  git('-c', 'user.name=Fox Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false',
+    'commit', '-qm', 'synthetic fixture');
+  return {cwd, git, commit: git('rev-parse', 'HEAD')};
+}
+
+test('candidate preflight binds a full commit and permits ignored evidence, without changing Git state', async t => {
+  const {cwd, git, commit} = await candidateRepository(t);
+  assert.equal(verification.checkCandidate(commit, cwd).commit, commit);
+  for (const value of [undefined, '', 'HEAD', commit.slice(0, 7), '0'.repeat(40)]) {
+    assert.throws(() => verification.checkCandidate(value, cwd), /candidate.*commit/i);
+  }
+  await mkdir(path.join(cwd, '.tmp'));
+  await writeFile(path.join(cwd, '.tmp', 'evidence.log'), 'keep');
+  assert.equal(verification.checkCandidate(commit, cwd).commit, commit);
+  assert.equal(git('status', '--porcelain'), '');
+  assert.equal(await readFile(path.join(cwd, '.tmp', 'evidence.log'), 'utf8'), 'keep');
+  const outside = await mkdtemp(path.join(tmpdir(), 'fox-no-git-'));
+  t.after(() => rm(outside, {recursive: true, force: true}));
+  assert.throws(() => verification.checkCandidate(commit, outside), /candidate.*git/i);
+});
+
+test('candidate preflight rejects unstaged, staged, untracked and deleted sources, preserving bytes', async t => {
+  for (const kind of ['unstaged', 'staged', 'untracked', 'deleted']) {
+    const {cwd, git, commit} = await candidateRepository(t);
+    const file = path.join(cwd, kind === 'untracked' ? 'new file.txt' : 'source.txt');
+    if (kind === 'deleted') await rm(file); else await writeFile(file, 'user change');
+    if (kind === 'staged') git('add', 'source.txt');
+    const before = git('status', '--porcelain');
+    assert.throws(() => verification.checkCandidate(commit, cwd), /candidate.*dirty/i, kind);
+    assert.equal(git('status', '--porcelain'), before);
+    if (kind !== 'deleted') assert.equal(await readFile(file, 'utf8'), 'user change');
+  }
+});
+
+test('candidate CLI requires an explicit tier and commit; typos cannot fall back to ordinary verification', () => {
+  const commit = 'a'.repeat(40);
+  assert.deepEqual(verification.parseVerificationArgs(['candidate', 'public', '--commit', commit, '--component', 'web', '--output', '/run']),
+    {action: 'run', scope: 'public', candidateCommit: commit, component: 'web', output: '/run'});
+  assert.equal(verification.parseVerificationArgs(['fast']).candidateCommit, undefined);
+  assert.equal(verification.parseVerificationArgs(['public', '--component', 'native']).component, 'native');
+  assert.equal(verification.parseVerificationArgs(['receipt', '/run/suite.json', '--scope', 'private']).action, 'receipt');
+  for (const args of [[], ['candidate'], ['candidate', 'fast', '--commit', commit], ['candidate', 'public'],
+    ['candidate', 'public', '--commit', 'HEAD'], ['candidate', 'private', '--commit', commit, '--component', 'web'],
+    ['public', '--candidate', commit], ['candidate', 'public', '--comit', commit],
+    ['candidate', 'public', '--commit', commit, '--commit', commit], ['public', '--output'],
+    ['public', '--component', 'watch'], ['public', 'unexpected'], ['receipt', '--scope', 'public']]) {
+    assert.throws(() => verification.parseVerificationArgs(args), /candidate|argument|option|scope|component|usage/i, args.join(' '));
+  }
+});
+
+test('real candidate entry rejects dirty source before inventory, toolchain or simulator work and retains failure', async t => {
+  const {cwd, git, commit} = await candidateRepository(t);
+  await cp(new URL('../../scripts/', import.meta.url), path.join(cwd, 'scripts'), {recursive: true});
+  const output = path.join(cwd, '.tmp', 'rejected');
+  const result = spawnSync(process.execPath, ['scripts/verify.mjs', 'candidate', 'public', '--commit', commit, '--output', output],
+    {cwd, encoding: 'utf8', env: {...process.env, FOX_PRIVATE_INPUT_MANIFEST: ''}, timeout: 10000});
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /candidate.*dirty/i);
+  const receipt = JSON.parse(await readFile(path.join(output, 'suite.json')));
+  assert.equal(receipt.status, 'failed');
+  assert.equal(receipt.candidateCommit, commit);
+  assert.deepEqual(receipt.steps, []);
+  assert.deepEqual(receipt.environment, {simulatorIsolation: []});
+  assert.equal(git('rev-parse', 'HEAD'), commit);
+  // Ordinary iteration must still reach its existing preflight on the same dirty tree.
+  const ordinary = spawnSync(process.execPath, ['scripts/verify.mjs', 'fast', '--output', path.join(cwd, '.tmp', 'ordinary')],
+    {cwd, encoding: 'utf8', env: {...process.env, FOX_PRIVATE_INPUT_MANIFEST: ''}, timeout: 10000});
+  assert.equal(ordinary.status, 1);
+  assert.doesNotMatch(ordinary.stderr, /candidate.*dirty/i);
+  assert.match(ordinary.stderr, /ENOENT/);
 });
 
 test('device errors remain environment conditions, not algorithm failures or permission bypass advice', () => {
