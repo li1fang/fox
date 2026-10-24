@@ -9,11 +9,16 @@ export const phoneDiagnosticCase = 'FoxUITests/FoxPhoneLayoutUITests/testFeedbac
 export const phoneDiagnosticCases = [phoneDiagnosticCase,
   'FoxUITests/FoxPhoneLayoutUITests/testFramingValidationRequiresEveryCorner',
   'FoxUITests/FoxPhoneLayoutUITests/testVisionOptionsLockCorrectionAndSavedReportRemainUsable'];
-export function checkDiagnosticContext(env, catalogue) {
+export const visionDiagnosticCase = 'FoxUITests/FoxVisionUITests/testLateralRaiseCountsSavesSeparateExerciseAndThenCurlStillWorks';
+export function checkDiagnosticContext(env, catalogue, includeVision = false) {
   if (env.FOX_PRIVATE_INPUT_MANIFEST || env.TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST) throw Error('Diagnostic must not receive private inputs');
   for (const id of phoneDiagnosticCases) {
     const row = catalogue.find(x => x.id === id);
     if (row?.scope !== 'public' || row.surface !== 'iphone') throw Error('Diagnostic case classification changed');
+  }
+  if (includeVision) {
+    const row = catalogue.find(x => x.id === visionDiagnosticCase);
+    if (row?.scope !== 'public' || row.surface !== 'ipad') throw Error('Diagnostic case classification changed');
   }
 }
 export function phoneDiagnosticStep(device) {
@@ -21,6 +26,22 @@ export function phoneDiagnosticStep(device) {
     timeoutMs: 15 * 60 * 1000, native: true, expectedNative: phoneDiagnosticCases,
     env: {FOX_IOS_UI_TEST: phoneDiagnosticCases.join(','), FOX_IOS_SIMULATOR: device,
       TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: '', TEST_RUNNER_FOX_REAL_SPEECH: '0'}};
+}
+
+export function visionDiagnosticStep(device) {
+  return {id: 'pad-exercise-switch', command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
+    timeoutMs: 15 * 60 * 1000, native: true, expectedNative: [visionDiagnosticCase],
+    env: {FOX_IOS_UI_TEST: visionDiagnosticCase, FOX_IOS_SIMULATOR: device,
+      TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: '', TEST_RUNNER_FOX_REAL_SPEECH: '0'}};
+}
+
+export function parseDiagnosticArguments(args) {
+  const paths = args.filter(x => !x.startsWith('-'));
+  const flags = args.filter(x => x.startsWith('-'));
+  if (paths.length !== 1 || !paths[0].trim() || flags.some(x => x !== '--vision') || flags.length > 1) {
+    throw Error('Invalid diagnostic arguments: one output directory and optional --vision required');
+  }
+  return {output: paths[0], includeVision: flags.length === 1};
 }
 
 export function diagnosticRuntime(info, runtime) {
@@ -114,31 +135,53 @@ export function auditFramingObservations(output) {
   return rows;
 }
 
-export async function runPhoneDiagnostic(output) {
+export function auditVisionCountObservations(output) {
+  const rows = [...output.matchAll(/FOX_UI_COUNT (\{[^\n]*\})/g)].map(x => JSON.parse(x[1]));
+  const stages = ['lateral-raise', 'curl-after-relaunch'];
+  if (rows.length !== stages.length || rows.some((row, index) => row.schema !== 'fox.ui_count_probe.v1'
+    || row.stage !== stages[index] || row.expected !== '2' || row.completed !== true || row.deadlineSeconds !== 12
+    || !Number.isFinite(row.elapsedSeconds) || row.elapsedSeconds < 0
+    || !Array.isArray(row.observations) || !row.observations.length
+    || row.observations.some((x, i) => !x || !/^\d+$/.test(x.label) || !Number.isFinite(x.elapsedSeconds)
+      || x.elapsedSeconds < 0 || x.elapsedSeconds > row.elapsedSeconds || !Number.isFinite(x.querySeconds)
+      || x.querySeconds < 0 || x.querySeconds > x.elapsedSeconds
+      || i > 0 && x.elapsedSeconds < row.observations[i - 1].elapsedSeconds)
+    || row.observations.at(-1)?.label !== '2'
+    || !Array.isArray(row.afterFailure) || row.afterFailure.length !== 0)) {
+    throw Error('Vision count observations missing or original assertion failed');
+  }
+  return rows;
+}
+
+export async function runPhoneDiagnostic(output, includeVision = false) {
   if (!output) throw Error('Diagnostic requires a fresh output directory');
   const directory = path.resolve(output), steps = [];
   const git = args => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
-  const metadata = {scope: 'diagnostic', component: 'phone-readiness', commit: git(['rev-parse', 'HEAD']),
+  const metadata = {scope: 'diagnostic', component: includeVision ? 'native-readiness' : 'phone-readiness', commit: git(['rev-parse', 'HEAD']),
     dirty: !!git(['status', '--porcelain']), environment: {},
-    evidenceBoundary: 'Fixed synthetic input/framing diagnostics, not full public/private acceptance or physical-device evidence.'};
+    evidenceBoundary: 'Fixed synthetic UI diagnostics, not full public/private acceptance or physical-device evidence.'};
   let lease;
   return runSuite({directory, steps, metadata,
     execute: async (step, options) => {
       const result = await execute(step, options);
       if (result.code === 0) {
-        auditPhoneObservations(result.output);
-        auditPhoneInputObservations(result.output);
-        auditFramingObservations(result.output);
+        if (step.id === 'pad-exercise-switch') auditVisionCountObservations(result.output);
+        else {
+          auditPhoneObservations(result.output);
+          auditPhoneInputObservations(result.output);
+          auditFramingObservations(result.output);
+        }
       }
       return result;
     },
     preflight: async () => {
-      checkDiagnosticContext(process.env, await checkedCatalogue());
+      checkDiagnosticContext(process.env, await checkedCatalogue(), includeVision);
       if (!steps.length) {
         const info = doctor({native: true});
         Object.assign(metadata.environment, info);
         lease = await allocateSimulators(diagnosticRuntime(info, process.env.FOX_DIAGNOSTIC_RUNTIME));
         metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
+        if (includeVision) steps.push(visionDiagnosticStep(lease.devices.ipad));
         steps.push(phoneDiagnosticStep(lease.devices.iphone));
       }
       return [];
@@ -152,6 +195,9 @@ export async function runPhoneDiagnostic(output) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  runPhoneDiagnostic(process.argv[2]).then(r => console.log(JSON.stringify({status: r.status, scope: r.scope, deviceVerified: false})))
+  Promise.resolve().then(() => {
+    const {output, includeVision} = parseDiagnosticArguments(process.argv.slice(2));
+    return runPhoneDiagnostic(output, includeVision);
+  }).then(r => console.log(JSON.stringify({status: r.status, scope: r.scope, deviceVerified: false})))
     .catch(error => { console.error(error.message); process.exitCode = 1; });
 }

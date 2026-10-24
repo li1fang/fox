@@ -112,3 +112,46 @@ test('a specified diagnostic runtime/model is exact and never silently falls bac
   assert.throws(() => diagnostic.diagnosticRuntime(info, 'missing'), /unavailable/);
   assert.throws(() => diagnostic.diagnosticRuntime({simulators: {same: [pad, other]}}, 'same'), /unavailable/);
 });
+
+test('native diagnostic adds the exact pad exercise-switch case without dropping phone cases', () => {
+  const step = diagnostic.visionDiagnosticStep('owned-pad');
+  assert.deepEqual(step.expectedNative, ['FoxUITests/FoxVisionUITests/testLateralRaiseCountsSavesSeparateExerciseAndThenCurlStillWorks']);
+  assert.equal(step.env.FOX_IOS_UI_TEST, step.expectedNative.join(','));
+  assert.equal(step.env.FOX_IOS_SIMULATOR, 'owned-pad');
+  assert.equal(step.env.TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST, '');
+  assert.equal(step.timeoutMs, 15 * 60 * 1000);
+  const catalogue = diagnostic.phoneDiagnosticCases.map(id => ({id, scope: 'public', surface: 'iphone'}));
+  assert.throws(() => checkDiagnosticContext({}, catalogue, true), /classification/);
+  const vision = {id: step.expectedNative[0], scope: 'public', surface: 'ipad'};
+  assert.doesNotThrow(() => checkDiagnosticContext({}, [...catalogue, vision], true));
+  assert.throws(() => checkDiagnosticContext({}, [...catalogue, {...vision, surface: 'iphone'}], true), /classification/);
+});
+
+test('vision count diagnostics require both original two-count results, not later convergence', () => {
+  const rows = ['lateral-raise', 'curl-after-relaunch'].map(stage => ({schema: 'fox.ui_count_probe.v1', stage,
+    completed: true, deadlineSeconds: 12, elapsedSeconds: 9, expected: '2',
+    observations: [{label: '0', elapsedSeconds: 1, querySeconds: 0.1},
+      {label: '2', elapsedSeconds: 9, querySeconds: 0.1}], afterFailure: []}));
+  const log = values => values.map(value => `FOX_UI_COUNT ${JSON.stringify(value)}`).join('\n');
+  assert.doesNotThrow(() => diagnostic.auditVisionCountObservations(log(rows)));
+  for (const changed of [{stage: 'lateral-raise'}, {completed: false}, {deadlineSeconds: 20}, {expected: '1'},
+    {observations: []}, {observations: [{label: '1', elapsedSeconds: 9, querySeconds: 0.1}]},
+    {observations: [{label: '2', elapsedSeconds: 9, querySeconds: -1}]},
+    {completed: false, afterFailure: [{label: '2', elapsedSeconds: 13, querySeconds: 0.1}]},
+    {afterFailure: [{label: '2', elapsedSeconds: 13, querySeconds: 0.1}]}]) {
+    assert.throws(() => diagnostic.auditVisionCountObservations(log([rows[0], {...rows[1], ...changed}])), /count observations/);
+  }
+  assert.throws(() => diagnostic.auditVisionCountObservations(log(rows.slice(0, 1))), /count observations/);
+  assert.throws(() => diagnostic.auditVisionCountObservations(log([...rows, rows[0]])), /count observations/);
+});
+
+test('diagnostic CLI rejects unknown, duplicate or ambiguous arguments before running', () => {
+  assert.deepEqual(diagnostic.parseDiagnosticArguments(['out']), {output: 'out', includeVision: false});
+  for (const args of [['out', '--vision'], ['--vision', 'out']]) {
+    assert.deepEqual(diagnostic.parseDiagnosticArguments(args), {output: 'out', includeVision: true});
+  }
+  for (const args of [[], ['--vision'], [''], [' '], ['--visoin'], ['out', '--visoin'], ['--visoin', 'out'],
+    ['out', 'other'], ['--vision', 'out', '--vision'], ['out', '-v'], ['--output', 'out']]) {
+    assert.throws(() => diagnostic.parseDiagnosticArguments(args), /arguments/);
+  }
+});

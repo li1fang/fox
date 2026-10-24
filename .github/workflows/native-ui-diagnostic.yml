@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  phone-readiness-diagnostic:
+  native-readiness-diagnostic:
     runs-on: macos-26
     timeout-minutes: 25
     env:
@@ -32,16 +32,16 @@ jobs:
           ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP/fox-tools"
           echo "$RUNNER_TEMP/fox-tools/xcodegen/bin" >> "$GITHUB_PATH"
       - run: npm run bootstrap
-      - name: Fixed input and rotation diagnostics, no retries
-        run: npm run diagnose:phone-ui -- .tmp/verification/ci-phone-diagnostic
+      - name: Fixed exercise-switch, input and rotation diagnostics, no retries
+        run: npm run diagnose:native-ui -- .tmp/verification/ci-native-diagnostic
       - name: Synthetic observations only, never a full-suite receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phone-readiness-diagnostic-${{ github.event.pull_request.head.sha }}
+          name: native-readiness-diagnostic-${{ github.event.pull_request.head.sha }}
           path: |
-            .tmp/verification/ci-phone-diagnostic/suite.json
-            .tmp/verification/ci-phone-diagnostic/*.log
+            .tmp/verification/ci-native-diagnostic/suite.json
+            .tmp/verification/ci-native-diagnostic/*.log
           if-no-files-found: warn
           include-hidden-files: true
           retention-days: 14

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  phone-ui-probe:
+  native-ui-probe:
     uses: ./.github/workflows/native-ui-diagnostic.yml
 
   public-web:
@@ -44,7 +44,7 @@ jobs:
           retention-days: 14
 
   public-native:
-    needs: phone-ui-probe
+    needs: native-ui-probe
     runs-on: macos-26
     timeout-minutes: 90
     env:

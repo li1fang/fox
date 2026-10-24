@@ -111,6 +111,42 @@ final class FoxVisionUITests: XCTestCase {
         }
         button.tap()
     }
+    private func requireTwoCounts(_ app: XCUIApplication, stage: String, file: StaticString = #filePath, line: UInt = #line) {
+        let started = ProcessInfo.processInfo.systemUptime
+        var observations: [[String: Any]] = [], afterFailure: [[String: Any]] = []
+        func observe() -> [String: Any] {
+            let queryStarted = ProcessInfo.processInfo.systemUptime
+            let label = app.staticTexts["vision-count"].label
+            let now = ProcessInfo.processInfo.systemUptime
+            return ["label": label, "elapsedSeconds": now - started, "querySeconds": now - queryStarted]
+        }
+        let predicate = NSPredicate { _, _ in
+            let observation = observe(); observations.append(observation)
+            return observation["label"] as? String == "2"
+        }
+        let result = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: 12)
+        let elapsed = ProcessInfo.processInfo.systemUptime - started
+        let synthetic = app.launchEnvironment["FOX_UI_TESTING"] == "1"
+            && app.launchEnvironment["FOX_POSE_FIXTURE"] == "normal"
+            && ProcessInfo.processInfo.environment["FOX_PRIVATE_INPUT_MANIFEST", default: ""].isEmpty
+        if synthetic {
+            if result != .completed {
+                print("FOX_SYNTHETIC_COUNT_FAILURE_AX\n\(app.debugDescription)")
+                // Read-only diagnosis after failure never changes the original twelve-second verdict.
+                let later = NSPredicate { _, _ in
+                    let observation = observe(); afterFailure.append(observation)
+                    return observation["label"] as? String == "2"
+                }
+                _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: later, object: nil)], timeout: 8)
+            }
+            let diagnostic: [String: Any] = ["schema": "fox.ui_count_probe.v1", "stage": stage, "expected": "2",
+                "completed": result == .completed, "deadlineSeconds": 12, "elapsedSeconds": elapsed,
+                "observations": observations, "afterFailure": afterFailure]
+            if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) { print("FOX_UI_COUNT \(json)") }
+        }
+        XCTAssertEqual(result, .completed, "Two counts required: \(stage)", file: file, line: line)
+    }
     private func saveReport(_ app: XCUIApplication) {
         app.buttons["vision-save-report"].tap()
         if phone { options(app, showing: "vision-last-body-view") }
@@ -493,8 +529,7 @@ final class FoxVisionUITests: XCTestCase {
         options(app)
         XCTAssertFalse(exercises.buttons["哑铃弯举"].isEnabled)
         closeOptions(app)
-        let counted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '2'"), object: app.staticTexts["vision-count"])
-        XCTAssertEqual(XCTWaiter.wait(for: [counted], timeout: 12), .completed)
+        requireTwoCounts(app, stage: "lateral-raise")
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "D1-lateral-raise-fixture-landscape"
         screenshot.lifetime = .keepAlways
@@ -525,8 +560,7 @@ final class FoxVisionUITests: XCTestCase {
         closeOptions(app)
         XCTAssertEqual(app.staticTexts["vision-count"].label, "0")
         begin(app)
-        let curls = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '2'"), object: app.staticTexts["vision-count"])
-        XCTAssertEqual(XCTWaiter.wait(for: [curls], timeout: 12), .completed)
+        requireTwoCounts(app, stage: "curl-after-relaunch")
         finish(app)
         XCTAssertTrue(app.buttons["vision-save-report"].waitForExistence(timeout: 5))
         saveReport(app)
