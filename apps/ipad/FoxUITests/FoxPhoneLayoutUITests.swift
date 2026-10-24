@@ -73,7 +73,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
 
     private func scrollFeedback(_ form: XCUIElement, target: XCUIElement, above footer: XCUIElement,
                                 in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-        let bounds = form.frame.intersection(app.frame)
+        let window = app.windows.firstMatch.frame
+        let bounds = form.frame.intersection(window)
         let bottom = min(bounds.maxY, footer.frame.minY - 8)
         let gutter = target.frame.minX - bounds.minX
         XCTAssertGreaterThan(gutter, 0, "Need a visible form gutter outside the multiline field", file: file, line: line)
@@ -81,8 +82,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         guard gutter > 0, bottom - bounds.minY > 60 else { return }
         // A centered swipe can be consumed by a multiline field's own scroll view.
         let origin = app.coordinate(withNormalizedOffset: .zero)
-        let x = bounds.minX - app.frame.minX + gutter / 2
-        let top = bounds.minY - app.frame.minY, height = bottom - bounds.minY
+        let x = bounds.minX - window.minX + gutter / 2
+        let top = bounds.minY - window.minY, height = bottom - bounds.minY
         let start = origin.withOffset(CGVector(dx: x, dy: top + height * 0.8))
         let end = origin.withOffset(CGVector(dx: x, dy: top + height * 0.2))
         start.press(forDuration: 0.05, thenDragTo: end)
@@ -90,7 +91,9 @@ final class FoxPhoneLayoutUITests: XCTestCase {
 
     private func waitForOrientation(_ orientation: UIDeviceOrientation, in app: XCUIApplication) {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            orientation.isLandscape ? app.frame.width > app.frame.height : app.frame.height > app.frame.width
+            let window = app.windows.firstMatch.frame
+            return window.width > 0 && window.height > 0
+                && (orientation.isLandscape ? window.width > window.height : window.height > window.width)
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 4), .completed)
     }
@@ -98,7 +101,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
     private func fullyVisible(_ element: XCUIElement, in app: XCUIApplication, viewport: XCUIElement? = nil,
                               above footer: XCUIElement? = nil) -> Bool {
         guard element.exists, element.isHittable else { return false }
-        let frame = element.frame, bounds = app.frame.intersection(viewport?.frame ?? app.frame)
+        let frame = element.frame, window = app.windows.firstMatch.frame
+        let bounds = window.intersection(viewport?.frame ?? window)
         return frame.width > 0 && frame.height > 0 && bounds.contains(frame)
             && (footer == nil || frame.maxY < footer!.frame.minY - 4)
     }
@@ -136,7 +140,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
             return ["id": id, "frame": rectangle(element.frame), "hittable": element.isHittable]
         }
         let observation: [String: Any] = ["schema": "fox.design_observation.v1", "source": "isolated-design-fixture", "scenario": name,
-            "viewport": rectangle(app.frame), "elements": elements, "requestedScenario": app.launchEnvironment["FOX_DESIGN_SCENARIO"] ?? "isolated-native-flow"]
+            "viewport": rectangle(app.windows.firstMatch.frame), "elements": elements, "requestedScenario": app.launchEnvironment["FOX_DESIGN_SCENARIO"] ?? "isolated-native-flow"]
         if let json = try? JSONSerialization.data(withJSONObject: observation, options: [.sortedKeys]), let value = String(data: json, encoding: .utf8) {
             let geometry = XCTAttachment(string: value)
             geometry.name = "design-\(name)-geometry"; geometry.lifetime = .keepAlways; add(geometry)
@@ -146,7 +150,9 @@ final class FoxPhoneLayoutUITests: XCTestCase {
     private func visible(_ element: XCUIElement, in app: XCUIApplication, diagnosticID: String? = nil,
                          file: StaticString = #filePath, line: UInt = #line) {
         var observations: [[String: Any]] = []
-        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        let deadline = ProcessInfo.processInfo.systemUptime + 4
+        var acceptedFrame: CGRect?, acceptedWindow: CGRect?
+        let predicate = NSPredicate { _, _ in
             let start = ProcessInfo.processInfo.systemUptime
             var row: [String: Any] = [:]
             defer {
@@ -162,18 +168,28 @@ final class FoxPhoneLayoutUITests: XCTestCase {
             row["hittable"] = hittable
             row["hittableQuerySeconds"] = ProcessInfo.processInfo.systemUptime - hittableStart
             guard hittable else { return false }
-            let window = app.frame.insetBy(dx: -0.5, dy: -0.5), frame = element.frame
+            // The application AX root can have no frame even when its main window is visible.
+            let window = app.windows.firstMatch.frame, frame = element.frame
             row["window"] = [window.minX, window.minY, window.width, window.height]
             row["frame"] = [frame.minX, frame.minY, frame.width, frame.height]
-            row["contained"] = window.contains(frame)
-            return window.contains(frame)
-        }, object: nil)
-        let result = XCTWaiter.wait(for: [settled], timeout: 4)
+            let contained = window.width > 0 && window.height > 0 && frame.width > 0 && frame.height > 0
+                && window.insetBy(dx: -0.5, dy: -0.5).contains(frame)
+            row["contained"] = contained
+            if contained { acceptedFrame = frame; acceptedWindow = window }
+            return contained
+        }
+        // Evaluate now; XCTest's first scheduled poll otherwise spends part of this same deadline idle.
+        let immediate = predicate.evaluate(with: nil)
+        let remaining = deadline - ProcessInfo.processInfo.systemUptime
+        let waited: XCTWaiter.Result = immediate ? .completed : remaining > 0
+            ? XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: remaining) : .timedOut
+        let result: XCTWaiter.Result = ProcessInfo.processInfo.systemUptime <= deadline ? waited : .timedOut
         let synthetic = app.launchEnvironment["FOX_UI_TESTING"] == "1"
             && app.launchArguments.contains("--ui-testing-reset")
             && ProcessInfo.processInfo.environment["FOX_PRIVATE_INPUT_MANIFEST", default: ""].isEmpty
         if let diagnosticID, synthetic {
-            let diagnostic: [String: Any] = ["schema": "fox.ui_visibility_probe.v1", "id": diagnosticID,
+            let diagnostic: [String: Any] = ["schema": "fox.ui_visibility_probe.v2", "id": diagnosticID,
+                "viewportSource": "main-window",
                 "completed": result == .completed, "deadlineSeconds": 4, "observations": observations]
             if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]),
                let json = String(data: data, encoding: .utf8) { print("FOX_UI_VISIBILITY \(json)") }
@@ -181,9 +197,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         }
         if result != .completed { screenshot("not-visible-\(element.identifier)", app: app) }
         XCTAssertEqual(result, .completed, element.identifier, file: file, line: line)
-        XCTAssertTrue(element.exists, file: file, line: line)
-        XCTAssertTrue(element.isHittable, file: file, line: line)
-        let rect = element.frame, window = app.frame
+        // Assert the accepted observation, not a new set of unrelated AX queries after the deadline.
+        guard result == .completed, let rect = acceptedFrame, let window = acceptedWindow else { return }
         XCTAssertGreaterThan(rect.width, 0, file: file, line: line)
         XCTAssertGreaterThanOrEqual(rect.minX, window.minX, file: file, line: line)
         XCTAssertGreaterThanOrEqual(rect.minY, window.minY, file: file, line: line)
@@ -202,7 +217,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
             captured.draw(in: CGRect(origin: .zero, size: captured.size))
         }
         let screenshot = try XCTUnwrap(upright.cgImage)
-        let pixelScale = CGFloat(screenshot.width) / app.frame.width
+        let pixelScale = CGFloat(screenshot.width) / app.windows.firstMatch.frame.width
         let inset = 36 * scale
         let samples: [(CGPoint, [UInt8])] = [
             (CGPoint(x: imageRect.minX + inset, y: imageRect.minY + inset), [0, 255, 0]),
@@ -273,7 +288,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         visible(app.buttons["vision-start"], in: app)
         let preview = app.otherElements["pose-preview"]
         visible(preview, in: app)
-        XCTAssertGreaterThan(preview.frame.height, app.frame.height * 0.4)
+        XCTAssertGreaterThan(preview.frame.height, app.windows.firstMatch.frame.height * 0.4)
         try assertWholeFramingImage(in: app)
         app.buttons["vision-options"].tap()
         XCTAssertTrue(app.segmentedControls["vision-exercise"].waitForExistence(timeout: 5))
@@ -308,8 +323,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         visible(app.buttons["vision-start"], in: app)
         visible(preview, in: app)
-        XCTAssertGreaterThan(preview.frame.height, app.frame.height * 0.75)
-        XCTAssertGreaterThan(preview.frame.width, app.frame.width * 0.4)
+        XCTAssertGreaterThan(preview.frame.height, app.windows.firstMatch.frame.height * 0.75)
+        XCTAssertGreaterThan(preview.frame.width, app.windows.firstMatch.frame.width * 0.4)
         for id in ["vision-options", "vision-start", "training-page-menu", "training-home"] {
             XCTAssertLessThan(app.buttons[id].frame.maxX, preview.frame.minX, id)
         }
@@ -445,7 +460,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
             visible(app.buttons["pause-set"], in: app)
             if orientation != .portrait {
                 let preview = app.otherElements["pose-preview"].frame
-                XCTAssertGreaterThan(preview.height, app.frame.height * 0.7)
+                XCTAssertGreaterThan(preview.height, app.windows.firstMatch.frame.height * 0.7)
                 for id in ["complete-set", "pause-set", "phone-training-details", "training-page-menu", "training-home"] {
                     XCTAssertLessThan(app.buttons[id].frame.maxX, preview.minX, id)
                 }

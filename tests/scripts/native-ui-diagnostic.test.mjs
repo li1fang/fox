@@ -18,13 +18,14 @@ test('phone diagnostic is one fixed synthetic case, never a full-suite substitut
 });
 
 test('a passing diagnostic must retain all four measured visibility observations', () => {
-  const row = {schema: 'fox.ui_visibility_probe.v1', id: 'feedback-dismiss-keyboard', completed: true,
+  const row = {schema: 'fox.ui_visibility_probe.v2', viewportSource: 'main-window', id: 'feedback-dismiss-keyboard', completed: true,
     deadlineSeconds: 4, observations: [{exists: true, hittable: true, contained: true, elapsedSeconds: 0.2,
       existsQuerySeconds: 0.03, hittableQuerySeconds: 0.04, window: [0, 0, 400, 800], frame: [12, 600, 44, 44]}]};
   const log = values => values.map(value => `FOX_UI_VISIBILITY ${JSON.stringify(value)}`).join('\n');
   assert.doesNotThrow(() => diagnostic.auditPhoneObservations(log([row, row, row, row])));
   for (const rows of [[], [row], [row, row, row, {...row, observations: []}],
-    [row, row, row, {...row, deadlineSeconds: 10}], [row, row, row, {...row, completed: false}]]) {
+    [row, row, row, {...row, deadlineSeconds: 10}], [row, row, row, {...row, completed: false}],
+    [row, row, row, {...row, viewportSource: 'application-root'}]]) {
     assert.throws(() => diagnostic.auditPhoneObservations(log(rows)), /observations/);
   }
   const missing = {exists: false, elapsedSeconds: 0.1, existsQuerySeconds: 0.05};
@@ -34,6 +35,15 @@ test('a passing diagnostic must retain all four measured visibility observations
     {...row.observations[0], frame: undefined}, {...row.observations[0], window: [0]},
     {...row.observations[0], hittableQuerySeconds: undefined}, {...row.observations[0], existsQuerySeconds: -1}];
   for (const observation of incomplete) {
+    assert.throws(() => diagnostic.auditPhoneObservations(log(Array(4).fill({...row, observations: [observation]}))), /observations/);
+  }
+  for (const geometry of [
+    {window: [0, 0, 0, 0], frame: [0, 0, 0, 0]},
+    {window: [0, 0, 400, 800], frame: [0, 0, 0, 0]},
+    {window: [0, 0, 400, 800], frame: [-10, 600, 44, 44]},
+    {window: [0, 0, 400, 800], frame: [10, 790, 44, 44]},
+    {window: [0, 0, 400, 800], frame: [390, 600, 44, 44]}]) {
+    const observation = {...row.observations[0], ...geometry, contained: true};
     assert.throws(() => diagnostic.auditPhoneObservations(log(Array(4).fill({...row, observations: [observation]}))), /observations/);
   }
 });

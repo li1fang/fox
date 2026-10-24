@@ -30,6 +30,10 @@ export function auditPhoneObservations(output) {
   const rows = [...output.matchAll(/FOX_UI_VISIBILITY (\{[^\n]*\})/g)].map(x => JSON.parse(x[1]));
   const duration = x => Number.isFinite(x) && x >= 0;
   const rect = x => Array.isArray(x) && x.length === 4 && x.every(Number.isFinite);
+  const contains = (window, frame) => rect(window) && rect(frame) && window[2] > 0 && window[3] > 0
+    && frame[2] > 0 && frame[3] > 0 && frame[0] >= window[0] - 0.5 && frame[1] >= window[1] - 0.5
+    && frame[0] + frame[2] <= window[0] + window[2] + 0.5
+    && frame[1] + frame[3] <= window[1] + window[3] + 0.5;
   const measured = x => {
     if (!x || typeof x !== 'object') return false;
     if (typeof x.exists !== 'boolean' || !duration(x.elapsedSeconds) || !duration(x.existsQuerySeconds)) return false;
@@ -37,9 +41,10 @@ export function auditPhoneObservations(output) {
       && x.frame === undefined && x.window === undefined && x.contained === undefined;
     if (typeof x.hittable !== 'boolean' || !duration(x.hittableQuerySeconds)) return false;
     if (!x.hittable) return x.frame === undefined && x.window === undefined && x.contained === undefined;
-    return typeof x.contained === 'boolean' && rect(x.window) && rect(x.frame);
+    return typeof x.contained === 'boolean' && rect(x.window) && rect(x.frame)
+      && x.contained === contains(x.window, x.frame);
   };
-  if (rows.length !== 4 || rows.some(row => row.schema !== 'fox.ui_visibility_probe.v1'
+  if (rows.length !== 4 || rows.some(row => row.schema !== 'fox.ui_visibility_probe.v2' || row.viewportSource !== 'main-window'
     || row.id !== 'feedback-dismiss-keyboard' || row.completed !== true || row.deadlineSeconds !== 4
     || !Array.isArray(row.observations) || !row.observations.length
     || row.observations.some(x => !measured(x))
