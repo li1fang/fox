@@ -49,6 +49,22 @@ test('diagnostic refuses private inputs or changed case classification before de
   }
 });
 
+test('input diagnostics retain the original exact-value result even if it later settles', () => {
+  const ids = ['trial-information', 'trial-software-issue', 'trial-training-feeling'];
+  const rows = ids.map((id, index) => ({schema: 'fox.ui_input_probe.v1', id, expected: `test ${index}`,
+    immediateValue: `test ${index}`, immediateMatched: true, deadlineSeconds: 4, observations: []}));
+  const log = values => values.map(value => `FOX_UI_INPUT ${JSON.stringify(value)}`).join('\n');
+  assert.doesNotThrow(() => diagnostic.auditPhoneInputObservations(log(rows)));
+  for (const invalid of [rows.slice(0, 2), [...rows, rows[0]],
+    rows.map((x, index) => index === 2 ? {...x, immediateValue: 'test ', immediateMatched: false,
+      observations: [{value: 'test 2', elapsedSeconds: 0.2}]} : x),
+    rows.map(x => ({...x, immediateValue: 'wrong'})), rows.map(x => ({...x, expected: 'changed'})),
+    rows.map(x => ({...x, immediateMatched: false})), rows.map(x => ({...x, deadlineSeconds: 8})),
+    rows.map(x => ({...x, observations: [{value: x.expected, elapsedSeconds: 0.2}]}))]) {
+    assert.throws(() => diagnostic.auditPhoneInputObservations(log(invalid)), /input observations/);
+  }
+});
+
 test('a specified diagnostic runtime/model is exact and never silently falls back', () => {
   const phone = {deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'};
   const pad = {deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch'};

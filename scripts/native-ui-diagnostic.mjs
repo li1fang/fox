@@ -49,6 +49,18 @@ export function auditPhoneObservations(output) {
   return rows;
 }
 
+export function auditPhoneInputObservations(output) {
+  const rows = [...output.matchAll(/FOX_UI_INPUT (\{[^\n]*\})/g)].map(x => JSON.parse(x[1]));
+  const ids = ['trial-information', 'trial-software-issue', 'trial-training-feeling'];
+  if (rows.length !== ids.length || rows.some((row, index) => row.schema !== 'fox.ui_input_probe.v1'
+    || row.id !== ids[index] || row.expected !== `test ${index}` || row.immediateValue !== row.expected
+    || row.immediateMatched !== true || row.deadlineSeconds !== 4
+    || !Array.isArray(row.observations) || row.observations.length !== 0)) {
+    throw Error('Phone input observations missing or original assertion failed');
+  }
+  return rows;
+}
+
 export async function runPhoneDiagnostic(output) {
   if (!output) throw Error('Diagnostic requires a fresh output directory');
   const directory = path.resolve(output), steps = [];
@@ -60,7 +72,10 @@ export async function runPhoneDiagnostic(output) {
   return runSuite({directory, steps, metadata,
     execute: async (step, options) => {
       const result = await execute(step, options);
-      if (result.code === 0) auditPhoneObservations(result.output);
+      if (result.code === 0) {
+        auditPhoneObservations(result.output);
+        auditPhoneInputObservations(result.output);
+      }
       return result;
     },
     preflight: async () => {

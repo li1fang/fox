@@ -34,7 +34,9 @@ final class FoxPhoneLayoutUITests: XCTestCase {
             XCTAssertFalse(app.buttons["rest-ready"].exists)
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 4))
             field.typeText("test \(index)")
-            XCTAssertEqual(field.value as? String, "test \(index)")
+            let immediateValue = field.value as? String
+            observeInputFailure(field, id: id, expected: "test \(index)", immediateValue: immediateValue, in: app)
+            XCTAssertEqual(immediateValue, "test \(index)")
             visible(app.buttons["feedback-dismiss-keyboard"], in: app, diagnosticID: "feedback-dismiss-keyboard")
             app.buttons["feedback-dismiss-keyboard"].tap()
             visible(app.buttons["submit-feedback"], in: app)
@@ -42,6 +44,31 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         }
         app.buttons["submit-feedback"].tap()
         XCTAssertTrue(app.buttons["rest-ready"].waitForExistence(timeout: 5))
+    }
+
+    private func observeInputFailure(_ field: XCUIElement, id: String, expected: String,
+                                     immediateValue: String?, in app: XCUIApplication) {
+        guard app.launchEnvironment["FOX_UI_TESTING"] == "1",
+              app.launchArguments.contains("--ui-testing-reset"),
+              ProcessInfo.processInfo.environment["FOX_PRIVATE_INPUT_MANIFEST", default: ""].isEmpty else { return }
+        var observations: [[String: Any]] = []
+        if immediateValue != expected {
+            let start = ProcessInfo.processInfo.systemUptime
+            let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                let value = field.exists ? field.value as? String : nil
+                observations.append(["value": value.map { $0 as Any } ?? NSNull(),
+                                     "elapsedSeconds": ProcessInfo.processInfo.systemUptime - start])
+                return value == expected
+            }, object: nil)
+            // Observe only: the original immediate assertion below must still fail.
+            _ = XCTWaiter.wait(for: [settled], timeout: 4)
+        }
+        let diagnostic: [String: Any] = ["schema": "fox.ui_input_probe.v1", "id": id, "expected": expected,
+            "immediateValue": immediateValue.map { $0 as Any } ?? NSNull(), "immediateMatched": immediateValue == expected,
+            "deadlineSeconds": 4, "observations": observations]
+        if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]),
+           let json = String(data: data, encoding: .utf8) { print("FOX_UI_INPUT \(json)") }
+        if immediateValue != expected { print("FOX_SYNTHETIC_UI_INPUT_FAILURE_AX\n\(app.debugDescription)") }
     }
 
     private func scrollFeedback(_ form: XCUIElement, target: XCUIElement, above footer: XCUIElement,
