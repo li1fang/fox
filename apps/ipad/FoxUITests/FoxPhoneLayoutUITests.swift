@@ -344,7 +344,14 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         XCTAssertTrue(app.buttons["vision-cancel-start"].waitForExistence(timeout: 4))
         XCTAssertFalse(exercise.isEnabled); XCTAssertFalse(arm.isEnabled)
         app.buttons["vision-cancel-start"].tap()
+        // Cancel stops preparation immediately; controls unlock after the recording is sealed asynchronously.
+        let unlocked = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.buttons["vision-start"].exists && !app.buttons["vision-cancel-start"].exists
+                && exercise.isEnabled && arm.isEnabled
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [unlocked], timeout: 4), .completed)
         XCTAssertTrue(exercise.isEnabled); XCTAssertTrue(arm.isEnabled)
+        XCTAssertTrue(exercise.buttons["哑铃侧平举"].isSelected); XCTAssertTrue(arm.buttons["右臂"].isSelected)
     }
 
     func testVisionPortraitUsesCameraFirstAndAccessibleOptions() throws {

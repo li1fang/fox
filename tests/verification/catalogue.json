@@ -1589,6 +1589,12 @@
       "surface": "ipad"
     },
     {
+      "id": "FoxAppTests/VisionDiagnosticTests/testDiagnosticSelectionLockPublishesWithoutCameraFrames",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
       "id": "FoxAppTests/VisionDiagnosticTests/testNoRetainedMediaBeforeAnAttemptAndFailureDoesNotChangeConfiguration",
       "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
       "scope": "public",

@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import FoxTrainingCore
 import SwiftUI
 import UIKit
@@ -9,6 +10,7 @@ final class VisionLabController: ObservableObject {
     static let preparationFlowVersion = "intent-reacquire-v1"
     let camera = PoseCamera()
     let diagnosticCapture: VisionDiagnosticStore
+    private var diagnosticChanges: AnyCancellable?
     var diagnosticWorkoutSessionID: UUID?
     var diagnosticSetAttemptID: UUID?
     private let deviceMotion = DevicePoseCapture()
@@ -269,6 +271,8 @@ final class VisionLabController: ObservableObject {
             self.invalidateMotion(clearPreview: true)
         }
         camera.onDiagnosticResult = { [capture = diagnosticCapture] id, result in capture.receive(id: id, result: result) }
+        // Selection locking depends on async recording finalization, even when no camera frame arrives.
+        diagnosticChanges = diagnosticCapture.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         diagnosticCapture.onLimit = { [weak self] in self?.finishDiagnostic(reason: "durationLimit") }
         deviceMotion.onReading = { [weak self] id, reading in
             guard let self, self.wantsCamera, self.captureID == id else { return }

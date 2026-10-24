@@ -1,10 +1,51 @@
 import AVFoundation
+import Combine
 import XCTest
 import FoxTrainingCore
 @testable import Fox
 
 @MainActor
 final class VisionDiagnosticTests: XCTestCase {
+    func testDiagnosticSelectionLockPublishesWithoutCameraFrames() throws {
+        let root = root(), controller = VisionLabController(diagnosticRoot: root.appendingPathComponent("Diagnostics"), storageDirectory: root)
+        let capture = controller.diagnosticCapture, original = controller.configuration
+        let deliver = try XCTUnwrap(controller.camera.onDiagnosticResult)
+        var notifications = 0
+        let subscription = controller.objectWillChange.sink { notifications += 1 }
+        defer { subscription.cancel() }
+
+        let failure = VisionDiagnosticArchive.error("synthetic finalization failure")
+        for fails in [false, true] {
+            let context = context()
+            notifications = 0
+            XCTAssertFalse(controller.selectionLocked)
+            XCTAssertTrue(capture.begin(context))
+            XCTAssertTrue(controller.selectionLocked)
+            XCTAssertGreaterThan(notifications, 0, "Recording start must refresh selection controls without a camera frame")
+            notifications = 0
+            capture.markFinishing()
+            XCTAssertTrue(controller.selectionLocked, "Keep selection locked until the original recording finishes")
+            XCTAssertGreaterThan(notifications, 0)
+            notifications = 0
+            deliver(UUID(), .failure(failure))
+            XCTAssertTrue(controller.selectionLocked)
+            XCTAssertEqual(notifications, 0, "An unrelated result cannot unlock the current recording")
+            if fails { deliver(context.id, .failure(failure)) }
+            else {
+                let folder = try VisionDiagnosticArchive.prepare(context, root: capture.draftRoot)
+                let manifest = try VisionDiagnosticArchive.seal(context: context, folder: folder, state: "failed",
+                    reason: "preparationCancelled", error: nil, video: nil)
+                deliver(context.id, .success(manifest))
+            }
+            XCTAssertFalse(controller.selectionLocked)
+            XCTAssertGreaterThan(notifications, 0, "Finalization must refresh selection controls without a camera frame")
+        }
+        XCTAssertEqual(controller.cameraState, .stopped)
+        XCTAssertFalse(controller.trialActive)
+        XCTAssertEqual(controller.automaticCount, 0)
+        XCTAssertEqual(controller.configuration, original)
+    }
+
     func testPostReviewAnnotationIsBoundToPackageAndOriginalEvidenceIsUnchanged() throws {
         let base = root(), drafts = base.appendingPathComponent("Drafts"), retained = base.appendingPathComponent("Retained")
         let c = context(), folder = try VisionDiagnosticArchive.prepare(c, root: drafts)
