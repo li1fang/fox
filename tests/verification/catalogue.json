@@ -1877,6 +1877,12 @@
       "surface": "iphone"
     },
     {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testFeedbackPreparationAfterLandscapeHistory",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
       "id": "FoxUITests/FoxPhoneLayoutUITests/testLandscapeQuickSelectionsApplyAndLockWithoutOpeningSettings",
       "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
       "scope": "public",

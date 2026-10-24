@@ -5,6 +5,34 @@ import {phoneDiagnosticCase, phoneDiagnosticStep, checkDiagnosticContext} from '
 import * as diagnostic from '../../scripts/native-ui-diagnostic.mjs';
 import {auditReceipt} from '../../scripts/verification-contracts.mjs';
 
+test('feedback prepares portrait only after a single configured app launch', () => {
+  const source = readFileSync(new URL('../../apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift', import.meta.url), 'utf8');
+  const method = name => {
+    const start = source.indexOf(`func ${name}(`);
+    assert.notEqual(start, -1, `Missing method ${name}`);
+    const end = source.indexOf('\n    }', start);
+    assert.notEqual(end, -1);
+    return source.slice(start, end);
+  };
+  const caller = method('testFeedbackKeyboardAndThreeCategoriesRemainReachableAfterRotation');
+  const setup = caller.slice(0, caller.indexOf('app.buttons["start-training"].tap()'));
+  const configured = setup.indexOf('app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_START_SCREEN": "training"]');
+  const reset = setup.indexOf('app.launchArguments = ["--ui-testing-reset"]');
+  assert.ok(configured >= 0 && reset > configured && setup.indexOf('launchFeedbackInPortrait(app)') > reset);
+  assert.equal((setup.match(/launchFeedbackInPortrait\(app\)/g) ?? []).length, 1);
+  assert.doesNotMatch(setup, /app\.launch\(\)|XCUIDevice\.shared\.orientation/);
+  const helper = method('launchFeedbackInPortrait');
+  const tokens = ['app.launch()', 'app.buttons["start-training"].waitForExistence(timeout: 10)',
+    'XCUIDevice.shared.orientation = .portrait', 'waitForOrientation(.portrait, in: app)'];
+  let previous = -1;
+  for (const token of tokens) {
+    const index = helper.indexOf(token);
+    assert.ok(index > previous, `Preparation order: ${token}`);
+    assert.equal(helper.indexOf(token, index + token.length), -1, `Single operation: ${token}`);
+    previous = index;
+  }
+});
+
 test('phone diagnostic covers fixed input and framing cases, never a full-suite substitute', () => {
   const step = phoneDiagnosticStep('owned-phone');
   const cases = [phoneDiagnosticCase,

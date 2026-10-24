@@ -11,8 +11,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_START_SCREEN": "training"]
         app.launchArguments = ["--ui-testing-reset"]
-        XCUIDevice.shared.orientation = .portrait; app.launch()
-        XCTAssertTrue(app.buttons["start-training"].waitForExistence(timeout: 10))
+        launchFeedbackInPortrait(app)
         app.buttons["start-training"].tap(); app.buttons["begin-set"].tap(); app.buttons["complete-set"].tap()
         let count = app.textFields["actual-reps"]
         XCTAssertTrue(count.waitForExistence(timeout: 5)); count.tap(); count.typeText("2")
@@ -43,6 +42,25 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         }
         app.buttons["submit-feedback"].tap()
         XCTAssertTrue(app.buttons["rest-ready"].waitForExistence(timeout: 5))
+    }
+
+    func testFeedbackPreparationAfterLandscapeHistory() throws {
+        try requirePhone()
+        let app = XCUIApplication()
+        app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_START_SCREEN": "training"]
+        app.launchArguments = ["--ui-testing-reset"]
+        app.launch()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        waitForOrientation(.landscapeLeft, in: app)
+        app.terminate()
+        launchFeedbackInPortrait(app)
+    }
+
+    private func launchFeedbackInPortrait(_ app: XCUIApplication) {
+        app.launch()
+        XCTAssertTrue(app.buttons["start-training"].waitForExistence(timeout: 10))
+        XCUIDevice.shared.orientation = .portrait
+        waitForOrientation(.portrait, in: app)
     }
 
     private func requireInputCompletion(_ field: XCUIElement, id: String, expected: String, in app: XCUIApplication) {
