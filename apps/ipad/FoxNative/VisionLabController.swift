@@ -303,7 +303,7 @@ final class VisionLabController: ObservableObject {
             cameraState = .running
             fixtureTimeline = PoseFixtureTimeline()
             fixtureTimer = Timer.scheduledTimer(withTimeInterval: PoseFixtureTimeline.frameInterval, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.receiveFixture() }
+                MainActor.assumeIsolated { self?.receiveFixtureTick(capture: id) }
             }
             onCameraStateChanged?(cameraState)
             if environmentDiagnosticSmoke && !diagnosticSmokeStarted {
@@ -346,6 +346,11 @@ final class VisionLabController: ObservableObject {
         if let id = capture ?? captureID { camera.onFrame?(id, value) }
     }
     func replayWatchdog() { precondition(replayClock != nil); checkWatchdog() }
+    func replayFixtureTick() {
+        precondition(replayClock != nil)
+        guard let captureID else { return }
+        receiveFixtureTick(capture: captureID)
+    }
     func replayDiscontinuity() {
         precondition(replayClock != nil)
         if let id = captureID { camera.onDiscontinuity?(id) }
@@ -412,6 +417,7 @@ final class VisionLabController: ObservableObject {
 
     func startCounting() {
         guard canCount else { return }
+        fixtureTimeline.controlBoundary(receivedAt: uptime)
         beginTemporaryDiagnostic()
         recordDiagnosticEvent("prepareRequested")
         if !trialActive {
@@ -450,6 +456,7 @@ final class VisionLabController: ObservableObject {
     }
 
     func pauseCounting() {
+        fixtureTimeline.controlBoundary(receivedAt: uptime)
         recordDiagnosticEvent(isPreparing ? "preparationCancelled" : "countingPaused")
         let wasCounting = isCounting
         let wasPreparing = isPreparing
@@ -653,7 +660,15 @@ final class VisionLabController: ObservableObject {
         }
     }
 
-    private func receiveFixture() {
+    private func receiveFixtureTick(capture: UUID) {
+        let generation = fixtureTimeline.generation
+        for timestamp in fixtureTimeline.samplesDue(receivedAt: uptime) {
+            guard wantsCamera, captureID == capture, fixtureTimeline.generation == generation else { break }
+            receiveFixture(timestamp: timestamp)
+        }
+    }
+
+    private func receiveFixture(timestamp: TimeInterval) {
         if isPreparing { fixturePreparationTick += 1 }
         // Normal UI fixtures stay clear of the minimum-duration boundary; core tests cover too-fast motion.
         let sequence = exercise == .latPulldown ?
@@ -715,8 +730,7 @@ final class VisionLabController: ObservableObject {
             if fixtureTick % 2 == 0 { people.insert(BodyPose(points: background), at: 0) }
             else { people.append(BodyPose(points: background)) }
         }
-        let frame = PoseFrame(timestamp: fixtureTimeline.next(receivedAt: ProcessInfo.processInfo.systemUptime),
-                              width: 720, height: 1280, people: people)
+        let frame = PoseFrame(timestamp: timestamp, width: 720, height: 1280, people: people)
         if diagnosticCapture.isActive && !diagnosticCapture.finishing { camera.diagnosticFixtureFrame(frame) }
         receive(CapturedPose(frame: frame,
             latencyMs: 1, revision: 1, cameraGeometry: VisionCameraGeometry(deviceType: "fixture", zoomFactor: 1, reportedFormatFieldOfViewDegrees: 60)))

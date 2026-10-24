@@ -1408,6 +1408,24 @@
       "reason": "Synthetic capture time is independent of delayed host delivery; real arrival freshness remains intact"
     },
     {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticDeliveryCatchesUpKnownSamplesWithoutChangingMotionFacts",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticControlBoundariesCannotConsumePreStartOrCancelledBacklog",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticDeliveryBoundsBacklogWithoutInventingFutureSamples",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
       "id": "FoxAppTests/VisionControllerReplayTests/testRealCaptureGapsStillDiscardIncompleteMotionCycles",
       "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
       "surface": "ipad",

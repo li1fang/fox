@@ -79,6 +79,98 @@ final class VisionControllerReplayTests: XCTestCase {
         } }
     }
 
+    func testSyntheticDeliveryCatchesUpKnownSamplesWithoutChangingMotionFacts() throws {
+        for exercise in [VisionExercise.curl, .lateralRaise] { for side in ArmSide.allCases {
+            var reference: [CurlRepetition]?
+            for stalled in [false, true] {
+                let (c, clock) = try controller(exercise, side)
+                defer { c.stopCamera() }
+                var timeline = PoseFixtureTimeline(), delivered: [Double] = []
+                let bottom = exercise == .curl ? 160.0 : 10.0
+                let cycle = exercise == .curl ? curlCycle : raiseCycle
+                let angles = Array(repeating: bottom, count: 36) + cycle + cycle
+                for i in angles.indices {
+                    if stalled && ((10...25).contains(i) || (46...80).contains(i)) { continue }
+                    let arrival = 1000 + Double(i) / 10
+                    clock.uptime = arrival
+                    for timestamp in timeline.samplesDue(receivedAt: arrival) {
+                        let index = Int(((timestamp - 1000) * 10).rounded())
+                        XCTAssertTrue(angles.indices.contains(index))
+                        guard angles.indices.contains(index) else { continue }
+                        delivered.append(timestamp)
+                        c.replayFrame(CapturedPose(frame: frame(exercise, side, angles[index], timestamp),
+                            latencyMs: 1, revision: 1, cameraGeometry: nil))
+                    }
+                }
+                XCTAssertEqual(delivered, angles.indices.map { 1000 + Double($0) * PoseFixtureTimeline.frameInterval })
+                XCTAssertEqual(c.automaticCount, 2, "\(exercise)/\(side), stalled=\(stalled)")
+                XCTAssertEqual(c.metrics.interruptions, 0)
+                XCTAssertEqual(c.observationReceivedUptime, 1000 + Double(angles.count - 1) / 10)
+                if let reference { XCTAssertEqual(c.repetitions, reference) }
+                else { reference = c.repetitions }
+            }
+        } }
+    }
+
+    func testSyntheticControlBoundariesCannotConsumePreStartOrCancelledBacklog() throws {
+        for exercise in [VisionExercise.curl, .lateralRaise] { for side in ArmSide.allCases {
+            let directory = try root(), clock = VisionReplayClock()
+            let c = VisionLabController(diagnosticRoot: directory.appendingPathComponent("diagnostics"), storageDirectory: directory)
+            c.enableReplay(clock: clock); c.changeExercise(exercise); c.changeArm(side); c.startCamera()
+            defer { c.stopCamera() }
+            clock.uptime = 1000; c.replayFixtureTick()
+            clock.uptime = 1005; c.startCounting(); c.replayFixtureTick()
+            XCTAssertTrue(c.isPreparing, "Idle backlog cannot complete a new countdown")
+            XCTAssertFalse(c.isCounting)
+            XCTAssertEqual(c.automaticCount, 0)
+            for i in 1...5 { clock.uptime = 1005 + Double(i) / 10; c.replayFixtureTick() }
+            c.pauseCounting()
+            clock.uptime = 1015; c.startCounting(); c.replayFixtureTick()
+            XCTAssertTrue(c.isPreparing, "Cancelled preparation cannot supply the rearmed countdown")
+            XCTAssertFalse(c.isCounting)
+            XCTAssertEqual(c.automaticCount, 0)
+            for i in 1...30 { clock.uptime = 1015 + Double(i) / 10; c.replayFixtureTick() }
+            XCTAssertTrue(c.isPreparing, "A full new preparation period is required")
+            for i in 31...95 { clock.uptime = 1015 + Double(i) / 10; c.replayFixtureTick() }
+            XCTAssertTrue(c.isCounting)
+            XCTAssertEqual(c.automaticCount, 2)
+            c.pauseCounting()
+            clock.uptime = 1030; c.startCounting()
+            var pausedAt: TimeInterval?
+            c.onCountingUpdated = { [weak c] in
+                pausedAt = c?.latest?.frame.timestamp
+                c?.pauseCounting()
+            }
+            clock.uptime = 1040; c.replayFixtureTick()
+            XCTAssertNotNil(pausedAt)
+            XCTAssertFalse(c.isCounting)
+            XCTAssertEqual(c.latest?.frame.timestamp, pausedAt, "A pause within delivery must discard the rest of the old batch")
+            XCTAssertEqual(c.automaticCount, 2)
+        } }
+    }
+
+    func testSyntheticDeliveryBoundsBacklogWithoutInventingFutureSamples() {
+        var timeline = PoseFixtureTimeline()
+        XCTAssertTrue(timeline.samplesDue(receivedAt: .nan).isEmpty)
+        XCTAssertTrue(timeline.samplesDue(receivedAt: -.infinity).isEmpty)
+        XCTAssertEqual(timeline.samplesDue(receivedAt: 1000), [1000])
+        XCTAssertTrue(timeline.samplesDue(receivedAt: 1000).isEmpty)
+        XCTAssertTrue(timeline.samplesDue(receivedAt: 999).isEmpty)
+        var catchup: [Double] = []
+        for _ in 0..<3 {
+            let batch = timeline.samplesDue(receivedAt: 1012)
+            XCTAssertLessThanOrEqual(batch.count, 50, "Bound work per delivery callback")
+            catchup += batch
+        }
+        XCTAssertEqual(catchup, (1...120).map { 1000 + Double($0) * PoseFixtureTimeline.frameInterval })
+        XCTAssertTrue(timeline.samplesDue(receivedAt: 1012).isEmpty)
+        XCTAssertTrue(timeline.samplesDue(receivedAt: .infinity).isEmpty)
+        var large = PoseFixtureTimeline()
+        XCTAssertEqual(large.samplesDue(receivedAt: 1_000_000), [1_000_000])
+        XCTAssertTrue(large.samplesDue(receivedAt: 1_000_000.05).isEmpty)
+        XCTAssertEqual(large.samplesDue(receivedAt: 1_000_000.1), [1_000_000.1])
+    }
+
     func testRealCaptureGapsStillDiscardIncompleteMotionCycles() throws {
         let (c, clock) = try controller()
         defer { c.stopCamera() }
