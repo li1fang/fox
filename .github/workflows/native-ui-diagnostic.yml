@@ -1,0 +1,48 @@
+name: Native UI Diagnostic
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  native-readiness-diagnostic:
+    runs-on: macos-26
+    # Two cold-start batches (25 minutes each), plus bootstrap and owned-simulator cleanup.
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      FOX_DIAGNOSTIC_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - name: Pinned native tools
+        run: |
+          test -d "$DEVELOPER_DIR"
+          curl --fail --location --output "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip
+          printf '%s  %s\n' '0c90f4d28ca57335f9fa78cf5bf6dabfe20a232036dabe36de2eef79cb7c0878' "$RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP/fox-tools"
+          echo "$RUNNER_TEMP/fox-tools/xcodegen/bin" >> "$GITHUB_PATH"
+      - run: npm run bootstrap
+      - name: Fixed exercise-switch, input and rotation diagnostics, no retries
+        run: npm run diagnose:native-ui -- .tmp/verification/ci-native-diagnostic
+      - name: Synthetic observations only, never a full-suite receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-readiness-diagnostic-${{ github.event.pull_request.head.sha }}
+          path: |
+            .tmp/verification/ci-native-diagnostic/suite.json
+            .tmp/verification/ci-native-diagnostic/*.log
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14

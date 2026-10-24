@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/capture-record.schema.json",
+  "title": "Fox Native Capture Record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revision", "recordedAt", "updatedAt", "timeZoneIdentifier", "photos", "labels", "source"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "id": {"type": "string", "format": "uuid"},
+    "revision": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "recordedAt": {"$ref": "#/$defs/timestamp"},
+    "updatedAt": {"$ref": "#/$defs/timestamp"},
+    "timeZoneIdentifier": {"type": "string", "minLength": 1},
+    "note": {"type": "string"},
+    "photos": {"type": "array", "items": {"$ref": "#/$defs/photo"}, "uniqueItems": true},
+    "labels": {"type": "array", "maxItems": 24, "items": {"type": "string", "minLength": 1, "maxLength": 256}, "uniqueItems": true},
+    "occurred": {"$ref": "#/$defs/occurrence"},
+    "source": {"$ref": "#/$defs/source"}
+  },
+  "anyOf": [
+    {"required": ["note"], "properties": {"note": {"pattern": "\\S"}}},
+    {"properties": {"photos": {"minItems": 1}}}
+  ],
+  "$defs": {
+    "timestamp": {"type": "number", "minimum": -62135596800000, "maximum": 253402300799999, "description": "Unix milliseconds; not an inferred occurrence time."},
+    "photo": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "mimeType", "byteCount", "sha256", "relativePath"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "mimeType": {"enum": ["image/jpeg", "image/png", "image/heic"]},
+        "byteCount": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "relativePath": {"type": "string", "pattern": "^attachments/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|heic)$"}
+      }
+    },
+    "occurrence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["start", "timeZoneIdentifier", "precision"],
+      "properties": {
+        "start": {"$ref": "#/$defs/timestamp"}, "end": {"$ref": "#/$defs/timestamp"},
+        "timeZoneIdentifier": {"type": "string", "minLength": 1},
+        "precision": {"enum": ["exact", "approximate", "day"]}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "deviceID"],
+      "properties": {
+        "kind": {"enum": ["user", "external"]}, "deviceID": {"type": "string", "format": "uuid"},
+        "provider": {"type": "string", "minLength": 1, "maxLength": 256},
+        "sourceRecordID": {"type": "string", "minLength": 1, "maxLength": 1024}
+      },
+      "if": {"properties": {"kind": {"const": "external"}}},
+      "then": {"required": ["provider", "sourceRecordID"]},
+      "else": {"not": {"anyOf": [{"required": ["provider"]}, {"required": ["sourceRecordID"]}]}}
+    }
+  }
+}

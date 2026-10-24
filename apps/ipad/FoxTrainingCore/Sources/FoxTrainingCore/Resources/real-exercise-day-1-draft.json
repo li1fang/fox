@@ -1,0 +1,42 @@
+{
+  "focus": "Real exercise · Day 1",
+  "scheduledDate": "2026-10-07",
+  "scheduledTimeZone": "Asia/Bangkok",
+  "warmup": "开始前确认今日状态、热身与本次完整训练内容。",
+  "cooldown": "结束后核对实际记录，再按需要放松。",
+  "safetyNotes": "待确认草稿；组数、次数、节奏和重量均需开始前核对。不舒服时停止。",
+  "exercises": [
+    {
+      "exerciseId": "dumbbell_curl",
+      "name": "哑铃弯举",
+      "repetitionBasis": "per_side",
+      "visualObservation": { "exercise": "curl", "arm": "left", "bodyView": "side" },
+      "notes": "侧身，观察臂靠近镜头；左右次数分开核对。",
+      "targetSets": [
+        { "setIndex": 1, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 },
+        { "setIndex": 2, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 }
+      ],
+      "tempo": [
+        { "phase": "lift", "seconds": 2, "visual": "expand" },
+        { "phase": "peak", "seconds": 1, "visual": "vibrate" },
+        { "phase": "lower", "seconds": 3, "visual": "shrink" }
+      ]
+    },
+    {
+      "exerciseId": "lateral_raise",
+      "name": "哑铃侧平举",
+      "repetitionBasis": "per_side",
+      "visualObservation": { "exercise": "lateralRaise", "arm": "right", "bodyView": "front" },
+      "notes": "正面，肩、肘、髋入镜；每组固定一个观察侧，另一侧由人确认。视觉为候选，尚未完成 M4 真人验收。",
+      "targetSets": [
+        { "setIndex": 1, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 },
+        { "setIndex": 2, "targetReps": 5, "weightUnit": "kg", "restSeconds": 90 }
+      ],
+      "tempo": [
+        { "phase": "lift", "seconds": 2, "visual": "expand" },
+        { "phase": "peak", "seconds": 1, "visual": "vibrate" },
+        { "phase": "lower", "seconds": 3, "visual": "shrink" }
+      ]
+    }
+  ]
+}

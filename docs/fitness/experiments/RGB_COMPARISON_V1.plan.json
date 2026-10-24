@@ -1,0 +1,44 @@
+{
+  "schema": "fox.pose_comparison_plan.v1",
+  "date": "2026-10-17",
+  "status": "fixed-before-inference",
+  "videoSHA256": "48b5913c45da677819ca2e18791865b624518d351ce5592e2d3a051a6fde7d66",
+  "heldOut": false,
+  "platformScope": "macOS offline diagnostic; not M4 realtime or new-scene acceptance",
+  "sampledHz": 10,
+  "maximumImageDimension": 1280,
+  "pixelTransfer": "lossless PNG stream; no audio; no frame-image archive",
+  "foxConfiguration": "bundled defaults frozen; no angle or timing changes",
+  "mediapipe": {
+    "model": "pose_landmarker_full",
+    "runningMode": "VIDEO",
+    "delegate": "CPU",
+    "numPoses": 4,
+    "minPoseDetectionConfidence": 0.5,
+    "minPosePresenceConfidence": 0.5,
+    "minTrackingConfidence": 0.5,
+    "coordinateMapping": "x unchanged, y=1-y; anatomical side unchanged; out-of-image points omitted",
+    "foxConfidenceAdapter": "min(visibility,presence); not calibrated equal to Apple confidence",
+    "derivedJoints": "neck=shoulder midpoint; root=hip midpoint; confidence=min of parent scores"
+  },
+  "appleCounter": {
+    "windowLength": 90,
+    "stride": 5,
+    "sampledHzProfiles": [10, 5],
+    "jointProfiles": ["body_without_face", "observed_arm"],
+    "output": "raw cumulative fractional counts and window timestamps; never rounded into confirmed repetitions",
+    "missingPosePolicy": "split sequence on absent selected pose; never carry forward coordinates",
+    "selection": "same Fox-selected subject as candidate A; report loss separately"
+  },
+  "targets": [
+    {"segment": "A01", "side": "left", "exercise": "curl"},
+    {"segment": "A02", "side": "right", "exercise": "curl"},
+    {"segment": "A03", "side": "left", "exercise": "lateralRaise"},
+    {"segment": "A03", "side": "right", "exercise": "lateralRaise"}
+  ],
+  "controls": ["unsupported front curl", "107-120 equipment change and bystanders", "185-end subject exit"],
+  "foxModes": ["counting-bypasses-start diagnostic", "counting-after-real-start-gate"],
+  "metrics": ["required-joint availability", "subject loss and recovery", "startup timestamp and resets", "per-cycle matches, misses and extra events", "negative-window counts", "fractional count timeline and first output window", "offline inference duration, not live latency"],
+  "labels": "existing coarse cycle intervals unchanged; post-produced claps never enter inference",
+  "decision": "diagnose next action only; no automatic model promotion, app deployment or fitness acceptance"
+}

@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/vision-run.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "fox.vision_run.v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-F0-9]{8}(-[A-F0-9]{4}){3}-[A-F0-9]{12}$"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "acceptance": {
+      "const": "not_assessed"
+    },
+    "evidenceKind": {
+      "enum": [
+        "controller_cache",
+        "controller_video",
+        "observations_cache",
+        "observations_video"
+      ]
+    },
+    "evidenceBoundary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "jobSHA256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "inputAssets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "path",
+          "bytes",
+          "sha256"
+        ]
+      }
+    },
+    "settingsSHA256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "appVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appBuild": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "controllerVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "device": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "platform": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceSHA256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "appVersion",
+        "appBuild",
+        "controllerVersion",
+        "device",
+        "platform",
+        "sourceSHA256"
+      ]
+    },
+    "motionStrategies": {
+      "type": "array",
+      "items": {
+        "$ref": "motion-strategy.schema.json"
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "exercise": {
+            "enum": [
+              "curl",
+              "lateralRaise",
+              "latPulldown"
+            ]
+          },
+          "arm": {
+            "enum": [
+              "left",
+              "right"
+            ]
+          },
+          "startSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "endSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "automaticCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "referenceCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "countError": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "returnIntervals": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "resets": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "exercise",
+          "arm",
+          "startSeconds",
+          "endSeconds",
+          "automaticCount",
+          "referenceCount",
+          "countError",
+          "returnIntervals",
+          "resets"
+        ]
+      }
+    },
+    "archivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "enum": [
+              "job.json",
+              "status.json",
+              "result.json",
+              "settings.json"
+            ]
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "path",
+          "bytes",
+          "sha256"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "status",
+    "acceptance",
+    "evidenceKind",
+    "evidenceBoundary",
+    "jobSHA256",
+    "inputAssets",
+    "settingsSHA256",
+    "execution",
+    "motionStrategies",
+    "cases",
+    "archivedAt",
+    "artifacts"
+  ]
+}

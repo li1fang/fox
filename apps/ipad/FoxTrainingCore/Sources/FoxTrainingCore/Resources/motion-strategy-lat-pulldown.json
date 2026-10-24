@@ -1,0 +1,51 @@
+{
+  "schema": "fox.motion_strategy.v1",
+  "version": 1,
+  "provider": "apple_vision_2d",
+  "coordinateSpace": "normalized_image_y_up_pixel_aspect_corrected",
+  "preparationJoints": [
+    "selected.shoulder",
+    "selected.elbow"
+  ],
+  "recovery": {
+    "shortGap": "retain_candidate_only_with_valid_continuity_guards",
+    "timingAfterGap": "unmeasured",
+    "longGap": "discard_unfinished_preserve_count"
+  },
+  "phase": {
+    "kind": "visual_angular_return",
+    "end": "counting_gate",
+    "fullEccentricComparison": false,
+    "publication": "following_accepted_peak",
+    "lastRepetition": "excluded"
+  },
+  "parameters": {
+    "configuration": "pose-counter-defaults.json",
+    "runtime": "pose-runtime-defaults.json",
+    "profile": "latPulldown"
+  },
+  "id": "lat-pulldown-back",
+  "exercise": "latPulldown",
+  "algorithm": "lat_pulldown_2d_v1",
+  "bodyView": "back",
+  "countingJoints": [
+    "selected.shoulder",
+    "selected.elbow",
+    "selected.wrist"
+  ],
+  "alternativeGeometry": "none",
+  "counting": {
+    "commit": "contracted_endpoint",
+    "terminal": "peak_without_return",
+    "rangeMeaning": "counting_gate_not_form_score"
+  },
+  "limitations": [
+    "Rear upper body only; current support is limited development-video evidence.",
+    "Return interval ends at a gate, not complete extension or muscular eccentric truth.",
+    "Final repetition remains counted without a published return duration."
+  ],
+  "contractTests": [
+    "LatPulldownTests/testPeakCountsImmediatelyAndTerminalReturnIsNotPublished",
+    "LatPulldownTests/testShortWristGapKeepsCountButDoesNotInventReturnDuration"
+  ]
+}

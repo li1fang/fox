@@ -1,146 +1,56 @@
-<div align="center">
-  <img src="apps/web-runtime/public/icon.svg" width="88" height="88" alt="fox logo" />
-  <h1>fox</h1>
-  <p><strong>本地优先的个人生活助手，当前以健身训练主持为第一条主线。</strong></p>
-  <p>
-    <a href="https://github.com/li1fang/fox/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-2f855a" /></a>
-    <img alt="Status" src="https://img.shields.io/badge/status-early%20prototype-d69e2e" />
-    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178c6" />
-  </p>
-</div>
+# fox
 
-## 项目简介
+**把日常留下，把训练做好。**
 
-fox 是一个综合个人助手项目，目标是把饮食、医疗、健身、记账等日常记录变成一个可追溯、可复盘、可被 AI 辅助分析的个人生活日志系统。
+本地优先的个人生活助手。原生 iPhone / iPad 记录文字与照片，也主持训练、计数、节奏引导与事后核对。私人资料留在设备和本地目录，公开仓库提供源码、契约与合成测试。
 
-当前阶段采用 **健身优先**：先做一个可靠的训练 runtime，让用户可以在本地浏览器中完成一次完整训练闭环，包括计划、倒计时、反馈、动态调整和总结确认。
+## 先看这里
 
-fox 的核心边界很明确：
-
-- AI 负责计划、建议、鼓励、解释和总结草稿。
-- 状态推进、计时器、危险停止和最终落库由确定性程序控制。
-- 当前不追求自动感知，不做姿态识别，不运行本地大模型。
+| 你想做什么 | 入口 |
+| --- | --- |
+| 了解现在真正做到了什么 | [当前状态与证据边界](docs/development/CURRENT.md) |
+| 开发或让 Agent 接手 | [AGENTS](AGENTS.md) · [模块地图](docs/development/MODULES.md) |
+| 重建、测试、准备交付 | [验证指南](docs/development/VERIFICATION.md) |
+| 了解产品下一步 | [任务台账](docs/planning/LIFE_LOG_BACKLOG.zh-CN.md) |
 
 ## 当前能力
 
-- 本地 Web Runtime UI：check-in、计划确认、动作执行、组后反馈、休息倒计时、总结确认。
-- SQLite 持久化：保存 session、event log 和 confirmed fitness Entry。
-- 训练状态机：覆盖 `idle`、`awaiting_approval`、`active_exercise`、`feedback`、`rest_timer`、`summary_pending`、`confirmed` 等状态。
-- 规则教练：睡眠差、疲劳高、没跟上、太轻松、疼痛等场景有确定性处理。
-- 器材档案：家庭健身房器材可以编辑，并进入计划草稿上下文。
-- 历史推荐：根据 confirmed 训练记录推荐同动作重量和次数。
-- AI 接口地基：已有 provider、schema 校验、fallback 和 audit，等待接入真实大模型。
+- **记录**：文字、相机和照片导入，近期记录、详情、更正与本地完整备份。
+- **训练**：可编辑草稿、组次、倒计时、反馈、人工核对和确认记录。
+- **视觉**：侧身弯举、正面侧平举与背面高位下拉的有限适配。准备、计数、恢复和返回阶段分开处理，不填补不可观察的时长。
+- **引导**：确定性语音/视觉节奏策略；延迟、取消和过期提示有测试。真实运动听感仍需自然试用。
+- **Fox Say**：独立语音实验入口，Web/API 与人工确认草稿。不是 Fox 主应用的联网依赖。
 
-## 快速开始
+**回放通过不等于任意现场可用。** 已安装的 0.6.8/build 25 试用候选与本次开发分支分开记录；本轮不更新设备。AI 分析、双设备同步、深度与跨平台尚未启动。
 
-要求：
+## 开发起步
 
-- Node.js 22+，推荐使用当前 LTS 或更新版本。
-- npm 10+。
+Node 22；原生验证另需 macOS、Python 3.12、Xcode 26.3 / 17C529、XcodeGen 2.45.x 和 iOS 模拟器。
 
-```bash
-npm install
-npm run dev
+```sh
+npm run bootstrap
+npm run doctor
+npm run verify:fast
+npm run verify:public
 ```
 
-默认服务：
+Linux 可运行 `npm run verify:public -- --component web`。私人回归与旧 `test:trial` 入口均要求显式输入清单，缺失不会变成绿色跳过。模拟器不需要 Apple 开发者账号。
 
-- Web Runtime: `http://localhost:5177`
-- API: `http://localhost:4177`
-
-常用命令：
-
-```bash
-npm run verify
-npm run typecheck
-npm run test
-npm run test:e2e
-npm run build
-```
-
-## Monorepo 结构
+## 仓库结构
 
 ```text
-fox/
-  apps/
-    api/                 # 本地 HTTP API、SQLite repository、端点测试
-    web-runtime/         # React 训练运行界面
-  packages/
-    core/                # 训练状态机、规则教练、AI 边界、计划推荐
-    schemas/             # schema 包入口
-  docs/                  # 产品、架构、健身模块设计文档
-  schemas/               # Entry 与领域 payload JSON Schema
+apps/ipad/           原生 Fox、Fox Say、训练/记录核心、原生测试
+apps/api/            Web 与语音实验 API
+apps/web-runtime/    Web 训练与 Fox Say 实验界面
+packages/            Web 领域逻辑和 schema 导出
+schemas/             记录、备份、运动策略与证据契约
+scripts/             现有构建、实验和分层验收工具
+tests/               浏览器、脚本与测试分类
+docs/                当前入口、设计、历史实验和任务台账
 ```
 
-## 系统设计
+## 设计依据
 
-fox 当前采用本地优先架构：
+[训练策略与运行档案](docs/fitness/VISION_STRATEGY_AND_EVIDENCE_V1.zh-CN.md) · [记录存储](docs/journal/RECORD_STORAGE_V1.zh-CN.md) · [原生 UI 约束](docs/design/UI_INTENT_AND_REVIEW.zh-CN.md) · [系统架构](docs/architecture.md)
 
-```mermaid
-flowchart LR
-  User["用户 / iPad 浏览器"] --> Web["apps/web-runtime"]
-  Web --> Api["apps/api"]
-  Api --> Core["packages/core"]
-  Api --> Db["SQLite"]
-  Core --> Rules["规则教练"]
-  Core --> Ai["AI Provider Interface"]
-```
-
-第一版不是自由 agent，而是“确定性 runtime + AI 建议层”：
-
-- runtime 控制训练状态、计时、落库和安全边界。
-- AI provider 只返回结构化建议。
-- validator 校验 AI 输出，不合法时回退到规则教练。
-
-## 文档入口
-
-核心文档：
-
-- [项目愿景](docs/vision.md)
-- [产品简报](docs/product-brief.md)
-- [系统架构](docs/architecture.md)
-- [数据模型](docs/data-model.md)
-- [自动化流水线](docs/automation.md)
-- [开发路线图](docs/development-roadmap.md)
-
-健身模块：
-
-- [健身产品设计](docs/fitness/fitness-product.md)
-- [训练主持循环](docs/fitness/coach-loop.md)
-- [训练状态机](docs/fitness/state-machine.md)
-- [AI 边界](docs/fitness/ai-boundary.md)
-- [训练运行界面设计](docs/fitness/training-runtime-ui.md)
-- [大模型介入接口复查](docs/fitness/llm-integration-review.md)
-- [初始用户档案](docs/fitness/user-profile.md)
-- [2024 旧训练记录整理](docs/fitness/recovered-2024-log.md)
-
-Schema：
-
-- [统一 Entry schema](schemas/entry.schema.json)
-- [领域 payload schema](schemas/domain-payloads.schema.json)
-- [schema 示例](schemas/examples.md)
-
-## 当前非目标
-
-- 不做姿态识别或自动计数。
-- 不做 3D 形象。
-- 不做语音交互。
-- 不运行本地大模型。
-- 不做全自动记账导入。
-- 不做医疗诊断或自动用药决策。
-
-## 路线图
-
-近期重点：
-
-1. 选择真实大模型 provider，并完成 plan draft / feedback / adjustment / summary 接入。
-2. 设计计划讨论流程，让 AI 能在训练前和用户确认器材、目标和限制。
-3. 完善用户档案、动作库和历史表现摘要。
-4. 打磨 iPad 体验，逐步向 PWA 或原生 iPad App 过渡。
-5. 后续再设计 ASR/TTS、传感器和姿态识别。
-
-## 开源协议
-
-fox 使用 [MIT License](LICENSE) 开源。
-
-本项目仍是早期原型，健身和医疗相关内容只用于个人记录与辅助提醒，不构成专业建议。
+项目代码使用 [MIT License](LICENSE)。私人媒体、个人档案、设备回执与未获再分发授权的第三方原稿不属于公开仓库内容。

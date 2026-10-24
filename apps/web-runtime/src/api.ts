@@ -37,6 +37,11 @@ interface EntryResponse {
   entry: EntryRecord;
 }
 
+interface EntryFilters {
+  kind?: "meal" | "medical" | "workout" | "expense" | "note";
+  source?: "workout_session" | "voice_draft";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
@@ -113,8 +118,16 @@ export const foxApi = {
     return payload.userProfile;
   },
 
-  async listEntries(): Promise<EntryRecord[]> {
-    const payload = await request<EntriesResponse>("/entries");
+  async listEntries(filters: EntryFilters = {}): Promise<EntryRecord[]> {
+    const params = new URLSearchParams();
+    if (filters.kind) {
+      params.set("kind", filters.kind);
+    }
+    if (filters.source) {
+      params.set("source", filters.source);
+    }
+    const query = params.toString();
+    const payload = await request<EntriesResponse>(`/entries${query ? `?${query}` : ""}`);
     return payload.entries;
   },
 

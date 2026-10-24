@@ -1,0 +1,2270 @@
+{
+  "schema": "fox.test_catalogue.v1",
+  "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
+  "tests": [
+    {
+      "id": "FoxTrainingCoreTests/GuidanceReplayTests/testExistingVideoCachesGuidanceCausalAndMotionFactsUnchanged",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceReplayTests.swift",
+      "scope": "private",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testReadyQuestionAndRestExpiryAreOncePerContextAndDoNotRequireASR",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testTempoExtractedWithoutChangingExistingValidAnimation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testCountsOnlyNewCommittedFactsAndDoesNotReannounceRestoredHistory",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testShortGapAbstainsThenFreshStableRecoveryDoesNotRepeatReturnInstruction",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testOldFutureOrOutOfOrderMotionCannotDriveGuidance",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testLatPulldownUsesReturnNotLiteralLowerOrSyntheticEccentricDuration",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testObservedReturnCopyIsShortAndDoesNotClaimSpeedOrTechniqueQuality",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testObservedModeNeverFallsBackToPlannedTempoAndOffStaysSilent",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testPrefixCausalityAndRepeatDeterminism",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testQueueBoundedDeduplicatedAndCancelsStalePhaseOrWrongAttempt",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testCancelledPhaseIsNotValidJustBecauseItsDeadlineHasNotExpired",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testCountCancelsOnPauseButStartDeadlineDoesNotCutAnAlreadyStartedCount",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testTrialDraftIsEditableUndatedAndNeverCopiesVideoWeights",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testLongLossAndRecoveryAreNotRepeatedEveryFrame",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/GuidanceTests/testReturnSummaryNeverUsesLegacyLowerSecondsOrTerminalPulldownRelaxation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testPeakCountsImmediatelyAndTerminalReturnIsNotPublished",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testNextPeakPublishesOnlyPreviousReturnAndAppendOnlyFacts",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testShortWristGapKeepsCountButDoesNotInventReturnDuration",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testLongGapRequiresNewStartWithoutDeletingExistingPeak",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testNoCountForInitialPeakPartialOrdinaryCurlOrTranslation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testWristNotRequiredToPrepareButRequiredForCounting",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testPeakSettlingIsNotEccentricAndLaterReversalIsStillRejected",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testPersistenceRejectsFabricatedDurationsAndPreservesWorkoutFacts",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testDuplicateFramesAndMissingPeakCannotCount",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testSmallSettlingReversalDoesNotIncludeHeldPeakInReturn",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LatPulldownTests/testOldRuntimeToleranceDoesNotValidateAgainstUnusedPulldownGate",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LatPulldownTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testShoulderAngleUsesTorsoNotImageVerticalAndPixelAspect",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testFullCycleBothSelectedArmsAndPhaseDurations",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testStaticHalfRangeJitterInstantJumpAndStartingAtTopDoNotCount",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testMissingHipAndDegenerateTorsoRejectButWristIsOptional",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testInterruptedCycleNeverCompletesAcrossOcclusionGapOrPause",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testNoAutomaticArmSwitchAndDuplicateTimeIgnored",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testContextUsesSelectedExerciseQuality",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testWristCurlWithoutUpperArmRaiseIsNotLateralRepetition",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testOverlongCycleExpiresAndFreshCycleCanCount",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testFixtureLikeCycleKeepsTimingMarginUnderFrameJitter",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testWristFlickerDoesNotBlockShoulderAngleCount",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralRaiseTests/testShortHipFlickerKeepsCycleButDoesNotInventMissingTorso",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralRaiseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralTorsoReferenceTests/testFreshOppositeTorsoCountsBothSidesAndNumericReplayIsExact",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralTorsoReferenceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralTorsoReferenceTests/testLegacyPolicyKeepsMissingHipSemanticsAndAlgorithm",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralTorsoReferenceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralTorsoReferenceTests/testNoFreshReferenceMissingArmOtherSubjectOrDegenerateTorsoCannotBeRescued",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralTorsoReferenceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralTorsoReferenceTests/testFallbackStillNeedsFullCycleAndObservedPeak",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralTorsoReferenceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/LateralTorsoReferenceTests/testFreshSameSideHipIsPreferredAndDoesNotMarkFallback",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LateralTorsoReferenceTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/MotionStrategyTests/testThreeStrategiesDescribeCurrentImplementationWithoutDuplicatedThresholds",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/MotionStrategyTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/MotionStrategyTests/testUnknownVersionAndContradictorySemanticsAreRejected",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/MotionStrategyTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/MotionStrategyTests/testPreparationContractMatchesActualGateWithoutWristOrFullBody",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/MotionStrategyTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/MotionStrategyTests/testLegacyActionsDoNotCommitAtPeakAndKeepPhaseEvidenceAfterReturn",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/MotionStrategyTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseAttemptTests/testAcceptedCycleAndTempoDeviationAreNotConflated",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseAttemptTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseAttemptTests/testVisibleShortRangeIsBelowMinimumButRestIsNotAnAttempt",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseAttemptTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseAttemptTests/testUnobservedPeakIsUnobservableNotBadFormAndNeverCounted",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseAttemptTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseEccentricTests/testCurrentReturnSignalDoesNotBackdateDetectionOrPublishFinishedDuration",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseEccentricTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseEccentricTests/testPlateauIsNotDescentAndDifferentRatesAgree",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseEccentricTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseEccentricTests/testNoiseGapReversalAndClockCannotManufactureTempo",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseEccentricTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseEccentricVideoTests/testPrivateLiveVideoLabelsAndGapAbstention",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseEccentricVideoTests.swift",
+      "scope": "private",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseEccentricVideoTests/testPrivateA03BothArmsAgainstVideoIntervals",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseEccentricVideoTests.swift",
+      "scope": "private",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseLiveR2Tests/testFirstCycleAtObservedPartialExtension",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseLiveR2Tests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseLiveR2Tests/testSyntheticReportWireAndPhaseStayIndependentOfCounts",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseLiveR2Tests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseLiveR2Tests/testWristOnlyGapAfterObservedPeakCanRecover",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseLiveR2Tests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseLiveR2Tests/testExtendedGapNeverBridgesUnsafeCases",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseLiveR2Tests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseLiveR2Tests/testPrivateLiveReportsCandidateAndFrozenReplay",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseLiveR2Tests.swift",
+      "scope": "private",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseLiveR2Tests/testInvalidNewPolicyAndUnavailablePhaseCannotMasqueradeAsMeasured",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseLiveR2Tests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testShortFlickerKeepsPhaseButNeverAdvancesOnMissingPoints",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testDropoutExpiryMultiplePeopleAndPauseNeverBridgeCycle",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testTrackingConfidenceHysteresisDoesNotPermitWeakAcquisition",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testSingleAngleSpikeIsQuarantinedInsteadOfResetting",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testUnobservedPeakAndStaticJitterCannotInventRepetition",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testGraceIsTimeBasedAtDifferentFrameRates",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testShortGapHidingEntirePeakDoesNotCreateAnUnobservedTop",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testExactReplayConfigurationSnapshotAndInterruptEvents",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testTraceIsBoundedAndOnlyContainsSelectedJoints",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testInvalidConfigurationAndWriteFailurePreservePrevious",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testGapCannotSatisfyMinimumMovementTime",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testCustomProfileActuallyControlsGatesAndReportKeepsSnapshot",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testLegacyPolicyIsFrozenIndependentlyOfEditableDefaults",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testRestorationAfterGraceDeadlineNeedsFreshAcquisition",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testNumericTraceAtDeviceUptimeReplaysExactlyAndBadTraceIsRejected",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseReliabilityTests/testUnreadableSettingsArePreservedWhenExplicitlyReplaced",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseReliabilityTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testSubjectBindingIgnoresBackgroundAndObservationOrder",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testAmbiguousSubjectsAreNotChosenByLargestOrOrder",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testNewAcquisitionIsExplicitAndArchivedPoliciesKeepOldBehavior",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testLeavingNeverHandsSessionToBystanderAndExplicitRebindWorks",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testStartDoesNotRequireWristHipOrOppositeArm",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testBriefCountdownLossPreservesDeadlineButCannotStartOnMissingFrame",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testObserved149DegreeBottomCountsOnlyInV3AndReplaysExactly",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testLongerOcclusionOnlyAtConfirmedBottomNeverCreatesMotion",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testInvalidTimestampDoesNotReusePreviousObservationIndex",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testReturningEndpointCanBeLowerThanAcquisitionOnlyAfterObservedPeak",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testValidLegacyCustomProfileMigratesWithoutPreconditionCrashOrOverwritingAngles",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseSessionTests/testV3NeverCountsStaticTopHalfRangeOrSinglePeakSpike",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseSessionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseStartGateTests/testCanArmWithoutPersonAndWaitIndefinitely",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseStartGateTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseStartGateTests/testStablePoseThenThreeTwoOneBeforeReady",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseStartGateTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseStartGateTests/testLostPoseRestartsFullCountdownRatherThanFinishingOldDeadline",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseStartGateTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseStartGateTests/testMissingFramesAndDiscontinuityResetPreparation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseStartGateTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseStartGateTests/testCancelAndRearmRequireNewCountdown",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseStartGateTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseStartGateTests/testDuplicateBackwardAndNonfiniteTimesCannotAdvanceDeadline",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseStartGateTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testPixelAspectCorrectedAngleAndMirroredLetterboxProjection",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testOneCompleteCycleAndMeasuredPhaseDurations",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testStaticJitterPartialAndInstantJumpDoNotCount",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testVisibilityAndMultiplePeopleAreNotAChosenLargestPerson",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testOcclusionInvalidatesPartialCycleAndRequiresNewExtension",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testDroppedFramesAndTargetJumpInvalidateCycle",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testSelectedArmIsNeverAutomaticallySwitched",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseTests/testDuplicateAndBackwardTimestampsDoNotAdvanceCount",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseVideoReplayTests/testEqualTotalDoesNotHideMergedMissedOrExtraEvents",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseVideoReplayTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseVideoReplayTests/testMissingPeaksAndInvalidOrOverlappingIntervals",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseVideoReplayTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseVideoReplayTests/testRawCacheRejectsDuplicateOrInvalidJointsBeforeDictionaryCreation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseVideoReplayTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/PoseVideoReplayTests/testFullSceneSelectionMetadataSurvivesReplayAndInvalidIndexRejected",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/PoseVideoReplayTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testFullLoopPersistsConfirmedRecordWithoutAService",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testPausedTimeAndFeedbackTimeAreNotExerciseTime",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testRestartRecoversOnlyObservedActiveTimeAndRequiresResume",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testWeightCarriesAcrossEqualTargetsButNewMovementUsesItsTarget",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testSkipEarlyEndAndPainKeepHonestRecords",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testWeightIsNotCarriedBetweenDifferentUnitsOrIntoBodyweight",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testInvalidTransitionsAndDuplicateConfirmationDoNotAppendRecords",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testTimedSetAndSummaryCorrectionKeepMeasuredDuration",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testWriteFailureDoesNotAdvanceInMemoryState",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testCorruptFileIsNotOverwrittenAndUnknownVersionIsRejected",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrainingTests/testPlanImportMatchesExistingWorkoutPlanJSONAndRejectsInvalidTargets",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrainingTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrialConfirmationTests/testPrefillIsNotAnActualWeightUntilExplicitConfirmation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrialConfirmationTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrialConfirmationTests/testConfirmationIsBoundToAttemptAndChangingWeightInvalidatesIt",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrialConfirmationTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrialConfirmationTests/testReviewSeparatesCategoriesAndSurvivesSaveReopenWithoutChangingPlan",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrialConfirmationTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrialConfirmationTests/testFailedWriteKeepsFeedbackAndDoesNotClaimConfirmation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrialConfirmationTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrialConfirmationTests/testSegmentSummaryDoesNotLinkReturnsAcrossRepositioning",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrialConfirmationTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/TrialConfirmationTests/testLegacyRecordsStillDecodeAndNewConfirmationCannotDisagreeWithActualWeight",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/TrialConfirmationTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionCaptureContextTests/testScreenAngleAndCameraElevationConventions",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionCaptureContextTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionCaptureContextTests/testInvalidGravityIsMissingRatherThanZeroDegrees",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionCaptureContextTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionCaptureContextTests/testImageScaleExcludesFaceAndIsNotMetricDistance",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionCaptureContextTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionCaptureContextTests/testAbsentAmbiguousAndLowConfidencePeopleDoNotReuseScale",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionCaptureContextTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionCaptureContextTests/testRecorderIsThrottledBoundedAndKeepsMissingObservations",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionCaptureContextTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionCaptureContextTests/testContextRoundTripAndOldReportsRemainCompatible",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionCaptureContextTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionCaptureContextTests/testInvalidMetadataAndFixtureCannotBecomeRealEvidence",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionCaptureContextTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionTrialTests/testCorrectionPreservesOriginalCountAndFixtureProvenance",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionTrialTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionTrialTests/testReportReloadAndDuplicateSaveProtection",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionTrialTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionTrialTests/testInvalidMetricsAndCountsRejected",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionTrialTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionTrialTests/testWriteFailureAndCorruptReadPreserveEvidence",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionTrialTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionTrialTests/testExerciseAlgorithmBindingAndLegacyCurlCompatibility",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionTrialTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/VisionTrialTests/testMixedExerciseArchiveReloadKeepsSeparateIdentityAndCounts",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionTrialTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testPreparationHasStableBindingAndDoesNotStartTrainingTime",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testVisualSnapshotCorrectionAndNextSetStaySeparate",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testPauseCreatesNewObservationAndPreservesCompletedCountsWithoutJoiningHalfCycles",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testCannotRewriteObservedRepsOrChangeFrozenConfigurationOnResume",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testManualFallbackKeepsVisualEvidenceAndRequiresActualReps",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testIndependentRhythmFactsNeverInventScoreOrEvaluateGapsAsBadForm",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testPersistenceRestoresObservedCountsButInvalidatesOldCameraEpoch",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testConfirmedRecordReloadAndSummaryCorrectionRetainOriginalObservation",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testWriteFailureKeepsCurrentObservationAndStageForRetry",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testLegacyArchiveDoesNotAcquireVisualDataOrPerSideAssumptions",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testInvalidDateAndUnsupportedViewCannotBecomeVisualPlan",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testMalformedSnapshotAndCrossSessionBindingCannotEnterArchive",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testCountingSourceAndNonzeroUnassessedScoreCannotBeForgedInArchive",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testCancelAndRestartDuringPreparationNeverStartClockOrAllowLateCountdown",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testMissingAttemptEvidenceOrImpossibleCompletionTimeIsRejected",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testNormalStopIsNotMistakenForIncompleteCoverageButTrackingLossIs",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testBundledDay1DraftIsEditableScheduledAndDoesNotPrescribeVideoWeights",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testWorkoutContextIsFrozenWithTheGroupAndCannotLoseItsObservedPrefix",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testDiagnosticTruncationAndUnknownOtherSideDoNotBecomeSuccessfulCompleteSet",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxTrainingCoreTests/WorkoutVisionTests/testFractionalCheckpointSurvivesReloadWithoutInvalidatingObservedCycle",
+      "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testTextOnlyRecordSurvivesReopenWithoutInventedOccurrenceOrDomain",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testPhotoOnlyCapturePreservesBytesAndDigest",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testRecordedTimeAndApproximateIntervalStayDistinct",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testInvalidAndOversizedInputsDoNotCreateRecords",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testStableCaptureIDRetryDoesNotDuplicateOrUndoLaterEdit",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testEditRetainsOriginalAndPhotoHistoryButRejectsStaleWrites",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testLiteralSearchLabelsTimeRangesAndPagination",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testDeleteRemovesAllRevisionsAndPhotosWithoutTouchingOtherRecords",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testDeletionFailureIsReportedAndReopenRetriesPhysicalCleanup",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testFailedPhotoAndMetadataWritesNeverLeaveHalfARecord",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testBackupRestoresTextPhotosHistoryAndIsIdempotent",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testRestoreConflictDoesNotOverwriteOrPartiallyImport",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testMissingTamperedOrTraversingBackupCannotEnterStorage",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testRestoreWriteFailureRollsBackAllRowsAndPhotos",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testExistingBackupAndFailedExportAreNeverPublishedOverPreviousData",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testSymlinkedPhotoAndBackupRootAreRejected",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testCorruptDatabaseAndFutureVersionAreNotReset",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testTwoConnectionsRespectRevisionCompareAndSwap",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testBackupLimitDoesNotPreventReadingOrDeletingStoredHistory",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testUnknownBackupFieldsAreRejectedInsteadOfSilentlyDiscarded",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testEmbeddedNulAndUnicodeTextRoundTripWithoutTruncation",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testExternalProvenanceAndInvalidSourcesAreExplicit",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testFailedRevisionAndDeletionLeaveExistingRecordUntouched",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testUnrelatedDatabaseIsNotAdoptedAsJournal",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testPortableFixtureCanBeValidatedOutsideSwift",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testSmallerNewInputLimitsDoNotHideOrEraseExistingRecords",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testParallelConnectionsAndRecoveryPreserveAllCommittedPhotos",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testSharedBackupAttachmentRemainsUntilItsLastRecordIsDeleted",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxJournalCoreTests/JournalTests/testActualProcessTerminationBeforeCommitRecoversWithoutPartialRecord",
+      "file": "apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests/JournalTests.swift",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxAppTests/DeviceIntegrationTests/testPhysicalCameraRecordingSpeechAndOverlayInSixControlledRounds",
+      "file": "apps/ipad/FoxAppTests/DeviceIntegrationTests.swift",
+      "scope": "physical",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceIntegrationTests/testHeadphoneRemovalMutesUntilExplicitReenable",
+      "file": "apps/ipad/FoxAppTests/GuidanceIntegrationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceIntegrationTests/testStandaloneGuidanceReadsActualControllerWithoutTakingItsCallbacks",
+      "file": "apps/ipad/FoxAppTests/GuidanceIntegrationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceIntegrationTests/testOverlaySizingStaysInsideTheFullAspectImage",
+      "file": "apps/ipad/FoxAppTests/GuidanceIntegrationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceOutputTests/testCountsAreSpokenOnceAndPauseCancelsWithoutChangingInputFacts",
+      "file": "apps/ipad/FoxAppTests/GuidanceOutputTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceOutputTests/testMissingObservationCancelsPhaseEvenWithoutNewCameraFrames",
+      "file": "apps/ipad/FoxAppTests/GuidanceOutputTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceOutputTests/testMuteAndContextChangeNeverReplayQueuedCounts",
+      "file": "apps/ipad/FoxAppTests/GuidanceOutputTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceOutputTests/testLateStartIsCancelledAndDriverFailureDoesNotDisablePresentation",
+      "file": "apps/ipad/FoxAppTests/GuidanceOutputTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceOutputTests/testInterruptPurgesOutputAndDoesNotAutomaticallyResumeOldSpeech",
+      "file": "apps/ipad/FoxAppTests/GuidanceOutputTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceOutputTests/testSystemInterruptionConsumesNewFactsSilentlyWithoutUnmutingUserPreference",
+      "file": "apps/ipad/FoxAppTests/GuidanceOutputTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceSafetyTests/testCountdownCannotSpeakOldNumberAfterNextNumberIsVisible",
+      "file": "apps/ipad/FoxAppTests/GuidanceSafetyTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceSafetyTests/testDeliveryCarriesPolicyVersionAndOldEventsStillDecode",
+      "file": "apps/ipad/FoxAppTests/GuidanceSafetyTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceSafetyTests/testLastSetEncouragementUsesConfirmedRestProgressOnly",
+      "file": "apps/ipad/FoxAppTests/GuidanceSafetyTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/GuidanceTrainingFlowTests/testThreeActionsWithGuidanceConfirmPersistAndReopenWithoutChangingMotionFacts",
+      "file": "apps/ipad/FoxAppTests/GuidanceTrainingFlowTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/HomeTrainingTests/testMissingDoesNotCreateArchiveOrDefaultPlan",
+      "file": "apps/ipad/FoxAppTests/HomeTrainingTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/HomeTrainingTests/testCorruptArchiveIsNotRepairedOrOverwritten",
+      "file": "apps/ipad/FoxAppTests/HomeTrainingTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/HomeTrainingTests/testReadingActiveSessionDoesNotRecoverOrPersistIt",
+      "file": "apps/ipad/FoxAppTests/HomeTrainingTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/HomeTrainingTests/testConfirmedHistoryUsesRealStatusAndDateOrder",
+      "file": "apps/ipad/FoxAppTests/HomeTrainingTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/HomeTrainingTests/testDesignVisionStorageUsesInjectedDirectory",
+      "file": "apps/ipad/FoxAppTests/HomeTrainingTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/HomeTrainingTests/testLoadingDistinguishesPendingEmptyAndUnreadableWithoutWriting",
+      "file": "apps/ipad/FoxAppTests/HomeTrainingTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testPhotoOnlyAndTextPhotoSurviveReopenWithExactBytes",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testFailedSaveRetainsNoteAndRetryDoesNotDuplicate",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testConcurrentSaveRequestsCreateOneRecord",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testImageLoadCancelFailureAndInvalidBytesKeepExistingPhoto",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testRevisionPreservesOriginalAndRejectsStaleEdit",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testBackupRoundTripAndDuplicateRestorePreserveHistoryAndPhotos",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testBrokenBackupAndConflictNeverOverwriteExistingRecordsOrDraft",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testDeleteChecksRevisionAndRemovesOnlySelectedRecord",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testCancelledBackupOnlyRemovesTemporaryExportAndKeepsDraft",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testPaginationCanReadBeyondOneThousandWithoutDuplicates",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testPhotoRemovalKeepsHistoryButRejectsAnEmptyRecord",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testJPEGOrientationOnlyTransformsThumbnailNotOriginalBytes",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testExportFailureAndUnsafeCleanupDoNotDeleteDataOrDraft",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalApplicationTests/testUnreadableLegacyPhotoStillAllowsTextAndBackup",
+      "file": "apps/ipad/FoxAppTests/JournalApplicationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalDisplayTests/testLargeDisplayDecodeIsBoundedAndOriginalIsUnchanged",
+      "file": "apps/ipad/FoxAppTests/JournalDisplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/JournalDisplayTests/testNativePhotoZoomFitsThenClampsAndRefitsAfterResize",
+      "file": "apps/ipad/FoxAppTests/JournalDisplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/NativeSpeechTests/testProductionSessionNotificationsDoNotCancelItsOwnSpeech",
+      "file": "apps/ipad/FoxAppTests/NativeSpeechTests.swift",
+      "scope": "real-speech",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/NativeSpeechTests/testExistingCachesAtRealSpeedThroughProductionSpeechScheduler",
+      "file": "apps/ipad/FoxAppTests/NativeSpeechTests.swift",
+      "scope": "real-speech",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/NativeSpeechTests/testRealChineseSpeechStartsWithinBudgetAndFinishesWithoutMicrophone",
+      "file": "apps/ipad/FoxAppTests/NativeSpeechTests.swift",
+      "scope": "real-speech",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/PhoneCameraLayoutTests/testVisionPageRetainsPreviewAcrossSizeClassChanges",
+      "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/PhoneCameraLayoutTests/testWorkoutRetainsPreviewAcrossSizeClassChanges",
+      "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/PhoneCameraLayoutTests/testRepeatedFrameLayoutsReportOrientationOnlyWhenItChanges",
+      "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/PhoneCameraLayoutTests/testSettingsCameraSelectionDoesNotRestartHiddenPreview",
+      "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/PhoneCameraLayoutTests/testPhoneRegionsKeepCameraAndActionsSeparateInBothOrientations",
+      "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/PhoneCameraLayoutTests/testPreviewKeepsAspectFitAndFixtureRequiresBothTestingAndFixtureSource",
+      "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/PhoneCameraLayoutTests/testAllImageCornersStayInPortraitAndLandscapeContainersWithMatchingProjection",
+      "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticFixturePTSDoesNotConvertHostDelayIntoMotionLoss",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "surface": "ipad",
+      "scope": "public",
+      "reason": "Synthetic capture time is independent of delayed host delivery; real arrival freshness remains intact"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticDeliveryCatchesUpKnownSamplesWithoutChangingMotionFacts",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticControlBoundariesCannotConsumePreStartOrCancelledBacklog",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSyntheticDeliveryBoundsBacklogWithoutInventingFutureSamples",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testRealCaptureGapsStillDiscardIncompleteMotionCycles",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "surface": "ipad",
+      "scope": "public",
+      "reason": "Actual capture gaps still invalidate incomplete cycles and cannot fabricate phase durations"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testPreparationReacquiresAfterWalkingBackWithoutAnotherTap",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testRebindIntentSurvivesSecondPreparationLossAndKeepsEccentricEvidence",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testPreparationCancellationAndCameraInterruptionRevokeIntent",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testAmbiguityDuringCountdownRequiresFreshFullCountdown",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testFormalPreparationInterruptionCannotAutoRestartOnCameraReturn",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testBothExercisesAndSidesThroughRealCallbacks",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testSingleUsablePersonOutsideOldAcquisitionBoxCanStart",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testFreshFrameRequiredAtCountdownEndAndAmbiguityDoesNotStart",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testWatchdogAndOldCaptureCallbackCannotResumeOrCount",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testFormalWorkoutPersistsCountsThroughProductionCoordinator",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testShortFlickerDoesNotEraseCycleButMissingPeakCannotInventOne",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testLongSubjectLossRebindRetainsCountsWithoutBridgingHalfCycle",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testFormalRebindCreatesNewSegmentAndManualFallbackKeepsAutomaticEvidence",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testDuplicateAndReorderedFramesDoNotRefreshWatchdogOrPreview",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testBriefLossDuringShortLiftRemainsInsufficientRatherThanInventingDuration",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testFlickerDuringSufficientlyObservedLiftAndLowerAcrossBothSides",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testMissingJointsAtLoweredEndpointAndNoFramesHaveDifferentRecovery",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testImagePlaneTransformsDoNotBecomeDevicePitchGate",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testDeliveryLatencyDoesNotChangeCapturePhaseDurations",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testLiveSettingsUpgradeDoesNotRewriteArchivedPolicyOrCustomValues",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testPrivateLiveCurlPackagesThroughActualController",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "private",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testPrivateM4CacheThroughActualControllerMatchesCorePerFrame",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "private",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testPostReviewAnnotationIsBoundToPackageAndOriginalEvidenceIsUnchanged",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testZeroFramesFailureIsSealedWithoutCreatingTrainingRecord",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testEncodedVideoUsesCapturePTSOriginAndHasNoAudio",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testGeometryChangeDoesNotMixFormatsAndStillSealsFirstClip",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testDurationLimitAndBackgroundRemainSeparateFromWorkoutCompletion",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testRestartRecoveryDoesNotRecoverAnotherActiveRecorder",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testDuplicateIDAndUnsafeDeletePreserveFiles",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testDiagnosticSelectionLockPublishesWithoutCameraFrames",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testNoRetainedMediaBeforeAnAttemptAndFailureDoesNotChangeConfiguration",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testLeavingOwnerStillFinishesAndDeliversSealedFailure",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testReviewRetainMovesDraftAndDiscardNeverCreatesRetainedPackage",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testCorruptDraftCannotBeRetainedAndOriginalIsPreserved",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testTemporaryExpiryNeverDeletesRetainedPackages",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testCacheUsesRealControllerForBothActionsAndSidesWithoutVideo",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testCompletedRunIsImmutableAndInputsAreUnchanged",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testObservationOnlyModeDoesNotStartControllerOrWriteTraining",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testObservationModeRejectsCounterCasesDiagnosticAndUnknownMode",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testObservationModeCancelledBeforePublishingCannotComplete",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testDeviceTransferredReadOnlyInboxDoesNotOwnOutputDirectory",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testBadDigestUnsafePathUnknownSchemaAndEmptySegmentAreRejected",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testCancelledOrBackgroundedRunCannotProduceSuccess",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testNonmonotonicCacheAndUnsupportedHeaderCannotComplete",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testPrivateM4CacheBatchPreservesFourControllerCountsAndMeasuredPhases",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "private",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionReplayBatchTests/testPrivatePulldownFullControllerSixPeaksAndNoTerminalDuration",
+      "file": "apps/ipad/FoxAppTests/VisionReplayBatchTests.swift",
+      "scope": "private",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testColumnAffinitySurvivesComposerGrowth",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testHomeScenarios",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testHomeSmokeScenarios",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testTrainingProjectionScenarios",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testTrainingScenarios",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testTrainingRotatedFeedbackInput",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testReadOnlyTrainingCardCanOpenAndClose",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testRecordScenarios",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testFullPhotoCanZoomAndReturnToUnchangedRecord",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDiagnosticUITests/testFailedPreparationCanBeKeptAfterReviewAndCancelledExportPreservesIt",
+      "file": "apps/ipad/FoxUITests/FoxDiagnosticUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDiagnosticUITests/testNormalCountCanReviewThenDiscardVideoWithoutChangingTrainingReport",
+      "file": "apps/ipad/FoxUITests/FoxDiagnosticUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxHomeUITests/testHomeSavesToRealLocalRepositoryAndSurvivesRelaunch",
+      "file": "apps/ipad/FoxUITests/FoxHomeUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxHomeUITests/testFailureKeepsDraftAndRetryCreatesOnlyOneRecord",
+      "file": "apps/ipad/FoxUITests/FoxHomeUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxHomeUITests/testTrainingCanReturnHomeWithoutStartingAWorkout",
+      "file": "apps/ipad/FoxUITests/FoxHomeUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxHomeUITests/testActiveTrainingPausesWhenReturningHomeAndCanBeReopened",
+      "file": "apps/ipad/FoxUITests/FoxHomeUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testPhotoOnlySaveEditAndRelaunchKeepPhoto",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testPhotoAndTextSurviveSaveFailureThenRetry",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testDeniedCameraStillAllowsTextSave",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testInvalidPhotoDoesNotDiscardTextOrEnableBlankRecord",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testRevisionConflictRetainsUnsubmittedCorrection",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testBackupExportCancellationPreservesUnsubmittedNote",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testBackupImportCancellationPreservesUnsubmittedNote",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxJournalUITests/testDeleteRequiresConfirmationAndReturnsToEmptyHome",
+      "file": "apps/ipad/FoxUITests/FoxJournalUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxNativeUITests/testOfflineTrainingLoopAndConfirmedRecordSurviveRelaunch",
+      "file": "apps/ipad/FoxUITests/FoxNativeUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxNativeUITests/testActiveSetRecoversPausedAndCanBeEndedWithoutInventedReps",
+      "file": "apps/ipad/FoxUITests/FoxNativeUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxNativeUITests/testPlanEditorOpensAndSavesLocally",
+      "file": "apps/ipad/FoxUITests/FoxNativeUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testFramingValidationRequiresEveryCorner",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testFeedbackKeyboardAndThreeCategoriesRemainReachableAfterRotation",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testFeedbackPreparationAfterLandscapeHistory",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testLandscapeQuickSelectionsApplyAndLockWithoutOpeningSettings",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testVisionPortraitUsesCameraFirstAndAccessibleOptions",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testManualPortraitShowsAllCoreFactsWithoutScrolling",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testReadyWeightChangesPropagateAndRestTargetsStayVisible",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testVisionOptionsLockCorrectionAndSavedReportRemainUsable",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testVisualWorkoutShowsLargePreviewAndCoreFactsAfterRotation",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxPhoneLayoutUITests/testLargerTextPortraitKeepsCoreFactsAndPrimaryActions",
+      "file": "apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testGuidanceOverlayAndMuteRemainAvailableAcrossRotation",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testPulldownUpperBodyPreparationPeakCountingAndReport",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testBatchRouteStartsAndReportsMissingInput",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testFreshOppositeTorsoReferenceCountsWhenSelectedHipIsMissing",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testLostSubjectRebindPreservesCountOnIndependentVisionPage",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testPreparationSurvivesWalkingBackWithoutRebindButton",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testParametersApplyPersistResetAndLockDuringTrial",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testFlickerLateralRaiseCountsAndPersistsDiagnostics",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testFixtureCountsCorrectionAndReportSurviveRelaunch",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testCameraDeniedHasActionableStatusAndNeverStartsCounting",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testPortraitShowsPreviewCountAndPrimaryControls",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testNoPersonAllowsArmingButDoesNotInventPointsOrCounts",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testAmbiguousPeoplePreventStartButHiddenWristDoesNotBlockCountdown",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testBackgroundPeopleAndReorderedObservationsDoNotPreventTwoCounts",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testTapBeforeWalkingIntoFrameThenCountdownStartsAutomatically",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testCancelCountdownAndLeavingVisionDisarmAutomaticStart",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testBodyViewCorrectionAndCaptureContextSurviveRelaunch",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testUnavailableMotionNeverShowsInventedAngleOrBlocksCounting",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testLateralRaiseCountsSavesSeparateExerciseAndThenCurlStillWorks",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testMissingHipAllowsStartButNeverInventsLateralRaiseCounts",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxVisionUITests/testLateralRaisePortraitRightArmControlsAndReport",
+      "file": "apps/ipad/FoxUITests/FoxVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxWorkoutVisionUITests/testFourVisualSetsCorrectionAndRelaunchWithoutServer",
+      "file": "apps/ipad/FoxUITests/FoxWorkoutVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxWorkoutVisionUITests/testDeniedCameraCanSwitchToManualWithoutInventedCount",
+      "file": "apps/ipad/FoxUITests/FoxWorkoutVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxWorkoutVisionUITests/testLostSubjectCanRebindInSameSetAndKeepPreviousCount",
+      "file": "apps/ipad/FoxUITests/FoxWorkoutVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxWorkoutVisionUITests/testFailedEarlyEndKeepsCameraAndObservationForRetry",
+      "file": "apps/ipad/FoxUITests/FoxWorkoutVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxWorkoutVisionUITests/testPortraitPauseBackgroundResumePreservesFinishedCyclesAndActualSides",
+      "file": "apps/ipad/FoxUITests/FoxWorkoutVisionUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "tests/scripts/design-review.test.mjs",
+      "file": "tests/scripts/design-review.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/fox-say-linux-asr-runner.test.mjs",
+      "file": "tests/scripts/fox-say-linux-asr-runner.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/fox-say-mac-input-bridge.test.mjs",
+      "file": "tests/scripts/fox-say-mac-input-bridge.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/ios-device-selection.test.mjs",
+      "file": "tests/scripts/ios-device-selection.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/ios-launch-policy.test.mjs",
+      "file": "tests/scripts/ios-launch-policy.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/pose-device-comparison.test.mjs",
+      "file": "tests/scripts/pose-device-comparison.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/pose-experiment-report.test.mjs",
+      "file": "tests/scripts/pose-experiment-report.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/test_pose_experiment_mediapipe.py",
+      "file": "tests/scripts/test_pose_experiment_mediapipe.py",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/trial-device-metrics.test.mjs",
+      "file": "tests/scripts/trial-device-metrics.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/trial-readiness.test.mjs",
+      "file": "tests/scripts/trial-readiness.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/trial-suite.test.mjs",
+      "file": "tests/scripts/trial-suite.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/verification.test.mjs",
+      "file": "tests/scripts/verification.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-batch.test.mjs",
+      "file": "tests/scripts/vision-batch.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-corpus.test.mjs",
+      "file": "tests/scripts/vision-corpus.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-cycle-check.test.mjs",
+      "file": "tests/scripts/vision-cycle-check.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-diagnostics.test.mjs",
+      "file": "tests/scripts/vision-diagnostics.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-evidence.test.mjs",
+      "file": "tests/scripts/vision-evidence.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-observability-private.test.mjs",
+      "file": "tests/scripts/vision-observability-private.test.mjs",
+      "scope": "private",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-observability.test.mjs",
+      "file": "tests/scripts/vision-observability.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/vision-video-check.test.mjs",
+      "file": "tests/scripts/vision-video-check.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/e2e/fox-say-corpus.spec.ts",
+      "file": "tests/e2e/fox-say-corpus.spec.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/e2e/training-flow.spec.ts",
+      "file": "tests/e2e/training-flow.spec.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "packages/core/test/ai.test.ts",
+      "file": "packages/core/test/ai.test.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "packages/core/test/planning.test.ts",
+      "file": "packages/core/test/planning.test.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "packages/core/test/sensors.test.ts",
+      "file": "packages/core/test/sensors.test.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "packages/core/test/stateMachine.test.ts",
+      "file": "packages/core/test/stateMachine.test.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "apps/api/test/repository.test.ts",
+      "file": "apps/api/test/repository.test.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "apps/api/test/server.test.ts",
+      "file": "apps/api/test/server.test.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/repository-checks.test.mjs",
+      "file": "tests/scripts/repository-checks.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/native-ui-diagnostic.test.mjs",
+      "file": "tests/scripts/native-ui-diagnostic.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "tests/scripts/test_workflow_schema.py",
+      "file": "tests/scripts/test_workflow_schema.py",
+      "scope": "public",
+      "surface": "host"
+    }
+  ]
+}

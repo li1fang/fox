@@ -1,0 +1,454 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/workout-visual-evidence.schema.json",
+  "title": "Fox native per-set visual evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "binding",
+    "settings",
+    "configuration",
+    "runtimePolicy",
+    "source",
+    "algorithm",
+    "segments"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fox.workout_visual_evidence.v1"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "exerciseId",
+        "setIndex",
+        "attemptId"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "exerciseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "setIndex": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attemptId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercise",
+        "arm",
+        "bodyView"
+      ],
+      "properties": {
+        "exercise": {
+          "enum": [
+            "curl",
+            "lateralRaise",
+            "latPulldown"
+          ]
+        },
+        "arm": {
+          "enum": [
+            "left",
+            "right"
+          ]
+        },
+        "bodyView": {
+          "enum": [
+            "side",
+            "front",
+            "back"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "exercise": {
+                "const": "latPulldown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "bodyView": {
+                "const": "back"
+              }
+            }
+          },
+          "else": {
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "exercise": {
+                      "const": "curl"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "bodyView": {
+                      "const": "side"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "bodyView": {
+                      "const": "front"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "configuration": {
+      "$ref": "pose-counter-configuration.schema.json"
+    },
+    "runtimePolicy": {
+      "$ref": "pose-runtime-policy.schema.json"
+    },
+    "source": {
+      "enum": [
+        "camera",
+        "fixture"
+      ]
+    },
+    "algorithm": {
+      "enum": [
+        "curl_2d_v3",
+        "curl_2d_v4",
+        "lateral_raise_2d_v3",
+        "lateral_raise_2d_v4",
+        "lat_pulldown_2d_v1"
+      ]
+    },
+    "fallbackReason": {
+      "enum": [
+        "user_choice",
+        "camera_denied",
+        "camera_unavailable",
+        "tracking_lost",
+        "camera_interrupted",
+        null
+      ]
+    },
+    "segments": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/segment"
+      }
+    }
+  },
+  "$defs": {
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "preparedAt",
+        "repetitions",
+        "attempts",
+        "droppedAttempts",
+        "metrics"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "preparedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "startedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "endedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "interruption": {
+          "enum": [
+            "pause",
+            "restart",
+            "camera_interrupted",
+            "user_finished",
+            null
+          ]
+        },
+        "repetitions": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "vision-trial.schema.json#/properties/repetitions/items"
+          }
+        },
+        "attempts": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/attempt"
+          }
+        },
+        "droppedAttempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "metrics": {
+          "$ref": "vision-trial.schema.json#/properties/metrics"
+        },
+        "resetCounts": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "propertyNames": {
+            "$ref": "vision-trial.schema.json#/$defs/failureReason"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "captureContext": {
+          "anyOf": [
+            {
+              "$ref": "vision-trial.schema.json#/$defs/captureContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startedAtSeconds",
+        "endedAtSeconds",
+        "outcome"
+      ],
+      "properties": {
+        "startedAtSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endedAtSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outcome": {
+          "enum": [
+            "accepted",
+            "observed_below_minimum",
+            "unobservable"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "vision-trial.schema.json#/$defs/failureReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "accepted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "required": [
+              "reason"
+            ],
+            "properties": {
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "observed_below_minimum"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "enum": [
+                  "incompleteRange",
+                  "movementTooShort"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$comment": "Swift additionally validates binding against the owning session/set/record, monotonic immutable prefixes, ordered segment and repetition clocks, accepted attempts vs repetitions, total <=1000, source-consistent context, frozen algorithm/policy and recomputed independent assessments. Formal records contain no images, audio or raw joint traces. Legacy absent context/resetCounts remain absent.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "algorithm": {
+            "const": "lat_pulldown_2d_v1"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "settings": {
+            "properties": {
+              "exercise": {
+                "const": "latPulldown"
+              }
+            }
+          },
+          "segments": {
+            "items": {
+              "properties": {
+                "repetitions": {
+                  "items": {
+                    "required": [
+                      "countingBasis",
+                      "startedAtSeconds",
+                      "peakAtSeconds"
+                    ],
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "holdSeconds"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "lowerSeconds"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "loweredAtSeconds"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "eccentric"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "geometryFallbackFrames"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "settings": {
+            "properties": {
+              "exercise": {
+                "enum": [
+                  "curl",
+                  "lateralRaise"
+                ]
+              }
+            }
+          },
+          "segments": {
+            "items": {
+              "properties": {
+                "repetitions": {
+                  "items": {
+                    "required": [
+                      "holdSeconds",
+                      "lowerSeconds"
+                    ],
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "countingBasis"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "precedingReturn"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

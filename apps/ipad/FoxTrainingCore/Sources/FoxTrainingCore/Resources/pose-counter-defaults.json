@@ -1,0 +1,47 @@
+{
+  "schema": "fox.pose_counter_configuration.v1",
+  "name": "reliability-candidate-v2",
+  "tracking": {
+    "acquisitionConfidence": 0.55,
+    "trackingConfidence": 0.45,
+    "graceSeconds": 0.3,
+    "maximumFrameGapSeconds": 0.4,
+    "maximumAnchorJump": 0.22,
+    "maximumAngleJumpDegrees": 70,
+    "minimumSegmentHeightFraction": 0.025,
+    "smoothingSeconds": 0.08,
+    "endpointDwellSeconds": 0.18,
+    "minimumMovementSeconds": 0.2,
+    "maximumCycleSeconds": 20,
+    "recordsTrace": true,
+    "traceCapacity": 6000
+  },
+  "curl": {
+    "loweredAngleDegrees": 150,
+    "departureAngleDegrees": 130,
+    "peakAngleDegrees": 70,
+    "returnAngleDegrees": 90,
+    "requiresWrist": true
+  },
+  "lateralRaise": {
+    "loweredAngleDegrees": 20,
+    "departureAngleDegrees": 35,
+    "peakAngleDegrees": 75,
+    "returnAngleDegrees": 60,
+    "requiresWrist": false
+  },
+  "latPulldown": {
+    "schema": "fox.lat_pulldown_policy.v1",
+    "angles": {
+      "loweredAngleDegrees": 130,
+      "departureAngleDegrees": 115,
+      "peakAngleDegrees": 95,
+      "returnAngleDegrees": 110,
+      "requiresWrist": true
+    },
+    "acquisitionConfidence": 0.45,
+    "trackingConfidence": 0.3,
+    "minimumOverheadWrist": 0.6,
+    "maximumContractedWrist": 0.35
+  }
+}
