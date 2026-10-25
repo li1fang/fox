@@ -13,10 +13,19 @@ final class FoxAdaptiveUITests: XCTestCase {
     }
 
     private func visible(_ element: XCUIElement, in app: XCUIApplication) {
+        var observation = "not evaluated"
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            element.exists && element.isEnabled && !element.frame.isEmpty && app.windows.firstMatch.frame.contains(element.frame)
+            let exists = element.exists
+            guard exists else { observation = "missing"; return false }
+            let enabled = element.isEnabled
+            let frame = element.frame
+            let window = app.windows.firstMatch.frame
+            observation = "enabled=\(enabled), frame=\(frame), window=\(window)"
+            return enabled && !frame.isEmpty && window.contains(frame)
         }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed, element.identifier)
+        // A fresh Duo can spend several seconds on each AX snapshot. Read each
+        // property once per poll; retain full containment and real-touch assertions.
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed, "\(element.identifier): \(observation)")
     }
 
     private func tap(_ element: XCUIElement, in app: XCUIApplication) {
