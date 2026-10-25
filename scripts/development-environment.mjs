@@ -17,9 +17,11 @@ export function xcodeConfiguration(id = process.env.FOX_XCODE_PROFILE ?? 'xcode-
   if (!Object.hasOwn(profiles, id)) throw Error(`environment_failure: Unknown Xcode profile: ${id}`);
   return {id, ...profiles[id]};
 }
-const toolchain = xcodeConfiguration();
-export const simulatorRuntime = process.env.FOX_SIMULATOR_RUNTIME ?? toolchain.runtime;
-export function assertXcodeVersion(actual, profile = toolchain.id) {
+export function resolveSimulatorRuntime(profile, override = process.env.FOX_SIMULATOR_RUNTIME) {
+  const selected = xcodeConfiguration(profile);
+  return override ?? selected.runtime;
+}
+export function assertXcodeVersion(actual, profile) {
   const expected = xcodeConfiguration(profile);
   if (actual !== expected.version) throw Error(`environment_failure: expected ${expected.version}; select FOX_XCODE_PROFILE and DEVELOPER_DIR explicitly`);
 }
@@ -49,6 +51,7 @@ export function doctor({native = process.platform === 'darwin', dependencies = t
   if (dependencies && !existsSync(path.join(root, 'node_modules/.package-lock.json'))) throw Error('environment_failure: run npm run bootstrap first');
   if (native) {
     if (process.platform !== 'darwin') throw Error('environment_failure: native tier requires macOS');
+    const toolchain = xcodeConfiguration();
     result.python = capture(python, ['--version']);
     if (!/^Python 3\.12\./.test(result.python)) throw Error('environment_failure: Python 3.12 required');
     result.schemaLibraries = JSON.parse(capture(python, ['-c', 'import importlib.metadata as m,json; from jsonschema import FormatChecker; assert "date-time" in FormatChecker.checkers; print(json.dumps({n:m.version(n) for n in ["jsonschema","referencing"]}))']));
@@ -61,12 +64,12 @@ export function doctor({native = process.platform === 'darwin', dependencies = t
     result.sdk = capture('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-version']);
     result.simulators = JSON.parse(capture('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).devices;
     result.simulatorTypes = JSON.parse(capture('xcrun', ['simctl', 'list', 'devicetypes', '--json'])).devicetypes;
-    result.simulatorRuntime = simulatorRuntime;
+    result.simulatorRuntime = resolveSimulatorRuntime();
   }
   return result;
 }
 
-export function simulatorCandidates(info, runtime = info.simulatorRuntime ?? simulatorRuntime) {
+export function simulatorCandidates(info, runtime = info.simulatorRuntime ?? resolveSimulatorRuntime()) {
   const devices = info.simulators?.[runtime];
   if (!devices?.length) throw Error(`environment_failure: simulator runtime unavailable: ${runtime}; no fallback`);
   return devices.map(d => ({...d, runtime}));
@@ -126,7 +129,7 @@ export async function allocateSimulators(info, {execute = captureAsync, coordina
       const installedType = info.simulatorTypes?.find(d => d.identifier === models[key]);
       const template = overrides[key] ? candidates.find(d => d.udid === overrides[key])
         : candidates.find(d => d.deviceTypeIdentifier === models[key])
-          ?? (installedType && {deviceTypeIdentifier: installedType.identifier, runtime: info.simulatorRuntime ?? simulatorRuntime});
+          ?? (installedType && {deviceTypeIdentifier: installedType.identifier, runtime: info.simulatorRuntime ?? resolveSimulatorRuntime()});
       if (!template) throw Error(`environment_failure: missing ${family} simulator runtime or invalid override; install a compatible runtime in Xcode`);
       const name = `FoxVerification-${family}-${randomUUID()}`;
       if (!overrides[key]) {

@@ -7,7 +7,7 @@ import { selectPairedDevice } from "./ios-device-selection.mjs";
 import { iosLaunchArguments } from "./ios-launch-policy.mjs";
 import {classifyDeviceError} from './verification-contracts.mjs';
 import {allocateSimulators, releaseSimulators, isolateSimulatorStep, readSimulatorSession,
-  assertSimulatorAvailability, simulatorRuntime, simulatorCandidates} from './development-environment.mjs';
+  assertSimulatorAvailability, resolveSimulatorRuntime, simulatorCandidates} from './development-environment.mjs';
 import {execute as executeTestCommand} from './trial-suite.mjs';
 
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -451,11 +451,13 @@ async function runIpad() {
 }
 
 function testNativeCore() {
+  resolveSimulatorRuntime();
   run("xcrun", ["swift", "test", "--package-path", join(ipadDir, "FoxTrainingCore"), "--scratch-path", join(root, ".tmp", "native-core-build"),
     ...(process.env.FOX_SWIFT_TEST_FILTER ? ['--filter', process.env.FOX_SWIFT_TEST_FILTER] : [])]);
 }
 
 function buildSimulator() {
+  resolveSimulatorRuntime();
   generate();
   const derivedData = process.env.FOX_IOS_UI_DERIVED_DATA ?? join(root, '.tmp/ipad-simulator-data');
   for (const app of Object.values(ipadApps)) {
@@ -466,6 +468,7 @@ function buildSimulator() {
 }
 
 async function testNativeUI() {
+  const simulatorRuntime = resolveSimulatorRuntime();
   const cancellation = new AbortController();
   const cancel = () => cancellation.abort();
   process.on('SIGINT', cancel); process.on('SIGTERM', cancel);

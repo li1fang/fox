@@ -10,6 +10,8 @@
 
 过渡期新增明确的 `FOX_XCODE_PROFILE=xcode-27.1`，只接受 27.1 / 27A9275，默认 runtime 为 iOS 27.1。默认 profile 仍为 `xcode-26.3`，不改变既有 CI。未知 profile、错误版本/build 不回退或接受“latest”。进程同时指定独立安装的 `DEVELOPER_DIR`；换 profile 不会自动切换全局工具或安装 runtime。首次运行状态、SDK 和 runtime 的可用性仍须实际核对，版本字符串匹配不替代这些证据。
 
+profile 与 runtime 在原生预检/实际使用时解析，不在导入模块时提前失败。因此未知配置不能遮蔽正式候选的错误提交/脏工作树拒绝及零步骤失败回执；单独运行原生入口仍严格拒绝未知 profile。
+
 本地新工具链示例（不写入全局配置）：
 
 ```sh

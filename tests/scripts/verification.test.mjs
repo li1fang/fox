@@ -20,10 +20,13 @@ test('toolchain selection retains the exact legacy pin and requires an explicit 
   assert.equal(legacy.version, 'Xcode 26.3\nBuild version 17C529');
   assert.equal(modern.version, 'Xcode 27.1\nBuild version 27A9275');
   assert.equal(modern.runtime, 'com.apple.CoreSimulator.SimRuntime.iOS-27-1');
+  assert.equal(developmentEnvironment.resolveSimulatorRuntime(modern.id, null), modern.runtime);
+  assert.equal(developmentEnvironment.resolveSimulatorRuntime(modern.id, 'explicit-runtime'), 'explicit-runtime');
   assert.doesNotThrow(() => developmentEnvironment.assertXcodeVersion(modern.version, modern.id));
   assert.throws(() => developmentEnvironment.assertXcodeVersion(modern.version, legacy.id), /expected Xcode 26.3/);
   assert.throws(() => developmentEnvironment.assertXcodeVersion('Xcode 27.2\nBuild version unknown', modern.id), /expected Xcode 27.1/);
   assert.throws(() => developmentEnvironment.xcodeConfiguration('latest'), /Unknown Xcode profile/);
+  assert.throws(() => developmentEnvironment.resolveSimulatorRuntime('latest', 'explicit-runtime'), /Unknown Xcode profile/);
 });
 
 test('a fresh modern runtime can create pinned models from installed device types without persistent template devices', async () => {
@@ -201,6 +204,30 @@ test('real candidate entry rejects dirty source before inventory, toolchain or s
   assert.equal(ordinary.status, 1);
   assert.doesNotMatch(ordinary.stderr, /candidate.*dirty/i);
   assert.match(ordinary.stderr, /ENOENT/);
+});
+
+test('unknown native profile cannot preempt candidate mismatch or dirty-tree failed receipts', async t => {
+  for (const kind of ['mismatch', 'dirty']) {
+    const {cwd, git} = await candidateRepository(t);
+    await cp(new URL('../../scripts/', import.meta.url), path.join(cwd, 'scripts'), {recursive: true});
+    git('add', 'scripts');
+    git('-c', 'user.name=Fox Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false',
+      'commit', '-qm', 'synthetic scripts');
+    const commit = git('rev-parse', 'HEAD');
+    if (kind === 'dirty') await writeFile(path.join(cwd, 'source.txt'), 'preserved user edit');
+    const output = path.join(cwd, '.tmp', kind);
+    const result = spawnSync(process.execPath, ['scripts/verify.mjs', 'candidate', 'public',
+      '--commit', kind === 'mismatch' ? '0'.repeat(40) : commit, '--output', output],
+    {cwd, encoding: 'utf8', env: {...process.env, FOX_XCODE_PROFILE: 'unknown-profile',
+      FOX_PRIVATE_INPUT_MANIFEST: '/must-not-be-read'}, timeout: 10_000});
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, kind === 'dirty' ? /candidate.*dirty/i : /candidate.*commit/i);
+    const receipt = JSON.parse(await readFile(path.join(output, 'suite.json')));
+    assert.equal(receipt.status, 'failed');
+    assert.deepEqual(receipt.steps, []);
+    assert.deepEqual(receipt.environment, {simulatorIsolation: []});
+    if (kind === 'dirty') assert.equal(await readFile(path.join(cwd, 'source.txt'), 'utf8'), 'preserved user edit');
+  }
 });
 
 test('device errors remain environment conditions, not algorithm failures or permission bypass advice', () => {
