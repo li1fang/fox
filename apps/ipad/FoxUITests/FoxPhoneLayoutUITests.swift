@@ -459,9 +459,10 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         visible(app.buttons["complete-set"], in: app)
         visible(app.buttons["pause-set"], in: app)
         XCUIDevice.shared.orientation = .landscapeLeft
+        waitForOrientation(.landscapeLeft, in: app)
+        screenshot("phone-manual-landscape", app: app)
         for id in ["phone-target-reps", "phone-target-weight", "set-elapsed", "tempo-phase"] { visible(app.staticTexts[id], in: app) }
         visible(app.buttons["complete-set"], in: app)
-        screenshot("phone-manual-landscape", app: app)
         app.buttons["pause-set"].tap()
         visible(app.buttons["begin-set"], in: app)
         visible(app.buttons["complete-set"], in: app)
