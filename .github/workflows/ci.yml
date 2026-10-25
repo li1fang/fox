@@ -48,6 +48,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 90
     env:
+      FOX_XCODE_PROFILE: xcode-26.3
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       FOX_SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-4
     steps:

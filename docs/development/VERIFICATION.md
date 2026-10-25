@@ -2,13 +2,13 @@
 
 ## 干净环境
 
-使用 Node 22（`.node-version`），然后 `npm run bootstrap`。macOS 另需 Python 3.12、Xcode 26.3 / 17C529、XcodeGen 2.45.x，以及已安装的 iPhone/iPad 模拟器运行时。
+使用 Node 22（`.node-version`），然后 `npm run bootstrap`。本地 macOS 另需 Python 3.12、Xcode 27.1 / 27A9275、XcodeGen 2.45.x，以及通用 iOS 27.0 模拟器运行时。CI 的旧版兼容通道显式指定 Xcode 26.3 / 17C529 和既有 iOS 26.4；不改变触发方式，也不把云端旧版通过当成本地新版验收。
 
 初始化安装仓库锁定的 npm 依赖、Playwright Chromium 及 `.venv` 中的 schema 依赖；不安装/切换全局 Xcode、不读取签名账户、不连接物理设备。Python 可通过 `FOX_BOOTSTRAP_PYTHON` 指定 3.12 可执行文件。XcodeGen 使用 [官方 2.45.3 发布包](https://github.com/yonaskolb/XcodeGen/releases/tag/2.45.3)；安装及 SHA-256 校验步骤见 [CI 配置](../../.github/workflows/ci.yml)。可解压到本地工具目录并将 `xcodegen/bin` 加到当前进程 PATH，不需全局安装。不要使用会浮动升级的 Homebrew 最新版本；不匹配时检查应停止。Linux 首次运行浏览器可能还需 `npx playwright install --with-deps chromium` 安装系统库。
 
 `npm run doctor` 输出实际 Node、npm、Python、Swift、Xcode、SDK、XcodeGen 和可用模拟器版本。`DEVELOPER_DIR` 可指向对应 Xcode。模拟器构建 Fox 和 Fox Say 不需要 Apple 账号；实际设备构建另需本地 `FOX_DEVELOPMENT_TEAM`，不能把 Team ID 提交到仓库。
 
-过渡期新增明确的 `FOX_XCODE_PROFILE=xcode-27.1`，只接受 27.1 / 27A9275，默认 runtime 为 iOS 27.1。默认 profile 仍为 `xcode-26.3`，不改变既有 CI。未知 profile、错误版本/build 不回退或接受“latest”。进程同时指定独立安装的 `DEVELOPER_DIR`；换 profile 不会自动切换全局工具或安装 runtime。首次运行状态、SDK 和 runtime 的可用性仍须实际核对，版本字符串匹配不替代这些证据。
+本地默认 profile 为 `xcode-27.1`，只接受 27.1 / 27A9275，默认 runtime 为通用 iOS 27.0。实核 27.1 / 24A94425 只支持 Duo，不能创建普通 iPad/iPhone；它与通用 27.0 不是重复下载。Duo 诊断必须同时显式指定该 runtime 与机型，不冒充完整手机/平板覆盖。未知 profile、错误版本/build 不回退或接受“latest”。CI 在现有 YAML 中显式选择 `xcode-26.3`；仅固定兼容通道，不改触发。进程指定 `DEVELOPER_DIR`；换 profile 不会自动切换全局工具或安装 runtime。首次运行、SDK 和 runtime 可用性仍须实际核对。
 
 profile 与 runtime 在原生预检/实际使用时解析，不在导入模块时提前失败。因此未知配置不能遮蔽正式候选的错误提交/脏工作树拒绝及零步骤失败回执；单独运行原生入口仍严格拒绝未知 profile。
 
@@ -20,7 +20,7 @@ DEVELOPER_DIR="$HOME/Applications/FoxToolchains/Xcode_27.1.app/Contents/Develope
 npm run doctor
 ```
 
-新旧工具链隔离构建缓存时，可设置 `FOX_IOS_UI_DERIVED_DATA="$PWD/.tmp/ipad-simulator-271-data"`，模拟器双 App 构建和 UI/App-host 测试共用这个显式目录。新 runtime 若尚无固定机型的永久实例，只在已安装 device type 与指定 runtime 上创建临时实例；不为凑模板创建永久用户设备，不修改显式 UDID 错误时的拒绝规则。
+隔离构建缓存时，可设置 `FOX_IOS_UI_DERIVED_DATA="$PWD/.tmp/ipad-simulator-271-data"`，模拟器双 App 构建和 UI/App-host 测试共用这个目录。预检从 `simctl list runtimes --json` 读取可用性与 `supportedDeviceTypes`；在申请会话或创建任何设备前核对本批全部机型。安装了某机型类型不等于指定 runtime 支持它。不兼容或运行时不存在直接失败，不自动回退；兼容运行时即使没有永久模板，也可按已安装类型创建临时实例。显式错误 UDID 仍拒绝。
 
 ## 开发流程与候选验收
 

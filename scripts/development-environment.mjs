@@ -9,10 +9,10 @@ import {promisify} from 'node:util';
 export const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const developerDir = process.env.DEVELOPER_DIR ?? '/Applications/Xcode.app/Contents/Developer';
 export const python = process.env.FOX_JOURNAL_PYTHON ?? path.join(root, '.venv/bin/python');
-export function xcodeConfiguration(id = process.env.FOX_XCODE_PROFILE ?? 'xcode-26.3') {
+export function xcodeConfiguration(id = process.env.FOX_XCODE_PROFILE ?? 'xcode-27.1') {
   const profiles = {
     'xcode-26.3': {version: 'Xcode 26.3\nBuild version 17C529', runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-26-3'},
-    'xcode-27.1': {version: 'Xcode 27.1\nBuild version 27A9275', runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-27-1'}
+    'xcode-27.1': {version: 'Xcode 27.1\nBuild version 27A9275', runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-27-0'}
   };
   if (!Object.hasOwn(profiles, id)) throw Error(`environment_failure: Unknown Xcode profile: ${id}`);
   return {id, ...profiles[id]};
@@ -64,6 +64,7 @@ export function doctor({native = process.platform === 'darwin', dependencies = t
     result.sdk = capture('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-version']);
     result.simulators = JSON.parse(capture('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).devices;
     result.simulatorTypes = JSON.parse(capture('xcrun', ['simctl', 'list', 'devicetypes', '--json'])).devicetypes;
+    result.simulatorRuntimes = JSON.parse(capture('xcrun', ['simctl', 'list', 'runtimes', '--json'])).runtimes;
     result.simulatorRuntime = resolveSimulatorRuntime();
   }
   return result;
@@ -71,8 +72,11 @@ export function doctor({native = process.platform === 'darwin', dependencies = t
 
 export function simulatorCandidates(info, runtime = info.simulatorRuntime ?? resolveSimulatorRuntime()) {
   const devices = info.simulators?.[runtime];
-  if (!devices?.length) throw Error(`environment_failure: simulator runtime unavailable: ${runtime}; no fallback`);
-  return devices.map(d => ({...d, runtime}));
+  const installed = info.simulatorRuntimes?.find(r => r.identifier === runtime);
+  if (info.simulatorRuntimes ? !installed?.isAvailable : !devices?.length) {
+    throw Error(`environment_failure: simulator runtime unavailable: ${runtime}; no fallback`);
+  }
+  return (devices ?? []).map(d => ({...d, runtime}));
 }
 
 // One claim across worktrees. Never steal a stale claim: a dead parent may still have live test children.
@@ -119,18 +123,28 @@ export async function allocateSimulators(info, {execute = captureAsync, coordina
   iphone: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}, overrides = {
   ipad: process.env.FOX_TRIAL_IPAD_SIMULATOR, iphone: process.env.FOX_TRIAL_IPHONE_SIMULATOR}} = {}) {
   const available = simulatorCandidates(info);
+  // Installed device types do not imply runtime support: 27.1 is Duo-only; general iPad/phone uses 27.0.
+  // Resolve every requested family before acquiring ownership or creating a partial device batch.
+  const templates = [['ipad', 'iPad'], ['iphone', 'iPhone']].filter(([key]) => families.includes(key)).map(([key, family]) => {
+    const candidates = available.filter(d => d.deviceTypeIdentifier?.includes(`.${family}-`));
+    const installedType = info.simulatorTypes?.find(d => d.identifier === models[key]);
+    const template = overrides[key] ? candidates.find(d => d.udid === overrides[key])
+      : candidates.find(d => d.deviceTypeIdentifier === models[key])
+        ?? (installedType && {deviceTypeIdentifier: installedType.identifier, runtime: info.simulatorRuntime ?? resolveSimulatorRuntime()});
+    if (!template) throw Error(`environment_failure: missing ${family} simulator runtime or invalid override; install a compatible runtime in Xcode`);
+    if (info.simulatorRuntimes) {
+      const runtime = info.simulatorRuntimes.find(r => r.identifier === template.runtime);
+      if (!runtime?.supportedDeviceTypes?.some(d => d.identifier === template.deviceTypeIdentifier)) {
+        throw Error(`environment_failure: runtime ${template.runtime} does not support ${template.deviceTypeIdentifier}; choose a compatible runtime explicitly; no fallback`);
+      }
+    }
+    return {key, family, template};
+  });
   const lease = {devices: {}, created: [], selection: {}, creationIntents: []};
   if (coordinate) lease.session = acquireSimulatorSession(sessionPath);
   try {
     if (coordinate) await assertSimulatorAvailability(Object.values(overrides).filter(Boolean), execute);
-    for (const [key, family] of [['ipad', 'iPad'], ['iphone', 'iPhone']].filter(([key]) => families.includes(key))) {
-      const candidates = available.filter(d => d.deviceTypeIdentifier?.includes(`.${family}-`));
-      // A freshly installed runtime need not have permanent template instances. The type must still be installed.
-      const installedType = info.simulatorTypes?.find(d => d.identifier === models[key]);
-      const template = overrides[key] ? candidates.find(d => d.udid === overrides[key])
-        : candidates.find(d => d.deviceTypeIdentifier === models[key])
-          ?? (installedType && {deviceTypeIdentifier: installedType.identifier, runtime: info.simulatorRuntime ?? resolveSimulatorRuntime()});
-      if (!template) throw Error(`environment_failure: missing ${family} simulator runtime or invalid override; install a compatible runtime in Xcode`);
+    for (const {key, family, template} of templates) {
       const name = `FoxVerification-${family}-${randomUUID()}`;
       if (!overrides[key]) {
         lease.creationIntents.push({name, runtime: template.runtime, deviceType: template.deviceTypeIdentifier});

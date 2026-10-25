@@ -497,7 +497,8 @@ async function testNativeUI() {
       await assertSimulatorAvailability([deviceId]);
     } else {
       const simulatorTypes = JSON.parse(await command('xcrun', ['simctl', 'list', 'devicetypes', '--json'], 60_000, true)).devicetypes;
-      const info = {simulators: devices.devices, simulatorRuntime, simulatorTypes};
+      const simulatorRuntimes = JSON.parse(await command('xcrun', ['simctl', 'list', 'runtimes', '--json'], 60_000, true)).runtimes;
+      const info = {simulators: devices.devices, simulatorRuntime, simulatorTypes, simulatorRuntimes};
       const selected = deviceId ? simulatorCandidates(info).find(d => d.udid === deviceId) : undefined;
       if (deviceId && !selected) throw Error('Explicit simulator unavailable in pinned runtime; no fallback');
       const family = selected?.deviceTypeIdentifier.includes('.iPhone-') ? 'iphone' : 'ipad';

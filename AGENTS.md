@@ -23,7 +23,7 @@ Read [current state](docs/development/CURRENT.md) first. This file is a routing 
 
 ## Commands
 
-- Use Node 22, Python 3.12 and XcodeGen 2.45.x. The default/CI pin remains Xcode 26.3 (17C529). The explicit transition profile `FOX_XCODE_PROFILE=xcode-27.1` requires Xcode 27.1 (27A9275), defaults to iOS 27.1, and must be paired with the independent installation's `DEVELOPER_DIR`; no global selection is changed. See [transition](docs/development/TOOLCHAIN_TRANSITION.zh-CN.md) before local native work on macOS 27.
+- Use Node 22, Python 3.12 and XcodeGen 2.45.x. Local defaults require Xcode 27.1 (27A9275), profile `xcode-27.1`, and the general iOS 27.0 runtime. iOS 27.1 is Duo-only: choose its runtime and model explicitly, never as an iPad fallback. CI retains an explicit `xcode-26.3` (17C529) compatibility lane. Select `DEVELOPER_DIR` per process; no global selection is changed. See [transition](docs/development/TOOLCHAIN_TRANSITION.zh-CN.md) for installation, acceptance and removal gates.
 - `npm run bootstrap`, then `npm run doctor`. No Apple account or physical device is needed for simulator verification.
 - `npm run verify:fast` for local iteration; `npm run verify:public` for complete public software coverage.
 - Before expensive acceptance, finish known blockers, focused tests and review; freeze a clean commit. Use `npm run verify:candidate -- public --commit <full-sha>` (or `private`). A component run is not whole-product acceptance. Keep evidence in ignored output directories, not candidate source files.

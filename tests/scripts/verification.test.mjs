@@ -14,12 +14,12 @@ import * as verification from '../../scripts/verify.mjs';
 import {execute as executeSuiteCommand} from '../../scripts/trial-suite.mjs';
 import {auditInventory, auditNativeCoverage, auditReceipt, auditCommandOutput, classifyDeviceError} from '../../scripts/verification-contracts.mjs';
 
-test('toolchain selection retains the exact legacy pin and requires an explicit supported modern profile', () => {
+test('toolchain selection retains exact pins and distinguishes the general runtime from Duo-only support', () => {
   const legacy = developmentEnvironment.xcodeConfiguration('xcode-26.3');
   const modern = developmentEnvironment.xcodeConfiguration('xcode-27.1');
   assert.equal(legacy.version, 'Xcode 26.3\nBuild version 17C529');
   assert.equal(modern.version, 'Xcode 27.1\nBuild version 27A9275');
-  assert.equal(modern.runtime, 'com.apple.CoreSimulator.SimRuntime.iOS-27-1');
+  assert.equal(modern.runtime, 'com.apple.CoreSimulator.SimRuntime.iOS-27-0');
   assert.equal(developmentEnvironment.resolveSimulatorRuntime(modern.id, null), modern.runtime);
   assert.equal(developmentEnvironment.resolveSimulatorRuntime(modern.id, 'explicit-runtime'), 'explicit-runtime');
   assert.doesNotThrow(() => developmentEnvironment.assertXcodeVersion(modern.version, modern.id));
@@ -27,6 +27,61 @@ test('toolchain selection retains the exact legacy pin and requires an explicit 
   assert.throws(() => developmentEnvironment.assertXcodeVersion('Xcode 27.2\nBuild version unknown', modern.id), /expected Xcode 27.1/);
   assert.throws(() => developmentEnvironment.xcodeConfiguration('latest'), /Unknown Xcode profile/);
   assert.throws(() => developmentEnvironment.resolveSimulatorRuntime('latest', 'explicit-runtime'), /Unknown Xcode profile/);
+});
+
+test('local default selects the accepted modern profile while CI pins its legacy compatibility lane explicitly', async () => {
+  const env = {...process.env}; delete env.FOX_XCODE_PROFILE; delete env.FOX_SIMULATOR_RUNTIME;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    'import {xcodeConfiguration} from "./scripts/development-environment.mjs"; console.log(JSON.stringify(xcodeConfiguration()))'],
+  {cwd: developmentEnvironment.root, env, encoding: 'utf8'});
+  assert.equal(result.status, 0, result.stderr);
+  const profile = JSON.parse(result.stdout);
+  assert.equal(profile.id, 'xcode-27.1');
+  assert.equal(profile.runtime, 'com.apple.CoreSimulator.SimRuntime.iOS-27-0');
+  for (const file of ['ci.yml', 'native-ui-diagnostic.yml']) {
+    const text = await readFile(path.join(developmentEnvironment.root, '.github/workflows', file), 'utf8');
+    assert.match(text, /FOX_XCODE_PROFILE: xcode-26\.3/);
+    assert.match(text, /DEVELOPER_DIR: \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
+  }
+});
+
+test('Duo-only and unavailable runtime metadata reject unsupported models before claiming a session or creating anything', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fox-runtime-support-'));
+  t.after(() => rm(dir, {recursive: true, force: true}));
+  const type = 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB';
+  const info = {simulatorRuntime: 'duo-only', simulators: {'duo-only': []}, simulatorTypes: [{identifier: type}],
+    simulatorRuntimes: [{identifier: 'duo-only', isAvailable: true,
+      supportedDeviceTypes: [{identifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-Duo'}]}]};
+  const calls = [];
+  const execute = async (...args) => {calls.push(args); throw Error('must not execute');};
+  const sessionPath = path.join(dir, 'session');
+  await assert.rejects(developmentEnvironment.allocateSimulators(info,
+    {execute, sessionPath, families: ['ipad'], overrides: {}}), /runtime.*does not support.*iPad/);
+  await assert.rejects(readFile(path.join(sessionPath, 'owner.json')), /ENOENT/);
+  const phone = 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro';
+  await assert.rejects(developmentEnvironment.allocateSimulators({...info,
+    simulatorTypes: [...info.simulatorTypes, {identifier: phone}],
+    simulatorRuntimes: [{...info.simulatorRuntimes[0], supportedDeviceTypes: [{identifier: type}]}]},
+  {execute, sessionPath, overrides: {}}), /runtime.*does not support.*iPhone/);
+  await assert.rejects(readFile(path.join(sessionPath, 'owner.json')), /ENOENT/);
+  await assert.rejects(developmentEnvironment.allocateSimulators({...info,
+    simulatorRuntimes: [{...info.simulatorRuntimes[0], isAvailable: false}]},
+  {execute, sessionPath, families: ['ipad'], overrides: {}}), /runtime unavailable/);
+  await assert.rejects(developmentEnvironment.allocateSimulators({...info, simulatorRuntimes: []},
+    {execute, sessionPath, families: ['ipad'], overrides: {}}), /runtime unavailable/);
+  assert.equal(calls.length, 0);
+});
+
+test('a supported general runtime with no persistent devices can create its pinned tablet without fallback', async () => {
+  const type = 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB';
+  const info = {simulatorRuntime: 'general', simulators: {}, simulatorTypes: [{identifier: type}],
+    simulatorRuntimes: [{identifier: 'general', isAvailable: true, supportedDeviceTypes: [{identifier: type}]}]};
+  const calls = [];
+  const execute = async (command, args) => {calls.push(args); return args[1] === 'create' ? '00000000-0000-0000-0000-000000000001' : '';};
+  const lease = await developmentEnvironment.allocateSimulators(info, {execute, coordinate: false, families: ['ipad'], overrides: {}});
+  assert.equal(lease.selection.ipad.runtime, 'general');
+  assert.equal(calls[0].at(-1), 'general');
+  await developmentEnvironment.releaseSimulators(lease, execute);
 });
 
 test('a fresh modern runtime can create pinned models from installed device types without persistent template devices', async () => {
@@ -469,8 +524,12 @@ const name=path.basename(process.argv[1]), args=process.argv.slice(2);
 appendFileSync(process.env.FOX_TEST_TRACE,JSON.stringify({name,args})+'\\n');
 if(name==='xcrun' && args[1]==='list') {
  const family=process.env.FOX_TEST_FRESH_RUNTIME==='1'?'iPhone-Duo':'iPad-Pro-11-inch-M5-12GB';
- console.log(JSON.stringify(args[2]==='devicetypes'?{devicetypes:[{identifier:'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB'}]}:
- {devices:{[process.env.FOX_SIMULATOR_RUNTIME]:[{udid:'${id}',state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.'+family}]}}));
+ const tablet='com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB';
+ const output=args[2]==='devicetypes'?{devicetypes:[{identifier:tablet}]}:
+ args[2]==='runtimes'?{runtimes:[{identifier:process.env.FOX_SIMULATOR_RUNTIME,isAvailable:true,
+ supportedDeviceTypes:[{identifier:process.env.FOX_TEST_DUO_ONLY==='1'?'com.apple.CoreSimulator.SimDeviceType.iPhone-Duo':tablet}]}]}:
+ {devices:{[process.env.FOX_SIMULATOR_RUNTIME]:process.env.FOX_TEST_FRESH_RUNTIME==='1'?[]:[{udid:'${id}',state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.'+family}]}};
+ console.log(JSON.stringify(output));
 }
 if(name==='xcrun' && args[1]==='create') console.log('${id}');
 if(name==='xcodebuild') console.log('NATIVE_PARTIAL_OUTPUT');
@@ -498,15 +557,28 @@ test('real UI child entry accepts the parent lease without path-format rejection
   developmentEnvironment.releaseSimulatorSession(session);
 });
 
-test('direct modern UI entry creates its pinned tablet even when only a Duo template exists', async t => {
+test('direct modern UI entry creates its pinned tablet in an empty compatible general runtime', async t => {
   const fixture = await fakeNativeCommands(t);
   const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
-    env: {...fixture.env, FOX_XCODE_PROFILE: 'xcode-27.1', FOX_SIMULATOR_RUNTIME: 'com.apple.CoreSimulator.SimRuntime.iOS-27-1',
+    env: {...fixture.env, FOX_XCODE_PROFILE: 'xcode-27.1', FOX_SIMULATOR_RUNTIME: 'com.apple.CoreSimulator.SimRuntime.iOS-27-0',
       FOX_TEST_FRESH_RUNTIME: '1'}, encoding: 'utf8', timeout: 10_000});
   assert.equal(result.status, 0, result.stderr);
   const calls = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
   assert.ok(calls.some(x => x.args[1] === 'create' && x.args.includes('com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB')
-    && x.args.at(-1) === 'com.apple.CoreSimulator.SimRuntime.iOS-27-1'));
+    && x.args.at(-1) === 'com.apple.CoreSimulator.SimRuntime.iOS-27-0'));
+});
+
+test('direct UI entry rejects a Duo-only runtime without a creation intent or stale claim', async t => {
+  const fixture = await fakeNativeCommands(t);
+  const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_XCODE_PROFILE: 'xcode-27.1', FOX_SIMULATOR_RUNTIME: 'com.apple.CoreSimulator.SimRuntime.iOS-27-1',
+      FOX_TEST_FRESH_RUNTIME: '1', FOX_TEST_DUO_ONLY: '1'}, encoding: 'utf8', timeout: 10_000});
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /runtime.*does not support.*iPad/);
+  const calls = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.ok(calls.some(x => x.args[2] === 'runtimes'));
+  assert.ok(!calls.some(x => ['create', 'delete'].includes(x.args[1]) || x.name === 'xcodebuild'));
+  await assert.rejects(readFile(path.join(fixture.dir, '.cache/fox/simulator-session/owner.json')), /ENOENT/);
 });
 
 test('simulator builds share the explicit isolated derived-data path with UI verification', async t => {

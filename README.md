@@ -25,7 +25,7 @@
 
 ## 开发起步
 
-Node 22；原生验证另需 macOS、Python 3.12、Xcode 26.3 / 17C529、XcodeGen 2.45.x 和 iOS 模拟器。
+Node 22；本地原生验证另需 macOS、Python 3.12、Xcode 27.1 / 27A9275、XcodeGen 2.45.x 和通用 iOS 27.0 模拟器。Duo 专用 iOS 27.1 不能替代通用运行时；CI 保留显式旧版兼容通道，详见[验证说明](docs/development/VERIFICATION.md)。
 
 ```sh
 npm run bootstrap
