@@ -14,9 +14,9 @@ struct FoxApp: App {
             #if DEBUG
             if let raw = ProcessInfo.processInfo.environment["FOX_POSE_BATCH_JOB"], let id = UUID(uuidString: raw) {
                 VisionReplayBatchView(id: id)
-            } else { normalRoot }
+            } else { normalRoot.foxReservedSpace() }
             #else
-            normalRoot
+            normalRoot.foxReservedSpace()
             #endif
         }
     }

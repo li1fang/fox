@@ -19,6 +19,7 @@ struct TrainingScreen: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var compactFeedback: Bool { session.stage == .feedback && verticalSizeClass == .compact }
+    private var sideBySide: Bool { FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) }
 
     init(store: TrainingStore, session: TrainingSession, phoneLandscapeNavigation: AnyView? = nil, onConfirmed: @escaping () -> Void) {
         self.store = store; self.session = session; self.onConfirmed = onConfirmed
@@ -109,7 +110,7 @@ struct TrainingScreen: View {
     }
 
     private var phoneTrainingBody: some View {
-        let landscape = verticalSizeClass == .compact
+        let landscape = sideBySide
         let actionsLayout = landscape ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 10))
         return PhoneCameraLayout(landscape: landscape, spacing: landscape ? 12 : 8) {
             VStack(spacing: 6) {
@@ -128,7 +129,7 @@ struct TrainingScreen: View {
         VStack(spacing: 6) {
             phoneHeading
             phoneTargets
-            if verticalSizeClass == .compact && usesPhoneCamera {
+            if sideBySide && usesPhoneCamera {
                 if session.stage == .ready || session.stage == .paused {
                     Picker("观测手臂", selection: $selectedArm) {
                         ForEach(ArmSide.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -173,11 +174,11 @@ struct TrainingScreen: View {
     @ViewBuilder private func phoneStage(size: CGSize) -> some View {
         if usesPhoneCamera {
             VStack(spacing: 6) {
-                if verticalSizeClass != .compact {
+                if !sideBySide {
                     TimelineView(.periodic(from: .now, by: 0.1)) { phoneObservation(at: $0.date) }
                 }
                 phoneWorkoutCamera
-                if verticalSizeClass != .compact { TrainingRecordingStatus(capture: visual.diagnosticCapture) }
+                if !sideBySide { TrainingRecordingStatus(capture: visual.diagnosticCapture) }
             }
         } else {
             TimelineView(.periodic(from: .now, by: 0.1)) { timeline in

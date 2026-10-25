@@ -72,6 +72,8 @@ struct FoxHomeView: View {
     @State private var showingBackup = false
     @State private var trainingSelection: HomeTrainingSelection?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
         NavigationStack {
@@ -157,7 +159,7 @@ struct FoxHomeView: View {
             }
             .task { if automaticallyLoad { await journal.load() }; await trainingArchive.load() }
             .fullScreenCover(isPresented: $showingTraining, onDismiss: { Task { await trainingArchive.load() } }) {
-                FoxRootView(onClose: { showingTraining = false }).interactiveDismissDisabled()
+                FoxRootView(onClose: { showingTraining = false }).foxReservedSpace().interactiveDismissDisabled()
             }
             .sheet(isPresented: $showingBackup) { JournalBackupView(journal: journal) }
             .sheet(item: $trainingSelection) { selection in HomeTrainingDetail(selection: selection) { trainingSelection = nil } }
@@ -169,8 +171,8 @@ struct FoxHomeView: View {
     }
 
     private func columnCount(_ width: CGFloat) -> Int {
-        if UIDevice.current.userInterfaceIdiom == .phone || typeSize.isAccessibilitySize { return 1 }
-        return width >= 1100 ? 3 : (width >= 700 ? 2 : 1)
+        FoxAdaptiveLayout.columns(width: width, phone: UIDevice.current.userInterfaceIdiom == .phone,
+            horizontal: horizontalSizeClass, vertical: verticalSizeClass, accessibility: typeSize.isAccessibilitySize)
     }
 
     private var composer: some View {

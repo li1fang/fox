@@ -37,6 +37,7 @@
     "verify:private": "node scripts/verify.mjs private",
     "verify:repository": "node scripts/repository-checks.mjs",
     "verify:receipt": "node scripts/verify.mjs receipt",
+    "verify:duo": "node scripts/duo-layout-check.mjs",
     "verify:history": "node scripts/public-history-audit.mjs",
     "diagnose:phone-feedback": "node scripts/native-ui-diagnostic.mjs",
     "diagnose:phone-ui": "node scripts/native-ui-diagnostic.mjs",

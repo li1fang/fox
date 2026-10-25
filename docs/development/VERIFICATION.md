@@ -1,5 +1,11 @@
 # 重建与验证
 
+## Duo 布局候选
+
+`npm run verify:duo -- <完整提交号> <新输出目录>` 固定使用 Duo + iOS 27.1，先拒绝脏候选/错误提交，再申请现有模拟器共享会话。只跑公开合成的首页、训练、视觉与自适应测试；退出清理本任务创建的设备，内盘低于 2 GiB 取消并保留回执。它是 `diagnostic/duo-layout` 专项，不代替 `verify:candidate public --component native` 的普通 iPhone/iPad 完整回归，不接收私人输入。
+
+专项复用 `runSuite` 的源码冻结、日志摘要和精确 XCTest 覆盖检查，但不把其回执冒充 `verify:receipt --scope public --component native`。Device Hub 实际开合截图单独记录；窗口注入、旋转、模拟器开合和真机视觉是不同证据。执行路线见 [M0/M1](../planning/DUO_M0_M4.zh-CN.md)。
+
 ## 干净环境
 
 使用 Node 22（`.node-version`），然后 `npm run bootstrap`。本地 macOS 另需 Python 3.12、Xcode 27.1 / 27A9275、XcodeGen 2.45.x，以及通用 iOS 27.0 模拟器运行时。CI 的旧版兼容通道显式指定 Xcode 26.3 / 17C529 和既有 iOS 26.4；不改变触发方式，也不把云端旧版通过当成本地新版验收。

@@ -69,7 +69,7 @@ struct FoxRootView: View {
     private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
     private var phoneFocus: Bool { isPhone && (tab == "vision" || (tab == "training" && store.session != nil)) }
     private var phoneLandscapeFocus: Bool {
-        isPhone && verticalSizeClass == .compact && (tab == "vision" ||
+        isPhone && FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) && (tab == "vision" ||
             (tab == "training" && store.session.map { [.ready, .active, .paused, .rest].contains($0.stage) } == true))
     }
 

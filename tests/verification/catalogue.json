@@ -1359,6 +1359,54 @@
       "surface": "ipad"
     },
     {
+      "id": "tests/scripts/duo-layout-check.test.mjs",
+      "file": "tests/scripts/duo-layout-check.test.mjs",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
+      "id": "FoxUITests/FoxAdaptiveUITests/testManualTrainingFeedbackRestAndSummaryInAdaptiveWindow",
+      "file": "apps/ipad/FoxUITests/FoxAdaptiveUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxUITests/FoxAdaptiveUITests/testVisualCounterAndReportSurviveAdaptiveRotation",
+      "file": "apps/ipad/FoxUITests/FoxAdaptiveUITests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/AdaptiveLayoutTests/testSpacePolicyPreservesPhoneAndPadWhileExpandingDuo",
+      "file": "apps/ipad/FoxAppTests/AdaptiveLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/AdaptiveLayoutTests/testFoldAndCameraRegionsDoNotCoverUsableContent",
+      "file": "apps/ipad/FoxAppTests/AdaptiveLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/AdaptiveLayoutTests/testExpandedPhoneKeepsPreviewIdentityAndUsesSideBySideSpace",
+      "file": "apps/ipad/FoxAppTests/AdaptiveLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/AdaptiveLayoutTests/testTrainingResizePreservesSessionArchiveAndPreview",
+      "file": "apps/ipad/FoxAppTests/AdaptiveLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
+      "id": "FoxAppTests/AdaptiveLayoutTests/testPhysicalCameraChangeBreaksContinuityOnlyOnce",
+      "file": "apps/ipad/FoxAppTests/AdaptiveLayoutTests.swift",
+      "scope": "public",
+      "surface": "iphone"
+    },
+    {
       "id": "FoxAppTests/PhoneCameraLayoutTests/testVisionPageRetainsPreviewAcrossSizeClassChanges",
       "file": "apps/ipad/FoxAppTests/PhoneCameraLayoutTests.swift",
       "scope": "public",

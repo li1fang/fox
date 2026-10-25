@@ -4,6 +4,14 @@ import ImageIO
 import UIKit
 import Vision
 
+struct CameraSourceContinuity {
+    private var previous: String?
+    mutating func changed(to id: String) -> Bool {
+        defer { previous = id }
+        return previous != nil && previous != id
+    }
+}
+
 enum PoseCameraState: Equatable {
     case stopped, requestingPermission, starting, running, denied, restricted, unavailable, interrupted
     case failed(String)
@@ -41,6 +49,7 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private let request = VNDetectHumanBodyPoseRequest()
     private var runID: UUID?
     private var activeDevice: AVCaptureDevice?
+    private var sourceContinuity = CameraSourceContinuity()
     private var lastProcessed = -Double.infinity
     private var orientation: AVCaptureVideoOrientation = .portrait
     private var observers: [NSObjectProtocol] = []
@@ -179,6 +188,7 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             applyOutputOrientation()
             session.commitConfiguration()
             activeDevice = device
+            sourceContinuity = CameraSourceContinuity()
             lastProcessed = -Double.infinity
             session.startRunning()
             emit(.running, id: id)
@@ -196,6 +206,12 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let id = runID, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        // Duo's virtual front camera can switch lenses without changing this capture session.
+        // Invalidate the old pose before delivering the first frame from a different physical camera.
+        if let device = activeDevice {
+            let source = device.activePrimaryConstituent ?? device
+            if sourceContinuity.changed(to: source.uniqueID) { breakContinuity(id: id) }
+        }
         if let reason = diagnosticRecorder?.append(sampleBuffer) { finishDiagnostic(reason: reason) }
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
         guard time.isFinite, time - lastProcessed >= 1.0 / 12 else { return }

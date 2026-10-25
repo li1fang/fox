@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Deliver M0/M1 Duo basic adaptive layouts as a simulator-verified candidate",
+  "nonGoals": ["Hover-specific workspace", "Controller input", "Android", "Counting algorithm changes", "Device deployment", "Database migration"],
+  "invariants": ["Preserve existing iPhone/iPad behavior and records", "Preserve preview and session identity during resize", "Do not join motion across physical camera changes", "Retain prior worktree changes and evidence"],
+  "modules": ["apps/ipad/FoxNative", "apps/ipad/FoxAppTests", "apps/ipad/FoxUITests", "scripts/duo-layout-check.mjs", "docs/planning"],
+  "acceptance": ["verify:repository", "verify:fast", "verify:candidate", "verify:duo"],
+  "stopConditions": ["Foreign simulator ownership", "Internal free capacity below 2 GiB", "Source drift during acceptance", "Data loss risk", "Missing required runtime"],
+  "evidence": ["Exact XCTest coverage and source-bound suite receipts", "Owned simulator cleanup", "Separate synthetic resize and actual simulator fold observations"],
+  "humanUnknowns": ["No Duo real device", "Physical lens switching and exercise accuracy unverified", "Hover ergonomics deferred", "M2 controller discussion not started"]
+}

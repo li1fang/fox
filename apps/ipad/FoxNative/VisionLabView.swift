@@ -5,6 +5,7 @@ struct VisionLabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var controller: VisionLabController
@@ -20,6 +21,7 @@ struct VisionLabView: View {
     @State private var parametersAfterOptions = false
     @State private var shareAfterOptions = false
     @State private var showingGuidanceOptions = false
+    private var sideBySide: Bool { FoxAdaptiveLayout.sideBySide(horizontal: horizontalSizeClass, vertical: verticalSizeClass) }
 
     init(controller: VisionLabController, phoneLandscapeNavigation: AnyView? = nil) {
         self.controller = controller; self.phoneLandscapeNavigation = phoneLandscapeNavigation
@@ -64,7 +66,7 @@ struct VisionLabView: View {
     }
 
     private var phoneBody: some View {
-        let landscape = verticalSizeClass == .compact
+        let landscape = sideBySide
         let actionsLayout = landscape ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 10))
         return PhoneCameraLayout(landscape: landscape, spacing: landscape ? 12 : 8) {
             VStack(spacing: 8) {
@@ -82,7 +84,7 @@ struct VisionLabView: View {
     private var phoneSidebarInformation: some View {
         VStack(spacing: 8) {
             phoneStatus
-            if verticalSizeClass == .compact { phoneQuickSelections }
+            if sideBySide { phoneQuickSelections }
             phoneError
         }
     }
