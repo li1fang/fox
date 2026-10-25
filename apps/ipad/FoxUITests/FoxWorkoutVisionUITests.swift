@@ -23,6 +23,7 @@ final class FoxWorkoutVisionUITests: XCTestCase {
         let old = field.value as? String ?? ""
         let digits = old.filter(\.isNumber)
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: digits.count) + value)
+        XCUIApplication().dismissNumericKeyboardPopover()
     }
 
     private func waitForCount(_ expected: Int, in app: XCUIApplication) {

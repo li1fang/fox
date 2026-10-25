@@ -52,16 +52,20 @@ final class FoxDesignReviewUITests: XCTestCase {
             if scenario == .trainingFeedback {
                 app.textFields["actual-reps"].tap(); app.textFields["actual-reps"].typeText("8")
                 capture("training-feedback-keyboard", app: app)
+                app.dismissNumericKeyboardPopover()
             } else if scenario == .trainingFeedbackRotated {
                 let left = app.textFields["actual-left-reps"], right = app.textFields["actual-right-reps"]
                 left.tap()
                 XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
                 left.typeText("8")
+                XCTAssertEqual(left.value as? String, "8")
                 capture("training-feedback-rotated-left-input", app: app)
+                app.dismissNumericKeyboardPopover()
                 right.tap()
                 right.typeText("7")
                 XCTAssertEqual(left.value as? String, "8"); XCTAssertEqual(right.value as? String, "7")
                 capture("training-feedback-rotated-keyboard", app: app)
+                app.dismissNumericKeyboardPopover()
             }
             let primary: [String]
             switch scenario {

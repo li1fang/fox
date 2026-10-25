@@ -334,6 +334,7 @@ final class FoxVisionUITests: XCTestCase {
         let reference = app.textFields["vision-reference-count"]
         XCTAssertTrue(reference.waitForExistence(timeout: 5))
         reference.tap(); reference.typeText("3")
+        app.dismissNumericKeyboardPopover()
         saveReport(app)
         XCTAssertTrue(app.staticTexts["vision-last-report"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["vision-last-report"].label, "自动 2 · 确认 3")
@@ -538,6 +539,7 @@ final class FoxVisionUITests: XCTestCase {
         let reference = app.textFields["vision-reference-count"]
         XCTAssertTrue(reference.waitForExistence(timeout: 5))
         reference.tap(); reference.typeText("2")
+        app.dismissNumericKeyboardPopover()
         XCTAssertTrue(app.buttons["vision-dismiss-keyboard"].waitForExistence(timeout: 5))
         app.buttons["vision-dismiss-keyboard"].tap()
         app.buttons["vision-report-body-view"].tap()

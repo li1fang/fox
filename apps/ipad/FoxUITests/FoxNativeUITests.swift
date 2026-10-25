@@ -84,7 +84,9 @@ final class FoxNativeUITests: XCTestCase {
             XCTAssertTrue(count.waitForExistence(timeout: 5))
             count.tap()
             count.typeText("10")
+            app.dismissNumericKeyboardPopover()
             if index == 0 {
+                readyToTap(app.buttons["feedback-dismiss-keyboard"], in: app)
                 XCTAssertTrue(app.buttons["feedback-dismiss-keyboard"].isHittable)
                 app.buttons["feedback-dismiss-keyboard"].tap()
                 XCTAssertFalse(app.keyboards.firstMatch.exists)
@@ -103,8 +105,12 @@ final class FoxNativeUITests: XCTestCase {
                 }
                 XCTAssertTrue(issue.isHittable)
                 issue.tap(); issue.typeText("语音反馈测试")
+                XCTAssertEqual(issue.value as? String, "语音反馈测试")
             }
-            app.buttons["submit-feedback"].tap()
+            let submit = app.buttons["submit-feedback"]
+            readyToTap(submit, in: app)
+            // Use the current frame after keyboard movement, not a stale AX activation point.
+            submit.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             if index == 0 {
                 XCTAssertTrue(app.buttons["extend-rest"].waitForExistence(timeout: 5))
                 app.buttons["extend-rest"].tap()
@@ -131,6 +137,7 @@ final class FoxNativeUITests: XCTestCase {
         let correctedCount = app.textFields["summary-reps"]
         correctedCount.tap()
         correctedCount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2) + "12")
+        app.dismissNumericKeyboardPopover()
         app.buttons["保存"].tap()
         XCTAssertTrue(app.staticTexts["12 次"].firstMatch.waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -186,5 +193,22 @@ final class FoxNativeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["编辑计划"].waitForExistence(timeout: 5))
         app.buttons["保存"].tap()
         XCTAssertTrue(app.buttons["start-training"].waitForExistence(timeout: 5))
+    }
+}
+
+extension XCUIApplication {
+    func dismissNumericKeyboardPopover(file: StaticString = #filePath, line: UInt = #line) {
+        // iPad's Chinese numeric popover blocks other fields and commands.
+        // Close only that overlay; keep the keyboard and input/layout assertions.
+        guard keyboards.firstMatch.exists else { return }
+        // Record editors can have an identically named dismissal region. Never
+        // target an app sheet when only the keyboard's numeric overlay is intended.
+        let keyboardWindow = windows.containing(.keyboard, identifier: nil).firstMatch
+        let dismiss = keyboardWindow.otherElements["PopoverDismissRegion"]
+        if dismiss.waitForExistence(timeout: 2) {
+            dismiss.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: dismiss)
+            XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, file: file, line: line)
+        }
     }
 }
