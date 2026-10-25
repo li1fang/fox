@@ -66,16 +66,18 @@ final class FoxVisionUITests: XCTestCase {
 
     private var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
     private func reveal(_ id: String, app: XCUIApplication) {
-        guard phone else { return }
+        // Form rows are virtualized inside iPad sheets as well as phone pages.
         let list = app.collectionViews.firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 5))
         let item = app.descendants(matching: .any).matching(identifier: id).firstMatch
         func visible() -> Bool {
-            item.exists && item.frame.width > 0 && app.frame.contains(item.frame) && (!item.isEnabled || item.isHittable)
+            guard item.exists else { return false }
+            let frame = item.frame, bounds = app.windows.firstMatch.frame.intersection(list.frame)
+            return frame.width > 0 && frame.height > 0 && bounds.contains(frame) && (!item.isEnabled || item.isHittable)
         }
         for _ in 0..<30 {
             if visible() { break }
-            let upward = !item.exists || item.frame.minY > 78
+            let upward = !item.exists || item.frame.minY >= list.frame.minY
             let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: upward ? 0.82 : 0.3))
             let end = list.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: upward ? 0.3 : 0.82))
             start.press(forDuration: 0.05, thenDragTo: end)
