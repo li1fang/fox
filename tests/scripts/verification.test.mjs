@@ -14,6 +14,33 @@ import * as verification from '../../scripts/verify.mjs';
 import {execute as executeSuiteCommand} from '../../scripts/trial-suite.mjs';
 import {auditInventory, auditNativeCoverage, auditReceipt, auditCommandOutput, classifyDeviceError} from '../../scripts/verification-contracts.mjs';
 
+test('toolchain selection retains the exact legacy pin and requires an explicit supported modern profile', () => {
+  const legacy = developmentEnvironment.xcodeConfiguration('xcode-26.3');
+  const modern = developmentEnvironment.xcodeConfiguration('xcode-27.1');
+  assert.equal(legacy.version, 'Xcode 26.3\nBuild version 17C529');
+  assert.equal(modern.version, 'Xcode 27.1\nBuild version 27A9275');
+  assert.equal(modern.runtime, 'com.apple.CoreSimulator.SimRuntime.iOS-27-1');
+  assert.doesNotThrow(() => developmentEnvironment.assertXcodeVersion(modern.version, modern.id));
+  assert.throws(() => developmentEnvironment.assertXcodeVersion(modern.version, legacy.id), /expected Xcode 26.3/);
+  assert.throws(() => developmentEnvironment.assertXcodeVersion('Xcode 27.2\nBuild version unknown', modern.id), /expected Xcode 27.1/);
+  assert.throws(() => developmentEnvironment.xcodeConfiguration('latest'), /Unknown Xcode profile/);
+});
+
+test('a fresh modern runtime can create pinned models from installed device types without persistent template devices', async () => {
+  const info = {simulatorRuntime: 'modern', simulators: {modern: [
+    {udid: 'user-duo', deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-Duo'}]},
+  simulatorTypes: [{identifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}]};
+  const calls = [];
+  const execute = async (command, args) => {calls.push(args); return args[1] === 'create' ? '00000000-0000-0000-0000-000000000001' : '';};
+  const lease = await developmentEnvironment.allocateSimulators(info, {execute, coordinate: false, families: ['iphone'], overrides: {}});
+  assert.equal(lease.selection.iphone.deviceType, 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro');
+  assert.equal(calls[0].at(-1), 'modern');
+  await developmentEnvironment.releaseSimulators(lease, execute);
+  assert.ok(calls.every(args => !args.includes('user-duo')));
+  await assert.rejects(developmentEnvironment.allocateSimulators(info,
+    {execute, coordinate: false, families: ['iphone'], overrides: {iphone: 'not-present'}}), /invalid override/);
+});
+
 test('private inputs are explicit, complete, pinned and rechecked, never an implicit local cache', async t => {
   const dir = await mkdtemp(path.join(tmpdir(), 'fox-input-test-'));
   t.after(() => rm(dir, {recursive: true, force: true}));
@@ -413,7 +440,11 @@ import {appendFileSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
 const name=path.basename(process.argv[1]), args=process.argv.slice(2);
 appendFileSync(process.env.FOX_TEST_TRACE,JSON.stringify({name,args})+'\\n');
-if(name==='xcrun' && args[1]==='list') console.log(JSON.stringify({devices:{'com.apple.CoreSimulator.SimRuntime.iOS-26-3':[{udid:'${id}',state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB'}]}}));
+if(name==='xcrun' && args[1]==='list') {
+ const family=process.env.FOX_TEST_FRESH_RUNTIME==='1'?'iPhone-Duo':'iPad-Pro-11-inch-M5-12GB';
+ console.log(JSON.stringify(args[2]==='devicetypes'?{devicetypes:[{identifier:'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB'}]}:
+ {devices:{[process.env.FOX_SIMULATOR_RUNTIME]:[{udid:'${id}',state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.'+family}]}}));
+}
 if(name==='xcrun' && args[1]==='create') console.log('${id}');
 if(name==='xcodebuild') console.log('NATIVE_PARTIAL_OUTPUT');
 if(name==='xcodebuild' && process.env.FOX_TEST_WAIT==='1'){writeFileSync(process.env.FOX_TEST_READY,String(process.pid));if(process.env.FOX_TEST_RESIST==='1')process.on('SIGTERM',()=>{});setTimeout(()=>{},60000);}
@@ -438,6 +469,28 @@ test('real UI child entry accepts the parent lease without path-format rejection
   assert.ok(calls.some(x => x.name === 'xcodebuild'));
   assert.ok(!calls.some(x => ['create', 'delete'].includes(x.args[1])));
   developmentEnvironment.releaseSimulatorSession(session);
+});
+
+test('direct modern UI entry creates its pinned tablet even when only a Duo template exists', async t => {
+  const fixture = await fakeNativeCommands(t);
+  const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_XCODE_PROFILE: 'xcode-27.1', FOX_SIMULATOR_RUNTIME: 'com.apple.CoreSimulator.SimRuntime.iOS-27-1',
+      FOX_TEST_FRESH_RUNTIME: '1'}, encoding: 'utf8', timeout: 10_000});
+  assert.equal(result.status, 0, result.stderr);
+  const calls = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.ok(calls.some(x => x.args[1] === 'create' && x.args.includes('com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB')
+    && x.args.at(-1) === 'com.apple.CoreSimulator.SimRuntime.iOS-27-1'));
+});
+
+test('simulator builds share the explicit isolated derived-data path with UI verification', async t => {
+  const fixture = await fakeNativeCommands(t);
+  const derived = path.join(fixture.dir, 'modern-derived');
+  const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'build-simulator'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_IOS_UI_DERIVED_DATA: derived}, encoding: 'utf8', timeout: 10_000});
+  assert.equal(result.status, 0, result.stderr);
+  const builds = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse).filter(x => x.name === 'xcodebuild');
+  assert.equal(builds.length, 2);
+  assert.ok(builds.every(x => x.args[x.args.indexOf('-derivedDataPath') + 1] === derived));
 });
 
 test('direct UI entry cancels its command, releases owned simulators and frees the shared session', {timeout: 15_000}, async t => {

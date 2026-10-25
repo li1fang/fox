@@ -457,9 +457,10 @@ function testNativeCore() {
 
 function buildSimulator() {
   generate();
+  const derivedData = process.env.FOX_IOS_UI_DERIVED_DATA ?? join(root, '.tmp/ipad-simulator-data');
   for (const app of Object.values(ipadApps)) {
     run('xcodebuild', ['-project', projectPath, '-scheme', app.scheme, '-configuration', 'Debug',
-      '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', join(root, '.tmp/ipad-simulator-data'),
+      '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', derivedData,
       'CODE_SIGNING_ALLOWED=NO', 'build']);
   }
 }
@@ -492,7 +493,8 @@ async function testNativeUI() {
       }
       await assertSimulatorAvailability([deviceId]);
     } else {
-      const info = {simulators: devices.devices, simulatorRuntime};
+      const simulatorTypes = JSON.parse(await command('xcrun', ['simctl', 'list', 'devicetypes', '--json'], 60_000, true)).devicetypes;
+      const info = {simulators: devices.devices, simulatorRuntime, simulatorTypes};
       const selected = deviceId ? simulatorCandidates(info).find(d => d.udid === deviceId) : undefined;
       if (deviceId && !selected) throw Error('Explicit simulator unavailable in pinned runtime; no fallback');
       const family = selected?.deviceTypeIdentifier.includes('.iPhone-') ? 'iphone' : 'ipad';

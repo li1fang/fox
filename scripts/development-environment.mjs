@@ -9,7 +9,20 @@ import {promisify} from 'node:util';
 export const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const developerDir = process.env.DEVELOPER_DIR ?? '/Applications/Xcode.app/Contents/Developer';
 export const python = process.env.FOX_JOURNAL_PYTHON ?? path.join(root, '.venv/bin/python');
-export const simulatorRuntime = process.env.FOX_SIMULATOR_RUNTIME ?? 'com.apple.CoreSimulator.SimRuntime.iOS-26-3';
+export function xcodeConfiguration(id = process.env.FOX_XCODE_PROFILE ?? 'xcode-26.3') {
+  const profiles = {
+    'xcode-26.3': {version: 'Xcode 26.3\nBuild version 17C529', runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-26-3'},
+    'xcode-27.1': {version: 'Xcode 27.1\nBuild version 27A9275', runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-27-1'}
+  };
+  if (!Object.hasOwn(profiles, id)) throw Error(`environment_failure: Unknown Xcode profile: ${id}`);
+  return {id, ...profiles[id]};
+}
+const toolchain = xcodeConfiguration();
+export const simulatorRuntime = process.env.FOX_SIMULATOR_RUNTIME ?? toolchain.runtime;
+export function assertXcodeVersion(actual, profile = toolchain.id) {
+  const expected = xcodeConfiguration(profile);
+  if (actual !== expected.version) throw Error(`environment_failure: expected ${expected.version}; select FOX_XCODE_PROFILE and DEVELOPER_DIR explicitly`);
+}
 const sessionDirectory = path.join(homedir(), '.cache', 'fox', 'simulator-session');
 export const environment = {...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH}`,
   DEVELOPER_DIR: developerDir, FOX_JOURNAL_PYTHON: python, PYTHONDONTWRITEBYTECODE: '1'};
@@ -40,12 +53,14 @@ export function doctor({native = process.platform === 'darwin', dependencies = t
     if (!/^Python 3\.12\./.test(result.python)) throw Error('environment_failure: Python 3.12 required');
     result.schemaLibraries = JSON.parse(capture(python, ['-c', 'import importlib.metadata as m,json; from jsonschema import FormatChecker; assert "date-time" in FormatChecker.checkers; print(json.dumps({n:m.version(n) for n in ["jsonschema","referencing"]}))']));
     result.xcode = capture('xcodebuild', ['-version']);
-    if (result.xcode !== 'Xcode 26.3\nBuild version 17C529') throw Error('environment_failure: expected Xcode 26.3 (17C529); set DEVELOPER_DIR explicitly');
+    assertXcodeVersion(result.xcode);
+    result.xcodeProfile = toolchain.id;
     result.xcodegen = capture('xcodegen', ['--version']);
     if (!/^Version: 2\.45\./.test(result.xcodegen)) throw Error('environment_failure: XcodeGen 2.45.x required');
     result.swift = capture('xcrun', ['swift', '--version']);
     result.sdk = capture('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-version']);
     result.simulators = JSON.parse(capture('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).devices;
+    result.simulatorTypes = JSON.parse(capture('xcrun', ['simctl', 'list', 'devicetypes', '--json'])).devicetypes;
     result.simulatorRuntime = simulatorRuntime;
   }
   return result;
@@ -107,8 +122,11 @@ export async function allocateSimulators(info, {execute = captureAsync, coordina
     if (coordinate) await assertSimulatorAvailability(Object.values(overrides).filter(Boolean), execute);
     for (const [key, family] of [['ipad', 'iPad'], ['iphone', 'iPhone']].filter(([key]) => families.includes(key))) {
       const candidates = available.filter(d => d.deviceTypeIdentifier?.includes(`.${family}-`));
+      // A freshly installed runtime need not have permanent template instances. The type must still be installed.
+      const installedType = info.simulatorTypes?.find(d => d.identifier === models[key]);
       const template = overrides[key] ? candidates.find(d => d.udid === overrides[key])
-        : candidates.find(d => d.deviceTypeIdentifier === models[key]);
+        : candidates.find(d => d.deviceTypeIdentifier === models[key])
+          ?? (installedType && {deviceTypeIdentifier: installedType.identifier, runtime: info.simulatorRuntime ?? simulatorRuntime});
       if (!template) throw Error(`environment_failure: missing ${family} simulator runtime or invalid override; install a compatible runtime in Xcode`);
       const name = `FoxVerification-${family}-${randomUUID()}`;
       if (!overrides[key]) {

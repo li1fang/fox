@@ -8,6 +8,18 @@
 
 `npm run doctor` 输出实际 Node、npm、Python、Swift、Xcode、SDK、XcodeGen 和可用模拟器版本。`DEVELOPER_DIR` 可指向对应 Xcode。模拟器构建 Fox 和 Fox Say 不需要 Apple 账号；实际设备构建另需本地 `FOX_DEVELOPMENT_TEAM`，不能把 Team ID 提交到仓库。
 
+过渡期新增明确的 `FOX_XCODE_PROFILE=xcode-27.1`，只接受 27.1 / 27A9275，默认 runtime 为 iOS 27.1。默认 profile 仍为 `xcode-26.3`，不改变既有 CI。未知 profile、错误版本/build 不回退或接受“latest”。进程同时指定独立安装的 `DEVELOPER_DIR`；换 profile 不会自动切换全局工具或安装 runtime。首次运行状态、SDK 和 runtime 的可用性仍须实际核对，版本字符串匹配不替代这些证据。
+
+本地新工具链示例（不写入全局配置）：
+
+```sh
+FOX_XCODE_PROFILE=xcode-27.1 \
+DEVELOPER_DIR="$HOME/Applications/FoxToolchains/Xcode_27.1.app/Contents/Developer" \
+npm run doctor
+```
+
+新旧工具链隔离构建缓存时，可设置 `FOX_IOS_UI_DERIVED_DATA="$PWD/.tmp/ipad-simulator-271-data"`，模拟器双 App 构建和 UI/App-host 测试共用这个显式目录。新 runtime 若尚无固定机型的永久实例，只在已安装 device type 与指定 runtime 上创建临时实例；不为凑模板创建永久用户设备，不修改显式 UDID 错误时的拒绝规则。
+
 ## 开发流程与候选验收
 
 ### 失败分类：决定下一步，不自动判断根因
