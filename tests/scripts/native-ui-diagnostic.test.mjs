@@ -5,6 +5,23 @@ import {phoneDiagnosticCase, phoneDiagnosticStep, checkDiagnosticContext} from '
 import * as diagnostic from '../../scripts/native-ui-diagnostic.mjs';
 import {auditReceipt} from '../../scripts/verification-contracts.mjs';
 
+test('feedback target stability samples immediately without extending its original deadline', () => {
+  const source = readFileSync(new URL('../../apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('private func stableTarget('), source.indexOf('private func screenshot('));
+  assert.match(body, /let start = ProcessInfo\.processInfo\.systemUptime, deadline = start \+ 4/);
+  assert.match(body, /let predicate = NSPredicate/);
+  assert.match(body, /self\.fullyVisible\(element, in: app, viewport: viewport, above: footer\)/);
+  assert.match(body, /previous = nil; stableSince = nil; return false/);
+  assert.match(body, /previous != frame/);
+  assert.match(body, />= 0\.25/);
+  assert.match(body, /let immediate = predicate\.evaluate\(with: nil\)/);
+  assert.match(body, /remaining = deadline - ProcessInfo\.processInfo\.systemUptime/);
+  assert.match(body, /timeout: remaining/);
+  assert.match(body, /result == \.completed && ProcessInfo\.processInfo\.systemUptime <= deadline/);
+  assert.match(body, /XCTAssertTrue\(completed, element\.identifier/);
+  assert.doesNotMatch(body, /timeout: 4|sleep\(|insetBy|retry/i);
+});
+
 test('feedback prepares portrait only after a single configured app launch', () => {
   const source = readFileSync(new URL('../../apps/ipad/FoxUITests/FoxPhoneLayoutUITests.swift', import.meta.url), 'utf8');
   const method = name => {

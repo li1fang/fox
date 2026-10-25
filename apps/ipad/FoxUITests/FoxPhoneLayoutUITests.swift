@@ -132,18 +132,23 @@ final class FoxPhoneLayoutUITests: XCTestCase {
 
     private func stableTarget(_ element: XCUIElement, in app: XCUIApplication, viewport: XCUIElement? = nil,
                               above footer: XCUIElement? = nil, file: StaticString = #filePath, line: UInt = #line) {
+        let start = ProcessInfo.processInfo.systemUptime, deadline = start + 4
         var previous: CGRect?, stableSince: TimeInterval?
-        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        let predicate = NSPredicate { _, _ in
             guard self.fullyVisible(element, in: app, viewport: viewport, above: footer) else {
                 previous = nil; stableSince = nil; return false
             }
             let frame = element.frame, now = ProcessInfo.processInfo.systemUptime
             if previous != frame { previous = frame; stableSince = now; return false }
             return now - (stableSince ?? now) >= 0.25
-        }, object: nil)
-        let result = XCTWaiter.wait(for: [ready], timeout: 4)
-        if result != .completed { screenshot("unstable-target-\(element.identifier)", app: app) }
-        XCTAssertEqual(result, .completed, element.identifier, file: file, line: line)
+        }
+        // Start observing now; the first scheduled poll otherwise consumes part of this same deadline.
+        let immediate = predicate.evaluate(with: nil), remaining = deadline - ProcessInfo.processInfo.systemUptime
+        let result: XCTWaiter.Result = immediate ? .completed : remaining > 0
+            ? XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: remaining) : .timedOut
+        let completed = result == .completed && ProcessInfo.processInfo.systemUptime <= deadline
+        if !completed { screenshot("unstable-target-\(element.identifier)", app: app) }
+        XCTAssertTrue(completed, element.identifier, file: file, line: line)
     }
 
     private func screenshot(_ name: String, app: XCUIApplication) {
