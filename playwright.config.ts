@@ -25,7 +25,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `mkdir -p .tmp && rm -f .tmp/playwright.sqlite .tmp/playwright.sqlite-* && rm -rf .tmp/playwright-say-captures .tmp/playwright-say-corpus && FOX_API_HOST=127.0.0.1 FOX_API_PORT=${apiPort} FOX_DB_PATH=.tmp/playwright.sqlite FOX_SAY_CAPTURE_DIR=.tmp/playwright-say-captures FOX_SAY_CORPUS_DIR=.tmp/playwright-say-corpus npm run dev -w @fox/api`,
+      command: `mkdir -p .tmp && rm -f .tmp/playwright.sqlite .tmp/playwright.sqlite-* && rm -rf .tmp/playwright-say-captures .tmp/playwright-say-corpus && FOX_API_HOST=127.0.0.1 FOX_API_PORT=${apiPort} FOX_WEB_PORT=${webPort} FOX_DB_PATH=.tmp/playwright.sqlite FOX_SAY_CAPTURE_DIR=.tmp/playwright-say-captures FOX_SAY_CORPUS_DIR=.tmp/playwright-say-corpus npm run dev -w @fox/api`,
       url: `http://127.0.0.1:${apiPort}/health`,
       reuseExistingServer: false,
       timeout: 60_000

@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { apiListenOptions, isUserProfile, readJson, RequestError, requestErrorStatus, requestUrl } from "./request-policy.js";
 import {
   createSession,
   createTemplateAiProvider,
@@ -22,8 +23,7 @@ import {
   type WorkoutRepository
 } from "./repository.js";
 
-const port = Number(process.env.FOX_API_PORT ?? 4177);
-const host = process.env.FOX_API_HOST;
+const { port, host } = apiListenOptions();
 const maxSayCaptureBytes = 12 * 1024 * 1024;
 const sayCorpusBuckets = new Set(["short_command", "training_feedback", "equipment_context", "mixed_utterance", "noise_distance"]);
 const entryKinds = new Set<EntryKind>(["meal", "medical", "workout", "expense", "note"]);
@@ -61,24 +61,6 @@ function sendJson(response: ServerResponse, status: number, payload: unknown): v
 function sendBinary(response: ServerResponse, status: number, contentType: string, payload: Buffer): void {
   response.writeHead(status, { "content-type": contentType, "content-length": payload.byteLength });
   response.end(payload);
-}
-
-function readJson<T>(request: IncomingMessage): Promise<T> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    request.setEncoding("utf8");
-    request.on("data", (chunk) => {
-      body += chunk;
-    });
-    request.on("end", () => {
-      try {
-        resolve(body ? (JSON.parse(body) as T) : ({} as T));
-      } catch (error) {
-        reject(error);
-      }
-    });
-    request.on("error", reject);
-  });
 }
 
 function readBinary(request: IncomingMessage, maxBytes = maxSayCaptureBytes): Promise<Buffer> {
@@ -632,12 +614,8 @@ function ensureOpenPlanningSession(repository: WorkoutRepository): void {
 
 export async function route(request: IncomingMessage, response: ServerResponse, dependencies: FoxServerDependencies, runtime: FoxSayRuntime): Promise<void> {
   const { repository, aiProvider } = dependencies;
-  const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+  const url = requestUrl(request, response);
   const pathname = url.pathname.replace(/^\/api/, "") || "/";
-
-  response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "content-type,x-fox-say-source");
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
 
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -715,6 +693,7 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
       const sample = saveCorpusSample(await readJson<Record<string, unknown>>(request));
       sendJson(response, 201, { sample, summary: corpusSummary(listCorpusSamples()) });
     } catch (error) {
+      if (error instanceof RequestError) throw error;
       const message = error instanceof Error ? error.message : "corpus_sample_failed";
       const status = message === "capture_not_found" ? 404 : 400;
       sendJson(response, status, { error: message });
@@ -750,6 +729,7 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
       sendJson(response, 202, queued);
       runtime.enqueueAsrJob(queued.job.id, apiUrlForRequest(url));
     } catch (error) {
+      if (error instanceof RequestError) throw error;
       const message = error instanceof Error ? error.message : "asr_job_enqueue_failed";
       sendJson(response, 400, { error: message });
     }
@@ -818,6 +798,7 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
       const asrResult = repository.listVoiceAsrResults(captureId)[0];
       sendJson(response, 200, { report, asrResult });
     } catch (error) {
+      if (error instanceof RequestError) throw error;
       const message = error instanceof Error ? error.message : "linux_asr_runner_failed";
       sendJson(response, 502, { error: message });
     }
@@ -855,6 +836,7 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
       repository.succeedActiveVoiceAsrJobForCapture(captureId, asrResult.id);
       sendJson(response, 201, { asrResult });
     } catch (error) {
+      if (error instanceof RequestError) throw error;
       const message = error instanceof Error ? error.message : "asr_result_failed";
       sendJson(response, 400, { error: message });
     }
@@ -884,6 +866,7 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
       });
       sendJson(response, queued.reused ? 200 : 201, queued);
     } catch (error) {
+      if (error instanceof RequestError) throw error;
       const message = error instanceof Error ? error.message : "mac_input_job_enqueue_failed";
       sendJson(response, 400, { error: message });
     }
@@ -1004,6 +987,7 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
       });
       sendJson(response, 201, { draft });
     } catch (error) {
+      if (error instanceof RequestError) throw error;
       const message = error instanceof Error ? error.message : "voice_draft_failed";
       sendJson(response, 400, { error: message });
     }
@@ -1135,8 +1119,8 @@ export async function route(request: IncomingMessage, response: ServerResponse, 
 
   if (request.method === "PATCH" && pathname === "/profile/user") {
     const body = await readJson<{ userProfile?: UserProfile }>(request);
-    if (!body.userProfile || typeof body.userProfile !== "object") {
-      sendJson(response, 400, { error: "user_profile_required" });
+    if (!isUserProfile(body.userProfile)) {
+      sendJson(response, 400, { error: body.userProfile === undefined ? "user_profile_required" : "invalid_user_profile" });
       return;
     }
     sendJson(response, 200, { userProfile: repository.saveUserProfile(body.userProfile) });
@@ -1272,8 +1256,10 @@ export function createFoxServer(dependencies: FoxServerDependencies = createDefa
   const runtime = createFoxSayRuntime(dependencies);
   return createServer((request, response) => {
     route(request, response, dependencies, runtime).catch((error: unknown) => {
-      console.error(error);
-      sendJson(response, 500, { error: "internal_server_error" });
+      if (!(error instanceof RequestError)) console.error(error);
+      if (response.destroyed || response.writableEnded) return;
+      if (error instanceof RequestError && error.closeConnection) response.setHeader("Connection", "close");
+      sendJson(response, requestErrorStatus(error, 500), { error: error instanceof RequestError ? error.message : "internal_server_error" });
     });
   });
 }
@@ -1281,11 +1267,9 @@ export function createFoxServer(dependencies: FoxServerDependencies = createDefa
 if (process.env.NODE_ENV !== "test" && process.env.VITEST !== "true") {
   const server = createFoxServer();
   const onListening = () => {
-    console.log(`fox api listening on http://${host ?? "localhost"}:${port}`);
+    const address = server.address();
+    const boundPort = typeof address === "object" && address ? address.port : port;
+    console.log(`fox api listening on http://${host.includes(":") ? `[${host}]` : host}:${boundPort}`);
   };
-  if (host) {
-    server.listen(port, host, onListening);
-  } else {
-    server.listen(port, onListening);
-  }
+  server.listen(port, host, onListening);
 }

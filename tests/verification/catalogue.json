@@ -2297,6 +2297,12 @@
       "surface": "host"
     },
     {
+      "id": "apps/api/test/request-boundary.test.ts",
+      "file": "apps/api/test/request-boundary.test.ts",
+      "scope": "public",
+      "surface": "host"
+    },
+    {
       "id": "tests/scripts/repository-checks.test.mjs",
       "file": "tests/scripts/repository-checks.test.mjs",
       "scope": "public",
