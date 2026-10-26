@@ -26,9 +26,13 @@ enum DesignScenario: String, CaseIterable, Identifiable {
         return "home"
     }
     static var homeCases: [Self] { allCases.filter { $0.section == "home" } }
+    // Full review is the union of these disjoint partitions, not full + smoke replayed twice.
+    static let homeSmokeCases: [Self] = [.mixed, .receipt, .largeType, .dark]
+    static var homeRemainingCases: [Self] { homeCases.filter { !homeSmokeCases.contains($0) } }
     static var recordCases: [Self] { allCases.filter { $0.section == "records" } }
     static var projectionCases: [Self] { allCases.filter { $0.section == "projections" } }
     static var trainingCases: [Self] { allCases.filter { $0.section == "training" } }
+    static var trainingRemainingCases: [Self] { trainingCases.filter { $0 != .trainingFeedbackRotated } }
     var hasPhoto: Bool { [.mixed, .portrait, .landscape, .receipt, .missing, .dark, .recordLongPhoto, .recordMulti, .recordMissing].contains(self) }
     static var active: DesignScenario? {
         #if DEBUG

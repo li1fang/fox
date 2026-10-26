@@ -28,7 +28,7 @@
     "test": "npm run test --workspaces --if-present && npm run test:scripts",
     "test:scripts": "node scripts/test-scripts.mjs public",
     "test:e2e": "playwright test",
-    "verify": "npm run typecheck && npm run test && npm run build",
+    "verify": "npm run typecheck && npm run build && npm run test",
     "bootstrap": "node scripts/development-environment.mjs bootstrap",
     "doctor": "node scripts/development-environment.mjs doctor",
     "verify:fast": "node scripts/verify.mjs fast",

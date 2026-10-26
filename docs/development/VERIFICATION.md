@@ -53,6 +53,8 @@ npm run doctor
 
 允许多因素。重复同类问题引用原记录，只有新增证据才更新判断。重跑前说明代码修正、环境恢复、受控复现或新增观测的目的；用于测量偶发性的重复也要预先给出次数与停止条件，不能无限重试直到通过。失败日志、取消和未完成回执都保留，不能被后一次通过覆盖。常规诊断由 Agent 自行推进，不增加逐操作人工批准。
 
+原生命令一旦输出 XCTest 的 `App animations complete notification not received` 超时行，现有执行器以 `native_automation_idle_timeout` 失败并终止自有进程，保留日志和清理，不继续积累每个操作的 60 秒等待。直接原生入口与 suite/design/Duo 使用同一规则。它是明确失效后的停止防线，不是自动根因分类，也不关闭动画/空闲检查。当前独立复现和未采纳的绕法见 [IMP-2 定位记录](../planning/IMP2_IDLE_RECOVERY_20261026.zh-CN.md)；等待问题未解决前，不以完整重跑碰运气。
+
 ### 候选冻结：昂贵验证之前固定身份
 
 顺序为实现/定向测试 -> fast -> 必要审查及已知阻断处理 -> 固定干净提交 -> 完整验收 -> 按授权交付。工具链/输入预检沿现有入口执行。定向跨环境检查可以在冻结前帮助定位；不把候选冻结解释成禁止早期云端诊断。
@@ -92,6 +94,22 @@ npm run verify:candidate -- private --commit "$candidate" --output .tmp/verifica
 
 ## 层级
 
+### IMP：先收束，再完整验收
+
+见 [IMP 路线图](../planning/IMPROVEMENT_IMP_0_4.zh-CN.md)。日常循环不要求三个设备每次全跑：脚本先 Node 反例；共享状态/存储先 host；布局先受影响的原生场景，再交互反例。最终冻结候选仍运行完整 public，Duo 布局相关改动另运行现有 Duo 专项。不以更少执行冒充相同质量，不跨提交拼接。
+
+设计采集统一使用 `npm run design:review -- --device ipad --group training-feedback --output <fresh-directory>`，与完整套件共用 doctor、runSuite、原生命令、会话租约和退出清理；它不是第二套验收系统。无 UI 修改时不要为了生成更多截图重跑全设计集；已有同候选完整结果包可只导出，不重复执行。
+
+`npm run verify` 顺序为 typecheck → build → test。API 的真实 CLI 集成测试通过 workspace 导出的 core 构建产物启动，不能依赖旧 dist；干净候选必须在测试前由同一候选源码生成它。此顺序修正不改变 CI 触发或测试集合。
+
+挂起预算保留在现有外层进程管理中；实际定向诊断先设 5–10 分钟问题预算，正式批次沿用既有上限。原 4/12/15 秒交互断言不改，超时/取消必须失败并释放自己拥有的资源。每个原生步骤显式保存独立 `<step>.xcresult`，不依赖可能被后续构建清理的默认结果目录。
+
+本轮试验的 XCTest 方法级超时模式未采纳，命令明确使用 `-test-timeouts-enabled NO`，挂起仍由外层预算处理。启用时备份取消出现重复 60 秒动画等待；关闭后一次定向对照通过，但后续完整候选仍复现等待，因此该开关不是已确认根因，也不宣称关闭它已解决问题。不关闭动画、不使用私有 XCTest 开关、不因此放宽产品断言。参见[实施结果与尚未通过的完整验收](../planning/IMPROVEMENT_EXECUTION_20261026.zh-CN.md)。
+
+只读成本入口：`node scripts/verification-timing.mjs <suite目录> [...]`，输出 JSON 到 stdout。统计成功/失败/取消、各步骤/方法、累计执行时长、区间合并占用时长和首尾窗口；缺结束时间标未知。日志逐份核对哈希与字节数，未验证日志只作定位；警告与慢方法只记录相关性，不自动归因。此命令不执行测试、不读取训练数据、不生成验收通过声明。
+
+每批记录：预期验证问题、首次有效失败、下一假设、重跑范围、是否替换候选。连续同类失败没有新假设时停止扩大执行范围。完整候选是收尾门槛，不是开发循环。成本目标是减少重做/等待，不能通过降低覆盖、断言期限或保留记录标准来换取。
+
 | 入口 | 覆盖 | 明确不覆盖 |
 | --- | --- | --- |
 | `npm run verify:fast` | 类型、Web/API 单测、脚本/边界、核心/存储、合成 wire、Python 映射 | 全量 UI、私人录像、真实语音、设备 |
@@ -101,7 +119,7 @@ npm run verify:candidate -- private --commit "$candidate" --output .tmp/verifica
 
 可加 `-- --output .tmp/verification/<unique-run>`。公开层可用 `--component web` 或 `--component native` 分工，CI 必须两者都通过；单一 component 不代表完整 public。private 不允许分片绕过公开覆盖。
 
-完整原生运行默认创建专属临时 iPad/iPhone 模拟器，固定本地 iOS 26.3、云端 iOS 26.4、iPhone 17 Pro 与 iPad Pro 11-inch M5 12GB。目标缺失直接失败，不按列表顺序回退；`FOX_SIMULATOR_RUNTIME` 可显式选运行时。完成、失败或正常套件取消后仅清理本次创建的实例。已有模拟器和真机不删除。回执记录实例、运行时、所有权及清理状态；清理失败也不能通过。`doctor` 只读，fast/Web 不创建实例。诊断时可用 `FOX_TRIAL_IPAD_SIMULATOR` / `FOX_TRIAL_IPHONE_SIMULATOR` 指定已有 UDID；它们不会被清理，但其原有状态会影响结果，不属于干净环境证明。
+完整原生运行默认创建专属临时 iPad/iPhone 模拟器，固定本地通用 iOS 27.0、云端显式兼容 profile，以及 iPhone 17 Pro 与 iPad Pro 11-inch M5 12GB。Duo 27.1 单独选型，不用于 iPad 回退。目标缺失直接失败，不按列表顺序回退；`FOX_SIMULATOR_RUNTIME` 可显式选运行时。完成、失败或正常套件取消后仅清理本次创建的实例。已有模拟器和真机不删除。回执记录实例、运行时、所有权及清理状态；清理失败也不能通过。`doctor` 只读，fast/Web 不创建实例。诊断时可用 `FOX_TRIAL_IPAD_SIMULATOR` / `FOX_TRIAL_IPHONE_SIMULATOR` 指定已有 UDID；它们不会被清理，但其原有状态会影响结果，不属于干净环境证明。
 
 套件、诊断及直接 UI 入口共享本用户的模拟器会话，跨工作树争用立即失败。每步若有外部启动实例则停止，不自动关闭。直接 UI 默认也使用临时实例；继承套件目标时核对 token、工作树、工具链和 UDID，不另抢锁。强制终止与异常创建/清理保留 owner 待核查，恢复步骤及工具链并存的退出条件见 [过渡计划](TOOLCHAIN_TRANSITION.zh-CN.md)。人工 Xcode 操作和旧脚本不受互斥约束。
 

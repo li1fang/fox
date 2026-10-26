@@ -482,7 +482,7 @@ async function testNativeUI() {
       // The enclosing suite owns the process group and budget. Do not nest detached runners.
       if (process.env.FOX_SIMULATOR_SESSION_TOKEN) return run(name, args, {capture: captureOutput});
       const logPath = join(logs, `${++sequence}.log`);
-      const result = await executeTestCommand({command: name, args, timeoutMs},
+      const result = await executeTestCommand({command: name, args, timeoutMs, native: name === 'xcodebuild'},
         {logPath, signal: cancellation.signal, forwardOutput: !captureOutput});
       if (result.code !== 0) throw Error(`${name} failed (${result.code}); see ${logPath}`);
       return result.stdout;
@@ -514,8 +514,13 @@ async function testNativeUI() {
     const derivedData = process.env.FOX_IOS_UI_DERIVED_DATA ?? join(root, ".tmp", "ipad-simulator-data");
     const tests = (process.env.FOX_IOS_UI_TEST ?? "FoxUITests").split(",").map((value) => value.trim()).filter(Boolean);
     if (!tests.length) throw new Error('No native tests selected');
+    const resultBundle = process.env.FOX_IOS_UI_RESULT;
+    if (resultBundle && existsSync(resultBundle)) throw Error('Result bundle already exists; use a fresh path');
     await command("xcodebuild", ["-project", projectPath, "-scheme", "Fox", "-configuration", "Debug",
       "-destination", `platform=iOS Simulator,id=${deviceId}`, "-derivedDataPath", derivedData,
+      ...(resultBundle ? ['-resultBundlePath', resolve(resultBundle)] : []),
+      // Keep budgets and fail-closed animation diagnostics in the owning parent process.
+      '-test-timeouts-enabled', 'NO',
       "-parallel-testing-enabled", "NO", ...tests.map((value) => `-only-testing:${value}`), "CODE_SIGNING_ALLOWED=NO", "test"], 60 * 60_000);
     cancellation.signal.throwIfAborted();
   } finally {

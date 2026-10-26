@@ -533,6 +533,7 @@ if(name==='xcrun' && args[1]==='list') {
 }
 if(name==='xcrun' && args[1]==='create') console.log('${id}');
 if(name==='xcodebuild') console.log('NATIVE_PARTIAL_OUTPUT');
+if(name==='xcodebuild' && process.env.FOX_TEST_IDLE_EXPIRED==='1') console.log('    t = 60.00s App animations complete notification not received, will attempt to continue.');
 if(name==='xcodebuild' && process.env.FOX_TEST_WAIT==='1'){writeFileSync(process.env.FOX_TEST_READY,String(process.pid));if(process.env.FOX_TEST_RESIST==='1')process.on('SIGTERM',()=>{});setTimeout(()=>{},60000);}
 if(name==='xcrun' && args[1]==='delete' && process.env.FOX_TEST_CLEANUP_WAIT==='1'){writeFileSync(process.env.FOX_TEST_READY,'cleanup');setTimeout(()=>{},400);}
 `;
@@ -566,6 +567,32 @@ test('direct modern UI entry creates its pinned tablet in an empty compatible ge
   const calls = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
   assert.ok(calls.some(x => x.args[1] === 'create' && x.args.includes('com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB')
     && x.args.at(-1) === 'com.apple.CoreSimulator.SimRuntime.iOS-27-0'));
+});
+
+test('native UI command preserves cases and result bundles without the unaccepted XCTest timeout mode', async t => {
+  const fixture = await fakeNativeCommands(t);
+  const output = path.join(fixture.dir, 'result.xcresult');
+  const ids = ['FoxUITests/FoxDesignReviewUITests/testHomeScenarios', 'FoxUITests/FoxDesignReviewUITests/testHomeSmokeScenarios'];
+  const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_IOS_UI_RESULT: output, FOX_IOS_UI_TEST: ids.join(',')}, encoding: 'utf8', timeout: 10_000});
+  assert.equal(result.status, 0, result.stderr);
+  const args = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse).find(x => x.name === 'xcodebuild').args;
+  assert.equal(args[args.indexOf('-resultBundlePath') + 1], output);
+  assert.equal(args[args.indexOf('-test-timeouts-enabled') + 1], 'NO');
+  assert.equal(args.includes('-default-test-execution-time-allowance'), false);
+  assert.equal(args.includes('-maximum-test-execution-time-allowance'), false);
+  assert.deepEqual(args.filter(x => x.startsWith('-only-testing:')), ids.map(x => `-only-testing:${x}`));
+});
+
+test('direct native entry rejects animation-idle expiry and releases only its owned simulator', async t => {
+  const fixture = await fakeNativeCommands(t);
+  const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'test-ui'], {cwd: developmentEnvironment.root,
+    env: {...fixture.env, FOX_TEST_IDLE_EXPIRED: '1'}, encoding: 'utf8', timeout: 10_000});
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /native_automation_idle_timeout/);
+  const calls = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.ok(calls.some(x => x.args[1] === 'delete' && x.args[2] === fixture.id));
+  await assert.rejects(readFile(path.join(fixture.dir, '.cache/fox/simulator-session/owner.json')), /ENOENT/);
 });
 
 test('direct UI entry rejects a Duo-only runtime without a creation intent or stale claim', async t => {

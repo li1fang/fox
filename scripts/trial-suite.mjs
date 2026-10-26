@@ -46,6 +46,7 @@ export function suiteSteps(directory, devices, inputs = [], {scope = 'private', 
   const ui = (id, tests, device, allowedSkipClasses = []) => ({id, command: 'node', args: ['scripts/ipad.mjs', 'test-ui'],
     timeoutMs: (id === 'ipad-ui' ? 60 : 45) * 60 * 1000,
     native: true, allowedSkipClasses, expectedNative: tests.split(','), env: {FOX_IOS_UI_TEST: tests, FOX_IOS_SIMULATOR: device,
+      FOX_IOS_UI_RESULT: path.join(directory, `${id}.xcresult`),
       TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST: privateScope ? process.env.FOX_PRIVATE_INPUT_MANIFEST : '',
       TEST_RUNNER_FOX_M3_EVIDENCE_DIR: directory,
       TEST_RUNNER_FOX_REAL_SPEECH: privateScope ? '1' : '0',
@@ -126,8 +127,20 @@ export async function execute(step, {logPath, signal, openLog = openLogFile, for
       failure ??= Error(`${step.id ?? step.command} timed out`); terminate();
     }, step.timeoutMs ?? 45 * 60 * 1000);
     signal?.addEventListener('abort', cancel, {once: true});
-    child.stdout.on('data', chunk => { stdout += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stdout.write(chunk); });
-    child.stderr.on('data', chunk => { stderr += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stderr.write(chunk); });
+    // XCTest continues after this 60s expiry; every later gesture can incur it again.
+    // Preserve the first diagnostic and fail closed, without disabling idle checking or retrying.
+    const pendingLines = {stdout: '', stderr: ''};
+    const detectIdleExpiry = (stream, chunk) => {
+      if (!step.native || failure) return;
+      const output = pendingLines[stream] + chunk.toString();
+      pendingLines[stream] = output.slice(output.lastIndexOf('\n') + 1);
+      if (/(?:^|\n)\s*t =\s*\d+(?:\.\d+)?s App animations complete notification not received, will attempt to continue\./.test(output)) {
+        failure ??= Error('native_automation_idle_timeout: XCTest did not receive animation-idle completion; retain logs and diagnose before rerunning');
+        terminate();
+      }
+    };
+    child.stdout.on('data', chunk => { stdout += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stdout.write(chunk); detectIdleExpiry('stdout', chunk); });
+    child.stderr.on('data', chunk => { stderr += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stderr.write(chunk); detectIdleExpiry('stderr', chunk); });
     child.on('error', error => { failure ??= error; });
     child.on('close', async (code, childSignal) => {
       clearTimeout(timeout); clearTimeout(forced); signal?.removeEventListener('abort', cancel);

@@ -22,6 +22,9 @@ test('suite has actual controller, phone/pad UI, real speech, wire and per-event
   assert.match(steps.find(x => x.id === 'app-host').env.FOX_IOS_UI_TEST, /FoxAppTests/);
   assert.match(steps.find(x => x.id === 'real-speech').env.FOX_IOS_UI_TEST, /NativeSpeechTests/);
   assert.equal(steps.find(x => x.id === 'ipad-ui').timeoutMs, 60 * 60 * 1000);
+  for (const step of steps.filter(x => x.args.includes('test-ui'))) {
+    assert.equal(step.env.FOX_IOS_UI_RESULT, `/run/${step.id}.xcresult`);
+  }
   assert.deepEqual(steps.find(x => x.id === 'mapping').args, ['scripts/run-python-tests.py', 'tests/scripts/nested/test_example.py']);
 });
 
@@ -119,6 +122,37 @@ test('a timed-out child exiting zero is a failure, not a green receipt', async t
     preflight: async () => []}), /timed out/);
   assert.match(await readFile(path.join(dir, 'timeout.log'), 'utf8'), /ready/);
   assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'failed');
+});
+
+test('native animation-idle expiry stops the process, retains evidence and does not run later gates', async t => {
+  const {dir} = await harness(t); let later = false;
+  const step = {id: 'native-idle', native: true, command: process.execPath, timeoutMs: 4000,
+    args: ['-e', `process.on('SIGTERM', () => process.exit(0));
+      process.stderr.write('    t = 72.45s App animations complete notification not received,');
+      setTimeout(() => process.stderr.write(' will attempt to continue.\\n'), 25);
+      setInterval(() => {}, 50);`]};
+  await assert.rejects(runSuite({directory: dir, steps: [step, {id: 'later', command: 'fake', args: []}],
+    fingerprint: async () => 'same', preflight: async () => [], execute: async (s, options) => {
+      if (s.id === 'later') later = true;
+      return suiteModule.execute(s, options);
+    }}), /native_automation_idle_timeout/);
+  assert.equal(later, false);
+  const receipt = JSON.parse(await readFile(path.join(dir, 'suite.json')));
+  assert.equal(receipt.status, 'failed');
+  assert.match(receipt.steps[0].error, /native_automation_idle_timeout/);
+  assert.match(await readFile(path.join(dir, 'native-idle.log'), 'utf8'), /will attempt to continue/);
+});
+
+test('animation-idle detector accepts normal native waits and does not interpret non-native quoted logs', async t => {
+  const {dir} = await harness(t);
+  const warning = '    t = 72.45s App animations complete notification not received, will attempt to continue.';
+  const plain = await suiteModule.execute({id: 'plain', command: process.execPath,
+    args: ['-e', `console.log(${JSON.stringify(warning)})`]}, {logPath: path.join(dir, 'plain.log')});
+  assert.equal(plain.code, 0);
+  const normal = await suiteModule.execute({id: 'normal', native: true, command: process.execPath,
+    args: ['-e', `console.log('    t = 1.20s Wait for com.whipa.fox to idle'); console.log('quoted: ${warning.trim()}')`]},
+    {logPath: path.join(dir, 'normal.log')});
+  assert.equal(normal.code, 0);
 });
 
 test('pre-cancelled execution and unavailable logs never spawn a child', async t => {

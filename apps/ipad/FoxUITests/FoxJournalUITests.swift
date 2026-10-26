@@ -141,7 +141,10 @@ final class FoxJournalUITests: XCTestCase {
 
     func testBackupImportCancellationPreservesUnsubmittedNote() {
         let app = launch()
-        note(app).tap(); note(app).typeText("Keep input when import is cancelled.")
+        note(app).tap()
+        let inputStarted = ProcessInfo.processInfo.systemUptime
+        note(app).typeText("Keep input when import is cancelled.")
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - inputStarted, 20, "Text input must not consume an animation-idle timeout")
         app.buttons["journal-backup"].tap()
         app.buttons["journal-import-backup"].tap()
         let cancel = app.buttons["file-import-cancel"]

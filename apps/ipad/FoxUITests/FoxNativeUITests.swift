@@ -104,7 +104,10 @@ final class FoxNativeUITests: XCTestCase {
                     tree.name = "feedback-field-accessibility"; tree.lifetime = .keepAlways; add(tree)
                 }
                 XCTAssertTrue(issue.isHittable)
-                issue.tap(); issue.typeText("语音反馈测试")
+                issue.tap()
+                let inputStarted = ProcessInfo.processInfo.systemUptime
+                issue.typeText("语音反馈测试")
+                XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - inputStarted, 20, "Chinese input must not consume an animation-idle timeout")
                 XCTAssertEqual(issue.value as? String, "语音反馈测试")
             }
             let submit = app.buttons["submit-feedback"]

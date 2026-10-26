@@ -1,6 +1,9 @@
 import XCTest
 
 final class FoxDesignReviewUITests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+    }
     func testColumnAffinitySurvivesComposerGrowth() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -18,10 +21,10 @@ final class FoxDesignReviewUITests: XCTestCase {
         for card in cards.allElementsBoundByIndex { XCTAssertEqual(card.frame.minX, positions[card.identifier]!, accuracy: 1) }
         app.terminate()
     }
-    func testHomeScenarios() throws { captureScenes(DesignScenario.homeCases) }
-    func testHomeSmokeScenarios() throws { captureScenes([.mixed, .receipt, .largeType, .dark]) }
+    func testHomeScenarios() throws { captureScenes(DesignScenario.homeRemainingCases) }
+    func testHomeSmokeScenarios() throws { captureScenes(DesignScenario.homeSmokeCases) }
     func testTrainingProjectionScenarios() { captureScenes(DesignScenario.projectionCases) }
-    func testTrainingScenarios() { captureTrainingScenes(DesignScenario.trainingCases) }
+    func testTrainingScenarios() { captureTrainingScenes(DesignScenario.trainingRemainingCases) }
     func testTrainingRotatedFeedbackInput() { captureTrainingScenes([.trainingFeedbackRotated]) }
     private func captureTrainingScenes(_ scenes: [DesignScenario]) {
         continueAfterFailure = false
@@ -193,9 +196,13 @@ final class FoxDesignReviewUITests: XCTestCase {
                        "submit-feedback", "confirm-summary", "actual-reps", "actual-left-reps", "actual-right-reps", "set-elapsed", "tempo-phase", "training-observation", "phone-target-reps", "phone-target-weight", "phone-training-details", "workout-automatic-count", "workout-tracking-status", "diagnostic-keep", "diagnostic-discard"]
         let recordIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'journal-record-' ")).allElementsBoundByIndex.prefix(8).map(\.identifier)
         let projectionIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-training-projection-' ")).allElementsBoundByIndex.map(\.identifier)
-        let values: [[String: Any]] = (targets + recordIDs + projectionIDs + ["journal-detail-note", "photo-zoom-level"]).compactMap { identifier in
-            let element = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-            guard element.exists else { return nil }
+        let identifiers = targets + recordIDs + projectionIDs + ["journal-detail-note", "photo-zoom-level"]
+        // Resolve present targets together; absent IDs must not each trigger a fresh AX tree search.
+        let matches = app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", identifiers)).allElementsBoundByIndex
+        var firstByID: [String: XCUIElement] = [:]
+        for element in matches where firstByID[element.identifier] == nil { firstByID[element.identifier] = element }
+        let values: [[String: Any]] = identifiers.compactMap { identifier in
+            guard let element = firstByID[identifier] else { return nil }
             return ["id": identifier, "frame": frame(element.frame), "hittable": element.isHittable,
                     "label": element.label, "enabled": element.isEnabled]
         }

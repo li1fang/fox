@@ -15,13 +15,15 @@ npm run design:review -- --device ipad --group training-feedback
 
 分组：`home` 为 14 个命名场景及输入增长的列归属检查；`home-smoke` 只跑混合、长图、大字号、深色及列归属；`records` 为详情、更正冲突、备份及缩放交互；`projections` 为本机计划、未结束、已确认、缺失、损坏及只读详情；`training` 为准备、等待、活动、暂停、休息、反馈、总结、诊断核对及横屏/大字号。它们是有限风险样本，不是全组合或全部设备的证明。
 
-默认沿用现有模拟器。需要指定已安装的其他模拟器时用 `FOX_IOS_SIMULATOR=<UUID>`；报告记录实际型号和系统，不按参数名字假定是真实目标设备。当前 App 仍是全屏，未新增 iPad 分屏支持。
+默认通过现有 `doctor` 和共享会话创建本次专属模拟器，固定通用运行时及对应型号；结束/取消只清理本次创建者。其他任务有活动实例则拒绝，不自动关闭。诊断需要借用已有目标时用 `FOX_IOS_SIMULATOR=<UUID>`，必须属于固定运行时，不会被删除。Duo 使用独立 `verify:duo`，不能按名称回退。当前 App 仍是全屏，未新增 iPad 分屏支持。
 
 `training-feedback` 只复查横屏双侧反馈输入，便于修键盘问题时少跑其他状态；场景与完整 `training` 分组共用同一驱动。首次输入确认键盘出现，输入后另采截图/AX，再定位下一输入框并断言左右实际数值；切换输入框时不要求软件键盘始终存在，也不靠放宽完成次数来消除时序失败。
 
-可加 `--output .tmp/design-review/<unique-name>` 保留固定位置；不要复用已有结果包目录。输出包含 `source.json`、`result.xcresult`、`run.log`、`report.json`、`index.html` 和附件。报告带构建前原生 Swift/YML/plist 源码指纹、实际设备、场景、方向、窗口、宿主请求的字号/外观、控件框/可用状态与明确未知项；AX 原树单独保留。指纹不代表全部资源、运行时配置或整机状态的快照，涉及这些输入的变更仍需另外登记。命令还核对每个被请求的方法均产出观测，防止一个不存在的测试被同组绿色结果掩盖。
+可加 `--output .tmp/design-review/<unique-name>`；不得复用已有回执/结果包。复用 `runSuite`，输出 `suite.json`、`design-ui.log`、`design-collect.log`、`source.json`、`result.xcresult`、`report.json`、`index.html` 和附件。suite 绑定完整仓库指纹/提交/环境/取消清理，scope 为 `diagnostic`；source.json 仅是额外原生源码指纹。报告保留实际设备、方向、字号/外观请求、控件几何、AX 原树及未知项。
 
-中途失败保留原结果；只修相关问题后另建输出目录复查，不删除失败见证。只收集现有结果时可用 `node scripts/design-review.mjs collect --result <xcresult> --output <directory>`；没有事前 `source.json` 的结果会标为源码未核对，不能事后把当前源码指纹补作构建时证据。
+`home` 包含 remaining+smoke 的不相交并集，`training` 包含 remaining+横屏双侧反馈；组合组也只选择每个方法一次。完整套件仍执行全部场景与原断言。必须精确执行选中方法并产出每个预期场景的截图，缺方法/skip/缺图/取消/清理失败均不能成功。不通过几何报告推断业务正确性。
+
+中途失败保留原结果；只修相关问题后另建目录复查。只收集现有结果时使用 `node scripts/design-review.mjs collect --result <xcresult> --output <directory> --group <原分组>`；collect 不生成 suite 成功回执，没有事前 source.json 则源码未核对，也不能事后补指纹冒充构建证据。
 
 ## 每次改页面
 

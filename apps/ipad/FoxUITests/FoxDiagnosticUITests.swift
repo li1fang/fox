@@ -38,6 +38,8 @@ final class FoxDiagnosticUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["diagnostic-pending-retention"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["diagnostic-keep"].exists)
         XCTAssertTrue(app.buttons["diagnostic-discard"].exists)
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "IMP3-review-before-retention-choice"; shot.lifetime = .keepAlways; add(shot)
     }
 
     private func readyToTap(_ element: XCUIElement, in app: XCUIApplication) {
@@ -137,6 +139,8 @@ final class FoxDiagnosticUITests: XCTestCase {
         XCTAssertEqual(countResult, .completed)
         app.buttons["vision-finish"].tap()
         XCTAssertTrue(app.buttons["vision-save-report"].waitForExistence(timeout: 8))
+        let report = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        report.name = "IMP3-results-before-video-review"; report.lifetime = .keepAlways; add(report)
         review(app)
         app.buttons["diagnostic-discard"].tap()
         let save = app.buttons["vision-save-report"]

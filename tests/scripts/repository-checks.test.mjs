@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkLinks, checkPublicFile, checkTask} from '../../scripts/repository-checks.mjs';
+import {readFile} from 'node:fs/promises';
+
+test('verification builds workspace runtime artifacts before real CLI integration tests', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.scripts.verify, 'npm run typecheck && npm run build && npm run test');
+  assert(pkg.scripts.build.startsWith('npm run build -w @fox/core &&'));
+});
 
 test('public source boundaries reject private media and signing identity, allow synthetic JSON', () => {
   for (const file of ['.data/raw.json', '.tmp/suite.json', 'video.mov', 'snapshot.sqlite', 'inputs.private.json', 'author.docx']) {

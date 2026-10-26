@@ -2319,6 +2319,18 @@
       "file": "tests/scripts/test_workflow_schema.py",
       "scope": "public",
       "surface": "host"
+    },
+    {
+      "id": "FoxAppTests/DesignScenarioTests/testScenarioOwnershipIsCompleteAndDisjoint",
+      "file": "apps/ipad/FoxAppTests/DesignScenarioTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "tests/scripts/verification-timing.test.mjs",
+      "file": "tests/scripts/verification-timing.test.mjs",
+      "scope": "public",
+      "surface": "host"
     }
   ]
 }
