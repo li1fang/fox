@@ -12,8 +12,9 @@ final class FoxWorkoutVisionUITests: XCTestCase {
         app.launchEnvironment["FOX_WEB_URL"] = "http://127.0.0.1:1/unreachable"
         app.launchArguments = ["--ui-testing-reset"]
         app.launch()
-        XCTAssertTrue(app.buttons["prepare-day1"].waitForExistence(timeout: 5))
-        app.buttons["prepare-day1"].tap()
+        app.buttons["training-tools"].tap()
+        XCTAssertTrue(app.buttons["准备 Day 1 草稿"].waitForExistence(timeout: 5))
+        app.buttons["准备 Day 1 草稿"].tap()
         XCTAssertTrue(app.staticTexts["Real exercise · Day 1"].waitForExistence(timeout: 5))
         app.buttons["start-training"].tap()
         return app

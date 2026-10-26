@@ -34,11 +34,14 @@ final class TrainingStore: ObservableObject {
         }
         do {
             let repository: LocalTrainingRepository
-            if testing && environment["FOX_UI_FAIL_EARLY_END_ONCE"] == "1" {
+            if testing && (environment["FOX_UI_FAIL_EARLY_END_ONCE"] == "1" || environment["FOX_UI_FAIL_CONFIRM_ONCE"] == "1") {
                 var failed = false
                 repository = try LocalTrainingRepository(fileURL: fileURL, writer: { data, url in
                     let archive = try LocalTrainingRepository.decoder().decode(TrainingArchive.self, from: data)
-                    if !failed && archive.sessions.contains(where: { $0.endedEarly }) {
+                    let blockedWrite = environment["FOX_UI_FAIL_CONFIRM_ONCE"] == "1"
+                        ? archive.sessions.contains(where: { $0.isFinished })
+                        : archive.sessions.contains(where: { $0.endedEarly })
+                    if !failed && blockedWrite {
                         failed = true
                         throw CocoaError(.fileWriteOutOfSpace)
                     }

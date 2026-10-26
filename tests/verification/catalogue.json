@@ -2,6 +2,21 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxAppTests/TrainingJourneyInputTests/testObservationChoiceIsBoundToAttemptAndFallsBackToNextExercisePlan","file":"apps/ipad/FoxAppTests/TrainingJourneyInputTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/TrainingJourneyInputTests/testPlanTargetTextPreservesPerSideAndTimedSemantics","file":"apps/ipad/FoxAppTests/TrainingJourneyInputTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxDailyJourneyUITests/testFailedConfirmationKeepsSummaryAndRetrySavesOnlyOnce","file":"apps/ipad/FoxUITests/FoxDailyJourneyUITests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/TrainingJourneyInputTests/testUnknownCountOnlyChangesAfterExplicitStep","file":"apps/ipad/FoxAppTests/TrainingJourneyInputTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/TrainingJourneyInputTests/testCountBoundsAndInvalidSideNeverSilentlyBecomeUnknown","file":"apps/ipad/FoxAppTests/TrainingJourneyInputTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxDailyJourneyUITests/testEntryAndFeedbackAudit","file":"apps/ipad/FoxUITests/FoxDailyJourneyUITests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxDailyJourneyUITests/testPlanActionIsPinnedAndExperimentToolsAreSecondary","file":"apps/ipad/FoxUITests/FoxDailyJourneyUITests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxDailyJourneyUITests/testManualCountConfirmationNeedsNoKeyboardAndRestAcknowledgesSave","file":"apps/ipad/FoxUITests/FoxDailyJourneyUITests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxDailyJourneyUITests/testFourVisualSetsConfirmAndReopenWithoutOptionalInput","file":"apps/ipad/FoxUITests/FoxDailyJourneyUITests.swift","scope":"public","surface":"ipad"},
+    {
+      "id": "FoxUITests/FoxDesignReviewUITests/testTrainingJourneyScenarios",
+      "file": "apps/ipad/FoxUITests/FoxDesignReviewUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
     {
       "id": "FoxAppTests/TrainingStoryTests/testPreparationAndRecoveryExplainRetainedFactsWithoutInventingMotion",
       "file": "apps/ipad/FoxAppTests/TrainingStoryTests.swift",

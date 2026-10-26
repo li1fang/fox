@@ -26,6 +26,9 @@ final class FoxDesignReviewUITests: XCTestCase {
     func testTrainingProjectionScenarios() { captureScenes(DesignScenario.projectionCases) }
     func testTrainingScenarios() { captureTrainingScenes(DesignScenario.trainingRemainingCases) }
     func testTrainingRotatedFeedbackInput() { captureTrainingScenes([.trainingFeedbackRotated]) }
+    func testTrainingJourneyScenarios() {
+        captureTrainingScenes(DesignScenario.trainingJourneyCases)
+    }
     private func captureTrainingScenes(_ scenes: [DesignScenario]) {
         continueAfterFailure = false
         for scenario in scenes {

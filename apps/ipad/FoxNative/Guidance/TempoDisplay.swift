@@ -7,6 +7,7 @@ struct TempoDisplay: View {
     let running: Bool
     var compact = false
     var drawingSize: CGFloat = 160
+    var inactiveLabel = "待开始"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -16,7 +17,7 @@ struct TempoDisplay: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(phase.phase == "peak" ? FoxStyle.coral : FoxStyle.green)
                 .frame(width: compact ? 50 : drawingSize, height: compact ? 50 : drawingSize).scaleEffect(scale)
-            Text(running ? phase.label : "待开始").font(.system(size: compact ? 16 : 22, weight: .semibold))
+            Text(running ? phase.label : inactiveLabel).font(.system(size: compact ? 16 : 22, weight: .semibold))
                 .accessibilityIdentifier("tempo-phase")
         }
     }

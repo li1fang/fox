@@ -12,8 +12,8 @@ const env = environment;
 const groups = { home: ['testHomeScenarios', 'testHomeSmokeScenarios', 'testColumnAffinitySurvivesComposerGrowth'],
   'home-smoke': ['testHomeSmokeScenarios', 'testColumnAffinitySurvivesComposerGrowth'],
   records: ['testRecordScenarios', 'testFullPhotoCanZoomAndReturnToUnchangedRecord'],
-  projections: ['testTrainingProjectionScenarios', 'testReadOnlyTrainingCardCanOpenAndClose'], training: ['testTrainingScenarios', 'testTrainingRotatedFeedbackInput'],
-  'training-feedback': ['testTrainingRotatedFeedbackInput'] };
+  projections: ['testTrainingProjectionScenarios', 'testReadOnlyTrainingCardCanOpenAndClose'], training: ['testTrainingJourneyScenarios', 'testTrainingScenarios', 'testTrainingRotatedFeedbackInput'],
+  'training-feedback': ['testTrainingRotatedFeedbackInput'], 'training-journey': ['testTrainingJourneyScenarios'] };
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function sourceFingerprint(directory = root) {
@@ -81,6 +81,8 @@ export function collect(resultPath, output, source = null) {
 }
 
 export const designScenes = {
+  testTrainingJourneyScenarios: ['training-ready', 'training-waiting', 'training-active', 'training-paused', 'training-rest',
+    'training-summary', 'training-active-rotated', 'training-large-type'],
   testHomeScenarios: ['home-empty', 'home-long-text', 'home-portrait-photo', 'home-landscape-photo', 'home-missing-photo',
     'home-keyboard', 'home-loading', 'home-save-failure', 'home-pagination', 'home-rotated'],
   testHomeSmokeScenarios: ['home-mixed', 'home-long-photo', 'home-large-type', 'home-dark'],
@@ -89,8 +91,7 @@ export const designScenes = {
   testFullPhotoCanZoomAndReturnToUnchangedRecord: ['record-full-photo-zoom'],
   testTrainingProjectionScenarios: ['projection-plan', 'projection-current', 'projection-confirmed', 'projection-missing', 'projection-corrupt'],
   testReadOnlyTrainingCardCanOpenAndClose: ['projection-read-only-detail'],
-  testTrainingScenarios: ['training-ready', 'training-waiting', 'training-active', 'training-paused', 'training-rest', 'training-feedback',
-    'training-summary', 'training-diagnostic-review', 'training-active-rotated', 'training-large-type', 'training-feedback-keyboard'],
+  testTrainingScenarios: ['training-feedback', 'training-diagnostic-review', 'training-feedback-keyboard'],
   testTrainingRotatedFeedbackInput: ['training-feedback-rotated', 'training-feedback-rotated-left-input', 'training-feedback-rotated-keyboard']
 };
 

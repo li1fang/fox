@@ -155,7 +155,8 @@ final class FoxVisionUITests: XCTestCase {
     }
     private func page(_ name: String, app: XCUIApplication) {
         closeOptions(app)
-        if phone && app.buttons["training-page-menu"].exists { app.buttons["training-page-menu"].tap() }
+        if app.buttons["training-page-menu"].exists { app.buttons["training-page-menu"].tap() }
+        else if name == "视觉实验" { app.buttons["training-tools"].tap() }
         app.buttons[name].tap()
     }
     private func screenAngle(_ app: XCUIApplication) -> String {
@@ -451,8 +452,9 @@ final class FoxVisionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["vision-finish"].exists)
         begin(app)
         XCTAssertTrue(app.buttons["vision-cancel-start"].waitForExistence(timeout: 5))
-        page("计划", app: app)
-        page("视觉", app: app)
+        page("训练", app: app)
+        XCTAssertTrue(app.segmentedControls.buttons["计划"].isSelected, "Without an active session, training returns to the selected plan page")
+        page("视觉实验", app: app)
         XCTAssertTrue(app.buttons["vision-start"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["vision-pause"].exists)
         XCTAssertFalse(app.buttons["vision-cancel-start"].exists)

@@ -9,7 +9,11 @@ struct TrainingScreen: View {
     @ObservedObject private var visual: VisionLabController
     @ObservedObject private var guidance: GuidanceSession
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedArm: ArmSide
+    @State private var armChoice: TrainingArmChoice?
+    private var selectedArm: ArmSide { TrainingArmChoice.current(armChoice, session: session) }
+    private var armBinding: Binding<ArmSide> {
+        Binding(get: { selectedArm }, set: { armChoice = TrainingArmChoice(attemptID: session.currentSetAttemptId, arm: $0) })
+    }
     @State private var summaryNote = ""
     @State private var editingRecord: LocalSetRecord?
     @State private var diagnosticsExpanded = false
@@ -26,7 +30,6 @@ struct TrainingScreen: View {
         self.phoneLandscapeNavigation = phoneLandscapeNavigation
         visual = store.workoutVision.controller
         guidance = store.guidance
-        _selectedArm = State(initialValue: session.exercise.visualObservation?.arm ?? .left)
     }
 
     var body: some View {
@@ -61,7 +64,6 @@ struct TrainingScreen: View {
             }
         } else if UIDevice.current.userInterfaceIdiom == .phone && session.stage != .feedback {
             phoneTrainingBody
-                .onChange(of: session.currentSetAttemptId) { _ in selectedArm = session.exercise.visualObservation?.arm ?? .left }
                 .sheet(isPresented: $showingPhoneDetails) { phoneDetails }
         } else {
             VStack(spacing: compactFeedback ? 0 : 18) {
@@ -101,7 +103,6 @@ struct TrainingScreen: View {
                             .padding(16).background(.bar).accessibilityIdentifier("training-actions")
                     }
                 }
-                .onChange(of: session.currentSetAttemptId) { _ in selectedArm = session.exercise.visualObservation?.arm ?? .left }
         }
     }
 
@@ -136,7 +137,7 @@ struct TrainingScreen: View {
             if usesPhoneCamera { workoutTask }
             if sideBySide && usesPhoneCamera {
                 if session.stage == .ready || session.stage == .paused {
-                    Picker("观测手臂", selection: $selectedArm) {
+                    Picker("观测手臂", selection: armBinding) {
                         ForEach(ArmSide.allCases, id: \.self) { Text($0.label).tag($0) }
                     }.pickerStyle(.segmented).disabled(session.currentVisualEvidence != nil)
                         .accessibilityIdentifier("workout-quick-arm")
@@ -220,14 +221,14 @@ struct TrainingScreen: View {
                 HStack(spacing: 24) {
                     phoneClock(elapsed: elapsed)
                     TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active,
-                                 drawingSize: max(32, min(90, size.height - 48)))
+                                 drawingSize: max(32, min(90, size.height - 48)), inactiveLabel: inactiveTempoLabel)
                         .frame(maxWidth: .infinity)
                 }
             } else {
                 VStack(spacing: 24) {
                     phoneClock(elapsed: elapsed)
                     TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active,
-                                 drawingSize: max(64, min(170, size.height - 180)))
+                                 drawingSize: max(64, min(170, size.height - 180)), inactiveLabel: inactiveTempoLabel)
                 }
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -248,6 +249,7 @@ struct TrainingScreen: View {
     private func phoneRest(at date: Date, short: Bool) -> some View {
         let rest = session.restRemaining(at: date)
         return VStack(spacing: short ? 8 : 20) {
+            restReceipt
             Text(rest > 0 ? "休息" : "准备下一组").font(.headline).foregroundStyle(FoxStyle.green)
             Text(durationText(ceil(rest))).font(.system(size: short ? 42 : 72, weight: .semibold)).monospacedDigit()
                 .accessibilityIdentifier("rest-remaining")
@@ -314,8 +316,8 @@ struct TrainingScreen: View {
                 FoxCommand(title: "暂停", icon: "pause.fill") { _ = store.workoutVision.pause() }.accessibilityIdentifier("pause-set")
             }
         } else if session.stage == .rest {
-            FoxCommand(title: "准备好了", icon: "play.fill", prominent: true) { store.updateSession { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
-            FoxCommand(title: "+30 秒", icon: "plus") { store.updateSession { try $0.extendRest(by: 30, at: Date()) } }.accessibilityIdentifier("extend-rest")
+            FoxCommand(title: "准备下一组", icon: "play.fill", prominent: true) { store.updateSession { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
+            FoxCommand(title: "30 秒", icon: "plus") { store.updateSession { try $0.extendRest(by: 30, at: Date()) } }.accessibilityIdentifier("extend-rest")
         }
     }
 
@@ -323,6 +325,12 @@ struct TrainingScreen: View {
         FoxCommand(title: "重新就位", icon: "arrow.clockwise") { store.workoutVision.rebindSubject() }
             .accessibilityIdentifier("rebind-vision-set")
     }
+
+    private var restReceipt: some View {
+        Label(session.records.last?.status == "skipped" ? "跳过已记录" : "上一组已保存", systemImage: "checkmark.circle")
+            .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("training-set-saved")
+    }
+    private var inactiveTempoLabel: String { session.stage == .paused ? "节奏已暂停" : "待开始" }
 
     private var actionColumnCount: Int {
         if typeSize.isAccessibilitySize { return 1 }
@@ -339,7 +347,7 @@ struct TrainingScreen: View {
                 if session.stage == .rest {
                     Text(durationText(ceil(session.restRemaining(at: timeline.date))))
                         .font(.system(size: 48, weight: .semibold)).monospacedDigit()
-                    Text("休息 · 下一组").font(.headline)
+                    VStack { restReceipt; Text("休息 · 下一组").font(.headline) }
                 } else if let evidence = session.currentVisualEvidence {
                     Text(String(evidence.automaticCount)).font(.system(size: 64, weight: .bold, design: .rounded))
                         .monospacedDigit().frame(minWidth: 90).accessibilityIdentifier("workout-automatic-count")
@@ -357,7 +365,7 @@ struct TrainingScreen: View {
                         .font(.headline).accessibilityIdentifier("training-stage")
                 }
                 if session.stage != .rest && showsPlannedTempo {
-                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, compact: true)
+                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, compact: true, inactiveLabel: inactiveTempoLabel)
                         .frame(width: 90, height: 78)
                 }
             }.frame(maxWidth: .infinity).frame(minHeight: 80)
@@ -383,6 +391,7 @@ struct TrainingScreen: View {
             let rest = session.restRemaining(at: timeline.date)
             VStack(spacing: 18) {
                 if session.stage == .rest {
+                    restReceipt
                     Text(rest > 0 ? "休息" : "准备下一组").font(.system(size: 26, weight: .semibold)).foregroundStyle(FoxStyle.green)
                     Text(durationText(ceil(rest))).font(.system(size: 100, weight: .medium, design: .rounded)).monospacedDigit().minimumScaleFactor(0.6)
                     ProgressView(value: max(0, min(1, 1 - rest / max(1, session.restDurationSeconds)))).frame(maxWidth: 480)
@@ -401,7 +410,7 @@ struct TrainingScreen: View {
                         } else if showsPlannedTempo {
                             VStack(spacing: 4) {
                                 Text("计划节奏").font(.caption).foregroundStyle(.secondary)
-                                TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active)
+                                TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, inactiveLabel: inactiveTempoLabel)
                                     .frame(width: 180, height: 200)
                             }
                         } else {
@@ -417,7 +426,7 @@ struct TrainingScreen: View {
                         Text("本组用时").font(.body).foregroundStyle(.secondary)
                         Text(durationText(elapsed)).font(.system(size: 44, weight: .semibold)).monospacedDigit().accessibilityIdentifier("set-elapsed")
                     }
-                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active)
+                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, inactiveLabel: inactiveTempoLabel)
                         .frame(width: 220, height: 220)
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -478,7 +487,7 @@ struct TrainingScreen: View {
             }
             if session.stage == .ready || session.stage == .paused {
                 if session.exercise.visualObservation != nil, session.currentVisualEvidence?.fallbackReason == nil {
-                    Picker("观察侧", selection: $selectedArm) {
+                    Picker("观察侧", selection: armBinding) {
                         Text("左臂").tag(ArmSide.left); Text("右臂").tag(ArmSide.right)
                     }.pickerStyle(.segmented).disabled(session.currentVisualEvidence != nil).accessibilityIdentifier("workout-observation-arm")
                     Text(session.exercise.visualObservation?.exercise.guidance ?? "").font(.system(size: 18)).foregroundStyle(.secondary)
@@ -528,7 +537,7 @@ struct TrainingScreen: View {
                     FoxCommand(title: "改为人工记录", icon: "hand.tap") { store.workoutVision.useManual() }.accessibilityIdentifier("manual-count")
                 }
             } else if session.stage == .rest {
-                FoxCommand(title: "准备好了", icon: "play.fill", prominent: true) { store.updateSession { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
+                FoxCommand(title: "准备下一组", icon: "play.fill", prominent: true) { store.updateSession { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
                 FoxCommand(title: "再休息 30 秒", icon: "plus") { store.updateSession { try $0.extendRest(by: 30, at: Date()) } }.accessibilityIdentifier("extend-rest")
             }
     }
@@ -582,6 +591,7 @@ struct SetFeedbackView: View {
     @State private var note = ""
     @State private var information = ""
     @State private var softwareIssue = ""
+    @State private var feedbackExpanded = false
     @FocusState private var editing: Bool
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -593,29 +603,34 @@ struct SetFeedbackView: View {
                 } else { Text("确认本组").font(.system(size: 26, weight: .semibold)) }
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 40) { actualCount; actualWeight.frame(width: 260); actualDuration }.fixedSize(horizontal: true, vertical: false)
-                    VStack(alignment: .leading, spacing: 24) { actualCount; actualWeight.frame(maxWidth: 320); actualDuration }
+                    VStack(alignment: .leading, spacing: 16) {
+                        actualCount
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: 16) { actualWeight; actualDuration }
+                            VStack(alignment: .leading, spacing: 16) { actualWeight; actualDuration }
+                        }
+                    }
                 }
                 if let evidence = session.currentVisualEvidence, evidence.hasObservedFrames {
                     Text("观测 \(evidence.settings.arm.label) \(evidence.automaticCount) 次，待你确认").font(.system(size: 20)).foregroundStyle(FoxStyle.green)
                     ReturnIntervalView(rows: ReturnIntervalSummary.make(evidence: evidence))
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 16)], spacing: 16) {
+                Text("这一组感觉如何").font(.headline)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                     ForEach(SetFeedback.allCases, id: \.self) { feedback in
                         Toggle(feedback.label, isOn: Binding(get: { selected.contains(feedback) }, set: { enabled in
                             if enabled { selected.insert(feedback) } else { selected.remove(feedback) }
-                        })).toggleStyle(.button).font(.system(size: 20)).frame(minHeight: 48)
+                        })).toggleStyle(.button).buttonStyle(.bordered).font(.body).frame(minHeight: 48)
                             .tint(feedback == .pain ? FoxStyle.coral : FoxStyle.green)
                     }
                 }
-                if session.currentVisualEvidence != nil {
-                    DisclosureGroup("补充反馈（可选）") {
-                        TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $note)
-                    }.accessibilityIdentifier("workout-review-feedback")
-                } else {
+                DisclosureGroup("补充反馈（可选）", isExpanded: $feedbackExpanded) {
                     TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $note)
                 }
                 Divider()
-                VisionDiagnosticControls(controller: store.workoutVision.controller)
+                DisclosureGroup("录像与诊断") {
+                    VisionDiagnosticControls(controller: store.workoutVision.controller)
+                }
             }.padding(.vertical, 12)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -636,8 +651,9 @@ struct SetFeedbackView: View {
                         let review = try TrialReview.make(information: information, softwareIssue: softwareIssue, trainingFeeling: note, at: now)
                         try $0.submit(reps: Int(reps), sideRepetitions: sides, feedback: Array(selected), notes: note, at: now, review: review)
                     }
-                }.disabled(session.target.targetReps != nil && (session.exercise.repetitionBasis == .perSide
-                    ? Int(leftReps) == nil && Int(rightReps) == nil : Int(reps) == nil)).accessibilityIdentifier("submit-feedback")
+                }.disabled(session.target.targetReps != nil && !TrainingCountInput.canConfirm(
+                    session.exercise.repetitionBasis == .perSide ? [leftReps, rightReps] : [reps]))
+                    .accessibilityIdentifier("submit-feedback")
             }.padding(.vertical, verticalSizeClass == .compact ? 4 : 12).background(.bar)
         }.onAppear {
             weight = session.currentWeight
@@ -658,18 +674,18 @@ struct SetFeedbackView: View {
                                 HStack(spacing: 16) {
                                     VStack(alignment: .leading) {
                                         Text("左臂").font(.system(size: 18))
-                                        TextField("次数", text: $leftReps).keyboardType(.numberPad).textFieldStyle(.roundedBorder)
-                                            .font(.system(size: 32, weight: .semibold)).frame(width: 110).accessibilityIdentifier("actual-left-reps")
+                                        TrainingCountField(text: $leftReps, identifier: "actual-left-reps", label: "左臂次数")
                                     }
                                     VStack(alignment: .leading) {
                                         Text("右臂").font(.system(size: 18))
-                                        TextField("次数", text: $rightReps).keyboardType(.numberPad).textFieldStyle(.roundedBorder)
-                                            .font(.system(size: 32, weight: .semibold)).frame(width: 110).accessibilityIdentifier("actual-right-reps")
+                                        TrainingCountField(text: $rightReps, identifier: "actual-right-reps", label: "右臂次数")
                                     }
                                 }
                             } else {
-                            TextField("次数", text: $reps).keyboardType(.numberPad).textFieldStyle(.roundedBorder)
-                                .font(.system(size: 36, weight: .semibold)).frame(maxWidth: 220).accessibilityIdentifier("actual-reps")
+                            TrainingCountField(text: $reps, identifier: "actual-reps", label: "实际次数")
+                            }
+                            if !TrainingCountInput.canConfirm(session.exercise.repetitionBasis == .perSide ? [leftReps, rightReps] : [reps]) {
+                                Text("次数待确认").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("feedback-count-required")
                             }
                         }
                     }

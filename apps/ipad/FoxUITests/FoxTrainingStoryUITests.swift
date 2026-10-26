@@ -109,7 +109,8 @@ final class FoxTrainingStoryUITests: XCTestCase {
 
     func testWorkoutRecoveryExplainsPreservedFacts() {
         let app = launch("subject_loss", screen: "training")
-        XCTAssertTrue(app.buttons["prepare-day1"].waitForExistence(timeout: 5)); app.buttons["prepare-day1"].tap()
+        app.buttons["training-tools"].tap()
+        XCTAssertTrue(app.buttons["准备 Day 1 草稿"].waitForExistence(timeout: 5)); app.buttons["准备 Day 1 草稿"].tap()
         app.buttons["start-training"].tap()
         visible(app.buttons["begin-vision-set"], in: app); app.buttons["begin-vision-set"].tap()
         XCTAssertTrue(app.buttons["rebind-vision-set"].waitForExistence(timeout: 15))
@@ -126,7 +127,8 @@ final class FoxTrainingStoryUITests: XCTestCase {
 
     func testManualFallbackRestoresPlannedTempoWithoutDiscardingObservedCount() {
         let app = launch("normal", screen: "training")
-        XCTAssertTrue(app.buttons["prepare-day1"].waitForExistence(timeout: 5)); app.buttons["prepare-day1"].tap()
+        app.buttons["training-tools"].tap()
+        XCTAssertTrue(app.buttons["准备 Day 1 草稿"].waitForExistence(timeout: 5)); app.buttons["准备 Day 1 草稿"].tap()
         app.buttons["start-training"].tap()
         app.buttons["begin-vision-set"].tap()
         count(2, id: "workout-automatic-count", in: app)

@@ -32,7 +32,11 @@ enum DesignScenario: String, CaseIterable, Identifiable {
     static var recordCases: [Self] { allCases.filter { $0.section == "records" } }
     static var projectionCases: [Self] { allCases.filter { $0.section == "projections" } }
     static var trainingCases: [Self] { allCases.filter { $0.section == "training" } }
-    static var trainingRemainingCases: [Self] { trainingCases.filter { $0 != .trainingFeedbackRotated } }
+    static let trainingJourneyCases: [Self] = [.trainingReady, .trainingWaiting, .trainingActive, .trainingPaused,
+                                             .trainingRest, .trainingSummary, .trainingRotated, .trainingLargeType]
+    static var trainingRemainingCases: [Self] {
+        trainingCases.filter { $0 != .trainingFeedbackRotated && !trainingJourneyCases.contains($0) }
+    }
     var hasPhoto: Bool { [.mixed, .portrait, .landscape, .receipt, .missing, .dark, .recordLongPhoto, .recordMulti, .recordMissing].contains(self) }
     static var active: DesignScenario? {
         #if DEBUG

@@ -17,6 +17,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         XCTAssertTrue(count.waitForExistence(timeout: 5)); count.tap(); count.typeText("2")
         visible(app.buttons["feedback-dismiss-keyboard"], in: app, diagnosticID: "feedback-dismiss-keyboard")
         app.buttons["feedback-dismiss-keyboard"].tap()
+        app.openOptionalTrainingFeedback()
         for (index, id) in ["trial-information", "trial-software-issue", "trial-training-feeling"].enumerated() {
             let orientation: UIDeviceOrientation = index == 1 ? .landscapeLeft : .portrait
             XCUIDevice.shared.orientation = orientation
@@ -391,7 +392,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 10))
         app.buttons["home-training"].tap()
-        app.buttons["视觉"].tap()
+        app.buttons["training-tools"].tap()
+        app.buttons["视觉实验"].tap()
         XCTAssertTrue(app.otherElements["pose-preview"].waitForExistence(timeout: 8))
         screenshot("phone-vision-portrait", app: app)
         visible(app.buttons["vision-options"], in: app)
@@ -556,7 +558,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-reset"]; app.launch()
         XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 10))
         app.buttons["home-training"].tap()
-        app.buttons["prepare-day1"].tap(); app.buttons["start-training"].tap()
+        app.buttons["training-tools"].tap(); app.buttons["准备 Day 1 草稿"].tap(); app.buttons["start-training"].tap()
         visible(app.buttons["begin-vision-set"], in: app)
         app.buttons["begin-vision-set"].tap()
         let counted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '2'"), object: app.staticTexts["workout-automatic-count"])

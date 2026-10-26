@@ -65,9 +65,11 @@ struct FoxRootView: View {
     @State private var ending = false
     @State private var sheet: FoxSheet?
     @State private var choosingPhonePage = false
+    @State private var savedSessionID: UUID?
     private let heartbeat = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
     private var phoneFocus: Bool { isPhone && (tab == "vision" || (tab == "training" && store.session != nil)) }
+    private var trainingFocus: Bool { tab == "vision" || (tab == "training" && store.session != nil) }
     private var phoneLandscapeFocus: Bool {
         isPhone && FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) && (tab == "vision" ||
             (tab == "training" && store.session.map { [.ready, .active, .paused, .rest].contains($0.stage) } == true))
@@ -76,7 +78,8 @@ struct FoxRootView: View {
     var body: some View {
         VStack(spacing: 0) {
             if !phoneLandscapeFocus { Group {
-                if isPhone || sizeClass == .compact {
+                if trainingFocus { headerActions }
+                else if isPhone || sizeClass == .compact {
                     if phoneFocus || (tab == "training" && store.session != nil) {
                         headerActions
                     } else { VStack(spacing: 8) { headerActions; pagePicker } }
@@ -99,7 +102,9 @@ struct FoxRootView: View {
                     FoxCommand(title: "导出原文件", icon: "square.and.arrow.up") { sheet = .share(store.fileURL) }.frame(maxWidth: 320)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if tab == "training", let session = store.session {
-                TrainingScreen(store: store, session: session, phoneLandscapeNavigation: AnyView(headerActions)) { tab = "history" }
+                TrainingScreen(store: store, session: session, phoneLandscapeNavigation: AnyView(headerActions)) {
+                    savedSessionID = session.id; tab = "history"
+                }
             } else if tab == "history" {
                 history
             } else {
@@ -111,7 +116,11 @@ struct FoxRootView: View {
         .tint(FoxStyle.green)
         .foregroundStyle(FoxStyle.ink)
         .preferredColorScheme(.light)
-        .onAppear { if store.session != nil && tab != "vision" { tab = "training" }; updateIdleTimer() }
+        .onAppear {
+            if store.session != nil && tab != "vision" { tab = "training" }
+            else if store.session == nil && tab == "training" { tab = "plan" }
+            updateIdleTimer()
+        }
         .onChange(of: tab) { value in
             if value != "training" && store.session?.currentObservationId != nil { _ = store.workoutVision.pause() }
             if value == "vision" { store.pauseIfActive() }
@@ -150,9 +159,9 @@ struct FoxRootView: View {
         }
         .confirmationDialog("训练页面", isPresented: $choosingPhonePage, titleVisibility: .visible) {
             Button("计划") { tab = "plan" }
-            Button("训练") { tab = "training" }
+            Button("训练") { tab = store.session == nil ? "plan" : "training" }
             Button("记录") { tab = "history" }
-            Button("视觉") { tab = "vision" }
+            Button("视觉实验") { tab = "vision" }
             Button("取消", role: .cancel) {}
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
@@ -189,9 +198,8 @@ struct FoxRootView: View {
     private var pagePicker: some View {
         Picker("页面", selection: $tab) {
             Text("计划").tag("plan")
-            Text("训练").tag("training")
+            if store.session != nil { Text("训练").tag("training") }
             Text("记录").tag("history")
-            Text("视觉").tag("vision")
         }.pickerStyle(.segmented).frame(maxWidth: isPhone || sizeClass == .compact ? .infinity : 440)
     }
 
@@ -206,18 +214,22 @@ struct FoxRootView: View {
                 Text("Fox").font(.title2.bold()).foregroundStyle(FoxStyle.green)
             }
             Spacer()
-            if phoneFocus {
+            if trainingFocus {
                 Button { choosingPhonePage = true } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
                     .accessibilityLabel("训练页面").help("训练页面").accessibilityIdentifier("training-page-menu")
-            } else if sizeClass == .compact && tab == "training" {
+            } else {
                 Menu {
-                    Button { tab = "plan" } label: { Label("计划", systemImage: "list.bullet") }
-                    Button { tab = "history" } label: { Label("记录", systemImage: "clock.arrow.circlepath") }
-                    Button { tab = "vision" } label: { Label("视觉", systemImage: "viewfinder") }
+                    Button { importing = true } label: { Label("导入计划", systemImage: "square.and.arrow.down") }
+                    Section("实验与试用") {
+                        Button { tab = "vision" } label: { Label("视觉实验", systemImage: "viewfinder") }
+                        Button { store.prepareDay1Draft() } label: { Label("准备 Day 1 草稿", systemImage: "calendar.badge.plus") }
+                            .accessibilityIdentifier("prepare-day1").disabled(store.session != nil)
+                        Button { store.prepareNextTrialDraft() } label: { Label("准备下次试用草稿", systemImage: "list.bullet.clipboard") }
+                            .accessibilityIdentifier("prepare-next-trial").disabled(store.session != nil)
+                    }
                 } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
-                    .accessibilityLabel("训练页面").help("训练页面").accessibilityIdentifier("training-page-menu")
+                    .accessibilityLabel("训练工具").help("训练工具").accessibilityIdentifier("training-tools")
             }
-            Image(systemName: "internaldrive").font(.system(size: 20)).foregroundStyle(.secondary).help("本机记录")
             if store.session != nil {
                 Button(role: .destructive) { ending = true } label: { Image(systemName: "stop.circle").font(.title2).frame(width: 44, height: 44) }
                     .accessibilityLabel("结束训练").help("结束训练").disabled(store.session?.stage == .summary)
@@ -247,37 +259,46 @@ struct FoxRootView: View {
                         Text(store.archive.plan.focus).font(.system(size: 30, weight: .bold))
                         Text("\(store.archive.plan.exercises.count) 个动作 · \(store.archive.plan.totalSets) 组").font(.system(size: 20)).foregroundStyle(.secondary)
                     }
-                    HStack(spacing: 16) {
-                    Spacer()
-                    Button { store.prepareDay1Draft() } label: { Image(systemName: "calendar.badge.plus").font(.title2).frame(width: 44, height: 44) }
-                        .help("准备 Day 1 草稿").accessibilityLabel("准备 Day 1 草稿").accessibilityIdentifier("prepare-day1")
-                        .disabled(store.session != nil)
-                    Button { store.prepareNextTrialDraft() } label: { Image(systemName: "list.bullet.clipboard").font(.title2).frame(width: 44, height: 44) }
-                        .help("准备下次试用草稿").accessibilityLabel("准备下次试用草稿").accessibilityIdentifier("prepare-next-trial")
-                        .disabled(store.session != nil)
-                    Button { importing = true } label: { Image(systemName: "square.and.arrow.down").font(.title2).frame(width: 44, height: 44) }.help("导入计划").accessibilityLabel("导入计划")
-                    Button { sheet = .editPlan } label: { Image(systemName: "pencil").font(.title2).frame(width: 44, height: 44) }.help("编辑计划").accessibilityLabel("编辑计划")
-                    }
+                    Button { sheet = .editPlan } label: { Label("编辑计划", systemImage: "pencil").frame(minHeight: 44) }
+                        .font(.headline).accessibilityIdentifier("edit-training-plan")
                 }
                 if let date = store.archive.plan.scheduledDate {
                     Text("\(date) · \(store.archive.plan.scheduledTimeZone ?? "")").font(.system(size: 18)).foregroundStyle(.secondary)
                 }
-                if store.session != nil {
-                    FoxCommand(title: "继续未结束的训练", icon: "play.fill", prominent: true) { tab = "training" }
-                }
-                TrainingPlanOverview(plan: store.archive.plan)
+                TrainingPlanOutline(plan: store.archive.plan)
+            }.padding(24).frame(maxWidth: 1000)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }.safeAreaInset(edge: .bottom) {
+            if store.session != nil {
+                FoxCommand(title: "继续未结束的训练", icon: "play.fill", prominent: true) { tab = "training" }
+                    .padding(16).background(.bar)
+            } else {
                 FoxCommand(title: "确认计划并开始", icon: "play.fill", prominent: true) {
                     store.start()
-                    if store.session != nil { tab = "training" }
-                }.disabled(store.session != nil).accessibilityIdentifier("start-training")
-            }.padding(28).frame(maxWidth: 1000)
-                .frame(maxWidth: .infinity, alignment: .center)
+                    if store.session != nil { savedSessionID = nil; tab = "training" }
+                }.accessibilityIdentifier("start-training").padding(16).background(.bar)
+            }
         }
     }
 
     private var history: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                if let saved = store.archive.sessions.first(where: { $0.id == savedSessionID && $0.isFinished }) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("本次训练已保存", systemImage: "checkmark.circle.fill")
+                            .font(.title2.bold()).foregroundStyle(FoxStyle.green).accessibilityIdentifier("training-saved-receipt")
+                        Text(saved.plan.focus).font(.headline)
+                        Text("本机记录 · \(saved.records.count) 组已记录").foregroundStyle(.secondary)
+                        Button { sheet = .record(saved) } label: { Label("查看本次记录", systemImage: "list.bullet.rectangle").frame(minHeight: 44) }
+                            .accessibilityIdentifier("view-saved-training")
+                        if onClose != nil {
+                            FoxCommand(title: "返回首页", icon: "house", prominent: true) { closeTraining() }
+                                .accessibilityIdentifier("training-saved-home")
+                        }
+                    }.padding(.vertical, 12)
+                    Divider()
+                }
                 Text("训练记录").font(.system(size: 28, weight: .bold))
                 if store.archive.sessions.isEmpty {
                     Text("还没有训练记录").font(.title3).foregroundStyle(.secondary).padding(.vertical, 40)
@@ -286,15 +307,19 @@ struct FoxRootView: View {
                     Button {
                         if session.isFinished { sheet = .record(session) } else { tab = "training" }
                     } label: {
-                        HStack(spacing: 20) {
+                        HStack(spacing: 16) {
                             Image(systemName: session.isFinished ? "checkmark.circle.fill" : "pause.circle").font(.system(size: 30)).foregroundStyle(session.isFinished ? FoxStyle.green : FoxStyle.coral)
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(session.plan.focus).font(.system(size: 22, weight: .semibold))
-                                Text(session.startedAt.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text("\(session.records.count) / \(session.plan.totalSets) 组").font(.system(size: 20)).monospacedDigit()
-                            Text(session.isFinished ? "已确认" : "未结束").font(.system(size: 18)).foregroundStyle(.secondary)
+                                Text(session.plan.focus).font(.title3.weight(.semibold))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("training-history-title")
+                                Text(session.startedAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("training-history-date")
+                                Text("\(session.records.count) / \(session.plan.totalSets) 组 · \(session.isFinished ? "已确认" : "未结束")")
+                                    .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
                             Image(systemName: "chevron.right")
                         }.padding(.vertical, 18).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("record-\(session.isFinished ? "confirmed" : "pending")")

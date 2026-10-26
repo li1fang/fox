@@ -90,6 +90,7 @@ final class FoxNativeUITests: XCTestCase {
                 XCTAssertTrue(app.buttons["feedback-dismiss-keyboard"].isHittable)
                 app.buttons["feedback-dismiss-keyboard"].tap()
                 XCTAssertFalse(app.keyboards.firstMatch.exists)
+                app.openOptionalTrainingFeedback()
                 let issue = app.descendants(matching: .any).matching(identifier: "trial-software-issue").firstMatch
                 let form = app.scrollViews["set-feedback"]
                 XCTAssertTrue(form.exists)
