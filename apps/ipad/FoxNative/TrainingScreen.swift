@@ -109,6 +109,10 @@ struct TrainingScreen: View {
         session.stage != .rest && session.exercise.visualObservation != nil && session.currentVisualEvidence?.fallbackReason == nil
     }
 
+    private var showsPlannedTempo: Bool {
+        session.currentVisualEvidence == nil || session.currentVisualEvidence?.fallbackReason != nil || visual.taskMessage().allowsPlannedTempo
+    }
+
     private var phoneTrainingBody: some View {
         let landscape = sideBySide
         let actionsLayout = landscape ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 10))
@@ -129,6 +133,7 @@ struct TrainingScreen: View {
         VStack(spacing: 6) {
             phoneHeading
             phoneTargets
+            if usesPhoneCamera { workoutTask }
             if sideBySide && usesPhoneCamera {
                 if session.stage == .ready || session.stage == .paused {
                     Picker("观测手臂", selection: $selectedArm) {
@@ -194,7 +199,7 @@ struct TrainingScreen: View {
                 .accessibilityIdentifier("workout-automatic-count")
             VStack(alignment: .leading, spacing: 2) {
                 Text((session.currentVisualEvidence?.settings.arm ?? selectedArm).label).font(.caption)
-                Text(session.stage == .paused ? "已暂停" : session.currentObservationId == nil ? "相机待机" : visual.qualityLabel)
+                Text(visual.isPreparing ? visual.qualityLabel : session.stage == .paused ? "已暂停" : session.currentObservationId == nil ? "相机待机" : visual.qualityLabel)
                     .font(.subheadline).accessibilityIdentifier("workout-tracking-status")
             }.foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
             Text(durationText(session.elapsed(at: date))).font(.headline).monospacedDigit()
@@ -351,7 +356,7 @@ struct TrainingScreen: View {
                     Text(session.stage == .active ? "本组用时" : session.stage == .paused ? "已暂停" : "准备开始")
                         .font(.headline).accessibilityIdentifier("training-stage")
                 }
-                if session.stage != .rest {
+                if session.stage != .rest && showsPlannedTempo {
                     TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, compact: true)
                         .frame(width: 90, height: 78)
                 }
@@ -393,9 +398,14 @@ struct TrainingScreen: View {
                             Text(visual.qualityLabel).font(.title2.bold()).foregroundStyle(FoxStyle.green)
                         } else if session.stage == .paused && session.currentObservationId == nil {
                             Text("已暂停").font(.system(size: 24, weight: .semibold)).foregroundStyle(FoxStyle.green)
+                        } else if showsPlannedTempo {
+                            VStack(spacing: 4) {
+                                Text("计划节奏").font(.caption).foregroundStyle(.secondary)
+                                TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active)
+                                    .frame(width: 180, height: 200)
+                            }
                         } else {
-                            TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active)
-                                .frame(width: 180, height: 200)
+                            Text("等待有效观测").font(.title2.bold()).foregroundStyle(.secondary)
                         }
                         Text("本组用时 \(durationText(elapsed))").font(.title2.bold()).monospacedDigit()
                             .accessibilityIdentifier("set-elapsed")
@@ -435,7 +445,15 @@ struct TrainingScreen: View {
                                 Text(session.currentVisualEvidence?.fallbackReason != nil ? "人工记录中" : visual.qualityLabel)
                                     .font(.callout).foregroundStyle(.secondary)
                                     .accessibilityIdentifier("workout-tracking-status")
+                                workoutTask
                             }
+    }
+
+    @ViewBuilder private var workoutTask: some View {
+        if session.currentVisualEvidence?.fallbackReason == nil {
+            VisionTaskDetail(message: visual.taskMessage(automaticCount: session.currentVisualEvidence?.automaticCount ?? 0),
+                identifier: "workout-task-detail")
+        }
     }
 
     private var targets: some View {
@@ -589,7 +607,13 @@ struct SetFeedbackView: View {
                             .tint(feedback == .pain ? FoxStyle.coral : FoxStyle.green)
                     }
                 }
-                TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $note)
+                if session.currentVisualEvidence != nil {
+                    DisclosureGroup("补充反馈（可选）") {
+                        TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $note)
+                    }.accessibilityIdentifier("workout-review-feedback")
+                } else {
+                    TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $note)
+                }
                 Divider()
                 VisionDiagnosticControls(controller: store.workoutVision.controller)
             }.padding(.vertical, 12)

@@ -1,5 +1,9 @@
 # 重建与验证
 
+## B 方案的分组验证
+
+2026-10-26 起，动画采集器支线按用户决定暂停，见 [B0～B3](../planning/TRAINING_STORY_B_IMPLEMENTATION.zh-CN.md)。开发按状态/存储、无键盘 UI、真实输入 UI 分组；沿用既有 runSuite 和模拟器租约。已知动画等待保留失败回执并暂停受影响组，其他独立组继续。不自动重试、不附加调试器、不削弱断言、不把新产品错误归入旧故障。此规则不修改 public/private 全覆盖、正式候选准入或 CI；分组通过不是完整验收，关键输入受阻时不可宣布完整 B 或发布通过。
+
 ## Duo 布局候选
 
 `npm run verify:duo -- <完整提交号> <新输出目录>` 固定使用 Duo + iOS 27.1，先拒绝脏候选/错误提交，再申请现有模拟器共享会话。只跑公开合成的首页、训练、视觉与自适应测试；退出清理本任务创建的设备，内盘低于 2 GiB 取消并保留回执。它是 `diagnostic/duo-layout` 专项，不代替 `verify:candidate public --component native` 的普通 iPhone/iPad 完整回归，不接收私人输入。

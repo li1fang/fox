@@ -2,6 +2,16 @@ import AVKit
 import FoxTrainingCore
 import SwiftUI
 
+struct VisionRecordingDisposition: View {
+    @ObservedObject var capture: VisionDiagnosticStore
+    var body: some View {
+        Text(capture.status).font(.subheadline).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("vision-recording-disposition")
+    }
+}
+
 struct VisionDiagnosticControls: View {
     @ObservedObject private var capture: VisionDiagnosticStore
     @State private var browsing = false
@@ -22,8 +32,10 @@ struct VisionDiagnosticControls: View {
                     .disabled(capture.isActive || capture.finishing)
                     .accessibilityLabel("诊断文件").help("诊断文件").accessibilityIdentifier("\(identifierPrefix)-library")
             }
-            if let latest = capture.drafts.first, !capture.isActive, !capture.finishing {
-                Button { reviewing = latest } label: { Label("核对本次录像", systemImage: "play.rectangle") }
+            if let latest = capture.reviewCandidate {
+                Button { reviewing = latest } label: {
+                    Label(capture.latestCaptureID == latest.id ? "核对本次录像" : "核对待处理录像", systemImage: "play.rectangle")
+                }
                     .buttonStyle(.borderless)
                     .accessibilityIdentifier("\(identifierPrefix)-review-latest")
             }

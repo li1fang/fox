@@ -537,6 +537,7 @@ final class VisionLabController: ObservableObject {
             try repository.append(report)
             lastTrial = report; trialStartedAt = nil; trialEndedAt = nil; trialStartedUptime = nil
             declaredBodyView = bodyView ?? declaredBodyView
+            errorMessage = nil
             return true
         } catch { errorMessage = "验证未保存：\(error.localizedDescription)"; return false }
     }

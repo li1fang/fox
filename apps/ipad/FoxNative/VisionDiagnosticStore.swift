@@ -11,13 +11,21 @@ final class VisionDiagnosticStore: ObservableObject {
     @Published private(set) var drafts: [VisionDiagnosticManifest] = []
     @Published private(set) var working = false
     @Published var error: String?
+    @Published private(set) var latestCaptureID: UUID?
+    @Published private(set) var latestDisposition: String?
     private var deadline: Timer?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var refreshGeneration = 0
     var onLimit: (() -> Void)?
     var isActive: Bool { recordingID != nil }
     var status: String {
-        finishing ? "正在整理临时片段" : (isActive ? "临时录像中 · 未保留" : (drafts.isEmpty ? "暂无待核对片段" : "本次录像待核对 · 未保留"))
+        finishing ? "正在整理临时片段" : (isActive ? "临时录像中 · 未保留" :
+            (latestDisposition ?? (drafts.isEmpty ? "暂无待核对片段" : "有待核对片段 · 未保留")))
+    }
+    var reviewCandidate: VisionDiagnosticManifest? {
+        guard !isActive, !finishing else { return nil }
+        if let latestCaptureID { return drafts.first { $0.id == latestCaptureID } }
+        return drafts.first
     }
 
     init(root: URL = VisionDiagnosticArchive.root, draftRoot: URL? = nil) {
@@ -35,11 +43,15 @@ final class VisionDiagnosticStore: ObservableObject {
                 throw VisionDiagnosticArchive.error("可用空间不足 512 MiB，未能临时录像；训练可继续。")
             }
             error = nil; recordingID = context.id
+            latestCaptureID = context.id; latestDisposition = nil
             deadline = Timer.scheduledTimer(withTimeInterval: context.maximumSeconds, repeats: false) { [weak self] _ in
                 MainActor.assumeIsolated { self?.onLimit?() }
             }
             return true
-        } catch { self.error = error.localizedDescription; return false }
+        } catch {
+            latestCaptureID = context.id; latestDisposition = "本次录像不可用"
+            self.error = error.localizedDescription; return false
+        }
     }
     func markFinishing() {
         guard isActive, !finishing else { return }
@@ -61,11 +73,14 @@ final class VisionDiagnosticStore: ObservableObject {
         switch result {
         case .success(let manifest):
             error = manifest.error
+            latestDisposition = manifest.video == nil ? "本次诊断待核对 · 无完整视频" : "本次录像待核对 · 未保留"
             if manifest.source == .fixture && ProcessInfo.processInfo.environment["FOX_UI_TESTING"] == "1" &&
                 ProcessInfo.processInfo.environment["FOX_DIAGNOSTIC_SMOKE"] == "1" {
                 Task { _ = await retain(manifest) }
             }
-        case .failure(let failure): error = "诊断未能封存：\(failure.localizedDescription)"
+        case .failure(let failure):
+            latestDisposition = "本次录像不可用"
+            error = "诊断未能封存：\(failure.localizedDescription)"
         }
         refresh()
     }
@@ -94,7 +109,11 @@ final class VisionDiagnosticStore: ObservableObject {
     func remove(_ manifest: VisionDiagnosticManifest) {
         let root = root
         Task {
-            do { try await Task.detached(priority: .utility) { try VisionDiagnosticArchive.remove(id: manifest.id, root: root) }.value; refresh() }
+            do {
+                try await Task.detached(priority: .utility) { try VisionDiagnosticArchive.remove(id: manifest.id, root: root) }.value
+                if latestCaptureID == manifest.id { latestDisposition = "本次录像已删除 · 记录不受影响" }
+                error = nil; refresh()
+            }
             catch { self.error = error.localizedDescription }
         }
     }
@@ -106,6 +125,9 @@ final class VisionDiagnosticStore: ObservableObject {
             _ = try await Task.detached(priority: .utility) {
                 try VisionDiagnosticArchive.retain(id: manifest.id, drafts: draftRoot, destination: root, review: review)
             }.value
+            if latestCaptureID == manifest.id {
+                latestDisposition = manifest.video == nil ? "本次诊断已保留 · 无完整视频" : "本次录像已保留"
+            }
             error = nil; refresh(); return true
         } catch { self.error = "未能保留，临时原件未删除：\(error.localizedDescription)"; return false }
     }
@@ -115,6 +137,7 @@ final class VisionDiagnosticStore: ObservableObject {
         let draftRoot = draftRoot
         do {
             try await Task.detached(priority: .utility) { try VisionDiagnosticArchive.remove(id: manifest.id, root: draftRoot) }.value
+            if latestCaptureID == manifest.id { latestDisposition = "本次录像已丢弃 · 记录不受影响" }
             error = nil; refresh(); return true
         } catch { self.error = error.localizedDescription; return false }
     }

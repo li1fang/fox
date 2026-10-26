@@ -3,6 +3,66 @@
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
     {
+      "id": "FoxAppTests/TrainingStoryTests/testPreparationAndRecoveryExplainRetainedFactsWithoutInventingMotion",
+      "file": "apps/ipad/FoxAppTests/TrainingStoryTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/TrainingStoryTests/testReferenceIsOptionalAndCannotAcceptInvalidOrNegativeCounts",
+      "file": "apps/ipad/FoxAppTests/TrainingStoryTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/TrainingStoryTests/testCameraLayoutReservesActionsInPhonePadAndExpandedSizes",
+      "file": "apps/ipad/FoxAppTests/TrainingStoryTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/TrainingStoryTests/testVideoDispositionChangesOnlyAfterSuccessfulChoiceAndIsScopedToCapture",
+      "file": "apps/ipad/FoxAppTests/TrainingStoryTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionControllerReplayTests/testReportSaveFailureRetainsFactsAndRetryWritesOnlyOnce",
+      "file": "apps/ipad/FoxAppTests/VisionControllerReplayTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxTrainingStoryUITests/testPreparationAndRecoveryKeepCountAndPrimaryActionsVisible",
+      "file": "apps/ipad/FoxUITests/FoxTrainingStoryUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxTrainingStoryUITests/testResultsComeBeforeVideoAndSavedReceiptIsVisible",
+      "file": "apps/ipad/FoxUITests/FoxTrainingStoryUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxTrainingStoryUITests/testRealReferenceInputPersistsWithoutReplacingAutomaticCount",
+      "file": "apps/ipad/FoxUITests/FoxTrainingStoryUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxTrainingStoryUITests/testRotationKeepsCameraCountAndPrimaryActions",
+      "file": "apps/ipad/FoxUITests/FoxTrainingStoryUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxTrainingStoryUITests/testWorkoutRecoveryExplainsPreservedFacts",
+      "file": "apps/ipad/FoxUITests/FoxTrainingStoryUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
       "id": "FoxTrainingCoreTests/GuidanceReplayTests/testExistingVideoCachesGuidanceCausalAndMotionFactsUnchanged",
       "file": "apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceReplayTests.swift",
       "scope": "private",
@@ -2323,6 +2383,12 @@
     {
       "id": "FoxAppTests/DesignScenarioTests/testScenarioOwnershipIsCompleteAndDisjoint",
       "file": "apps/ipad/FoxAppTests/DesignScenarioTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxTrainingStoryUITests/testManualFallbackRestoresPlannedTempoWithoutDiscardingObservedCount",
+      "file": "apps/ipad/FoxUITests/FoxTrainingStoryUITests.swift",
       "scope": "public",
       "surface": "ipad"
     },

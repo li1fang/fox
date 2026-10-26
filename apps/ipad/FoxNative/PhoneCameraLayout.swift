@@ -4,6 +4,7 @@ import SwiftUI
 struct PhoneCameraLayout: Layout {
     var landscape: Bool
     var spacing: CGFloat = 8
+    var cameraLeading = false
 
     struct Regions {
         let information: CGRect
@@ -19,10 +20,11 @@ struct PhoneCameraLayout: Layout {
         let width = columnWidth(for: bounds.width)
         let actionsHeight = min(bounds.height, max(0, actionsHeight))
         let informationHeight = min(max(0, bounds.height - actionsHeight - spacing * (landscape ? 1 : 2)), max(0, informationHeight))
-        let information = CGRect(x: bounds.minX, y: bounds.minY, width: width, height: informationHeight)
-        let actions = CGRect(x: bounds.minX, y: bounds.maxY - actionsHeight, width: width, height: actionsHeight)
+        let columnX = landscape && cameraLeading ? bounds.maxX - width : bounds.minX
+        let information = CGRect(x: columnX, y: bounds.minY, width: width, height: informationHeight)
+        let actions = CGRect(x: columnX, y: bounds.maxY - actionsHeight, width: width, height: actionsHeight)
         let camera = landscape
-            ? CGRect(x: bounds.minX + width + spacing, y: bounds.minY,
+            ? CGRect(x: cameraLeading ? bounds.minX : bounds.minX + width + spacing, y: bounds.minY,
                      width: max(0, bounds.width - width - spacing), height: bounds.height)
             : CGRect(x: bounds.minX, y: information.maxY + spacing, width: bounds.width,
                      height: max(0, actions.minY - information.maxY - 2 * spacing))

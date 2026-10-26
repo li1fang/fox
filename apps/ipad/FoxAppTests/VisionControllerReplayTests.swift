@@ -50,6 +50,34 @@ final class VisionControllerReplayTests: XCTestCase {
         }
     }
 
+    func testReportSaveFailureRetainsFactsAndRetryWritesOnlyOnce() throws {
+        let (c, clock) = try controller()
+        defer { c.stopCamera() }
+        prepare(c, clock); cycle(c, clock, from: 4)
+        c.finishCounting()
+        XCTAssertEqual(c.automaticCount, 1)
+        let repetitions = c.repetitions
+        try FileManager.default.createDirectory(at: c.reportFileURL, withIntermediateDirectories: true)
+        XCTAssertFalse(c.saveReport(referenceCount: 3, notes: "retained draft"))
+        XCTAssertNotNil(c.errorMessage)
+        XCTAssertTrue(c.trialActive)
+        XCTAssertNil(c.lastTrial)
+        XCTAssertNil(c.savedReceipt)
+        XCTAssertEqual(c.repetitions, repetitions)
+        try FileManager.default.removeItem(at: c.reportFileURL)
+        XCTAssertTrue(c.saveReport(referenceCount: 3, notes: "retained draft"))
+        XCTAssertNil(c.errorMessage)
+        XCTAssertFalse(c.saveReport(referenceCount: 3, notes: "duplicate click"))
+        let records = try VisionTrialRepository(fileURL: c.reportFileURL).trials
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.automaticCount, 1)
+        XCTAssertEqual(records.first?.confirmedCount, 1)
+        XCTAssertEqual(records.first?.referenceCount, 3)
+        XCTAssertEqual(records.first?.notes, "retained draft")
+        XCTAssertEqual(records.first?.repetitions, repetitions)
+        XCTAssertNotNil(c.savedReceipt)
+    }
+
     func testSyntheticFixturePTSDoesNotConvertHostDelayIntoMotionLoss() throws {
         for exercise in [VisionExercise.curl, .lateralRaise] { for side in ArmSide.allCases {
             var reference: [CurlRepetition]?

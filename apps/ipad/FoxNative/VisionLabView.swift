@@ -84,6 +84,7 @@ struct VisionLabView: View {
     private var phoneSidebarInformation: some View {
         VStack(spacing: 8) {
             phoneStatus
+            taskInformation
             if sideBySide { phoneQuickSelections }
             phoneError
         }
@@ -179,8 +180,30 @@ struct VisionLabView: View {
     }
 
     private var tabletBody: some View {
-        VStack(spacing: 18) {
-            HStack(spacing: 20) {
+        VStack(spacing: 12) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) { tabletSelections; tabletTools }
+                VStack(spacing: 8) { tabletSelections; tabletTools }
+            }
+            Text(controller.exercise.guidance).font(.callout.weight(.medium))
+                .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("vision-guidance")
+            phoneError
+            GeometryReader { geometry in
+                let wide = geometry.size.width >= 850
+                let actionsLayout = wide ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 12))
+                // All orientations retain the same preview and pin actions outside scrolling diagnostics.
+                PhoneCameraLayout(landscape: wide, spacing: 16, cameraLeading: true) {
+                    ScrollView { controls }
+                        .frame(maxHeight: wide ? .infinity : (typeSize.isAccessibilitySize ? 280 : 210))
+                    cameraSurface
+                    actionsLayout { countingActions }
+                }
+            }
+        }.padding(20)
+    }
+
+    private var tabletSelections: some View {
+            HStack(spacing: 16) {
                 Picker("动作", selection: Binding(get: { controller.exercise }, set: { controller.changeExercise($0) })) {
                     ForEach(VisionExercise.allCases, id: \.self) { Text($0.label).tag($0) }
                 }.pickerStyle(.segmented).frame(width: 280).disabled(controller.selectionLocked)
@@ -189,7 +212,11 @@ struct VisionLabView: View {
                     ForEach(ArmSide.allCases, id: \.self) { Text($0.label).tag($0) }
                 }.pickerStyle(.segmented).frame(width: 160).disabled(controller.selectionLocked)
                     .accessibilityIdentifier("vision-arm")
-                Spacer()
+            }
+    }
+
+    private var tabletTools: some View {
+            HStack(spacing: 12) {
                 Button { showingGuidanceOptions = true } label: {
                     Image(systemName: "waveform").font(.title2).frame(width: 44, height: 44)
                 }.accessibilityLabel("视听引导设置").help("视听引导设置").accessibilityIdentifier("guidance-options")
@@ -203,35 +230,6 @@ struct VisionLabView: View {
                     Text("前置").tag(true); Text("后置").tag(false)
                 }.pickerStyle(.segmented).frame(width: 150).disabled(controller.selectionLocked)
             }
-            HStack {
-                Text(controller.exercise.guidance).font(.system(size: 19, weight: .medium))
-                    .accessibilityIdentifier("vision-guidance")
-                Spacer()
-                Text("仅计所选臂").font(.system(size: 17)).foregroundStyle(.secondary)
-            }
-            if let error = controller.errorMessage {
-                HStack {
-                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(FoxStyle.coral).accessibilityIdentifier("vision-error")
-                    Spacer()
-                    Button { controller.errorMessage = nil } label: { Image(systemName: "xmark") }.help("关闭提示")
-                }
-            }
-            GeometryReader { geometry in
-                if geometry.size.width >= 900 {
-                    HStack(alignment: .top, spacing: 24) {
-                        cameraSurface.frame(maxWidth: .infinity, maxHeight: .infinity)
-                        ScrollView { controls }.frame(width: 310)
-                    }
-                } else {
-                    ScrollView {
-                        VStack(spacing: 22) {
-                            cameraSurface.frame(height: 410)
-                            controls
-                        }
-                    }
-                }
-            }
-        }.padding(28)
     }
 
     private var cameraSurface: some View {
@@ -278,13 +276,14 @@ struct VisionLabView: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 18) {
+            taskInformation
             HStack {
-                Text("待确认次数").font(.system(size: 20)).foregroundStyle(.secondary)
+                Text(controller.savedReceipt == nil ? "待核对次数" : "最近已保存").font(.system(size: 20)).foregroundStyle(.secondary)
                 Spacer()
                 Text(controller.arm.label).font(.system(size: 18))
             }
             HStack(alignment: .center) {
-                Text("\(controller.confirmedCount)").font(.system(size: 90, weight: .semibold)).monospacedDigit().minimumScaleFactor(0.5)
+                Text("\(controller.confirmedCount)").font(.system(size: 64, weight: .semibold)).monospacedDigit().minimumScaleFactor(0.5)
                     .accessibilityIdentifier("vision-count")
                 Spacer()
                 VStack(spacing: 16) {
@@ -311,13 +310,12 @@ struct VisionLabView: View {
                         phaseMetric("下放段", value: rep.lowerSeconds)
                     }
                 }
-                Text("阈值区间 · 完整离心节奏未评估").font(.system(size: 16)).foregroundStyle(.secondary)
+                Text("上次已记录的区间 · 非实时节奏").font(.system(size: 16)).foregroundStyle(.secondary)
                 if (rep.trackingGapSeconds ?? 0) > 0 {
                     Text("节奏约略 · 追踪缺口 \((rep.trackingGapSeconds ?? 0).formatted(.number.precision(.fractionLength(1)))) s")
                         .font(.system(size: 16)).foregroundStyle(.secondary)
                 }
             }
-            countingActions
             HStack {
                 Text("人体朝向").foregroundStyle(.secondary)
                 Spacer()
@@ -348,6 +346,17 @@ struct VisionLabView: View {
             Divider()
             diagnosticDetails
         }.font(.system(size: 18))
+    }
+
+    @ViewBuilder private var taskInformation: some View {
+        if let receipt = controller.savedReceipt {
+            Text(receipt).font(.callout.weight(.semibold)).foregroundStyle(FoxStyle.green)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("vision-saved-receipt")
+            VisionRecordingDisposition(capture: controller.diagnosticCapture)
+        } else {
+            VisionTaskDetail(message: controller.taskMessage())
+        }
     }
 
     @ViewBuilder private var countingActions: some View {
@@ -464,24 +473,38 @@ struct VisionReportEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("本次录像") { VisionDiagnosticControls(controller: controller, identifierPrefix: "diagnostic-report") }
                 Section("本次结果") {
-                    LabeledContent("动作", value: controller.exercise.label)
-                    LabeledContent("原始自动次数", value: "\(controller.automaticCount)")
-                    LabeledContent("人工修正后", value: "\(controller.confirmedCount)")
-                    LabeledContent("追踪手臂", value: controller.arm.label)
+                    Text("\(controller.exercise.label) · \(controller.arm.label)").font(.headline)
+                    HStack {
+                        Text("自动 \(controller.automaticCount) · 确认 \(controller.confirmedCount)")
+                            .font(.title3.bold()).accessibilityIdentifier("vision-review-counts")
+                        Spacer()
+                        Button { controller.correct(by: -1) } label: { Image(systemName: "minus").frame(width: 44, height: 44) }
+                            .buttonStyle(.borderless).disabled(controller.confirmedCount == 0)
+                            .accessibilityLabel("确认次数减一").accessibilityIdentifier("vision-review-minus")
+                        Button { controller.correct(by: 1) } label: { Image(systemName: "plus").frame(width: 44, height: 44) }
+                            .buttonStyle(.borderless).accessibilityLabel("确认次数加一").accessibilityIdentifier("vision-review-plus")
+                    }
+                    TextField("人工参考次数（可留空）", text: $reference).keyboardType(.numberPad)
+                        .focused($inputField, equals: .reference).accessibilityIdentifier("vision-reference-count")
+                    Text(measurementSummary).font(.subheadline).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("vision-review-measurement")
+                }
+                Section("本次录像") { VisionDiagnosticControls(controller: controller, identifierPrefix: "diagnostic-report") }
+                Section {
+                    DisclosureGroup("补充反馈（可选）") {
+                        TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $trainingFeeling)
+                        TextField("备注", text: $notes, axis: .vertical).focused($inputField, equals: .notes)
+                    }.accessibilityIdentifier("vision-review-feedback")
+                }
+                Section("机位与来源") {
+                    Picker("人体朝向", selection: $bodyView) {
+                        ForEach(VisionBodyView.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }.pickerStyle(.navigationLink).accessibilityIdentifier("vision-report-body-view")
                     LabeledContent("数据来源", value: controller.source == .fixture ? "测试数据" : "本机相机")
                     LabeledContent("机位样本", value: "\(controller.contextSampleCount)")
                         .accessibilityElement(children: .ignore).accessibilityLabel("机位样本")
                         .accessibilityValue("\(controller.contextSampleCount)").accessibilityIdentifier("vision-context-samples")
-                }
-                Section("人工复核") {
-                    Picker("人体朝向", selection: $bodyView) {
-                        ForEach(VisionBodyView.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }.pickerStyle(.navigationLink).accessibilityIdentifier("vision-report-body-view")
-                    TextField("人工参考次数（可留空）", text: $reference).keyboardType(.numberPad)
-                        .focused($inputField, equals: .reference).accessibilityIdentifier("vision-reference-count")
-                    TextField("备注", text: $notes, axis: .vertical).focused($inputField, equals: .notes)
                 }
                 Section("测量") {
                     ReturnIntervalView(rows: ReturnIntervalSummary.make(controller.repetitions, exercise: controller.exercise))
@@ -489,7 +512,6 @@ struct VisionReportEditor: View {
                     LabeledContent("中断", value: "\(controller.metrics.interruptions)")
                     LabeledContent("Vision P95", value: "\(Int(controller.metrics.latencyP95Ms.rounded())) ms")
                 }
-                Section { TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $trainingFeeling) }
                 Section("追踪诊断") {
                     LabeledContent("参数", value: controller.diagnostics.configuration.name)
                     LabeledContent("短暂缺失后恢复", value: "\(controller.diagnostics.recoveries)")
@@ -500,11 +522,14 @@ struct VisionReportEditor: View {
                                        value: "\(controller.diagnostics.resetCounts[reason] ?? 0)")
                     }
                 }
-            }.navigationTitle("核对视觉验证")
+            }.navigationTitle("核对视觉验证").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
-                        Button { inputField = nil } label: { Image(systemName: "keyboard.chevron.compact.down") }
+                        Button {
+                            inputField = nil
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        } label: { Image(systemName: "keyboard.chevron.compact.down") }
                             .accessibilityLabel("收起键盘").accessibilityIdentifier("vision-dismiss-keyboard")
                     }
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
@@ -515,12 +540,19 @@ struct VisionReportEditor: View {
                                 if controller.saveReport(referenceCount: Int(reference), notes: notes, bodyView: bodyView, review: review) { dismiss() }
                                 else { error = controller.errorMessage ?? "验证未保存" }
                             } catch { self.error = error.localizedDescription }
-                        }.disabled(!reference.isEmpty && Int(reference) == nil).accessibilityIdentifier("vision-save-report")
+                        }.disabled(!VisionReportInput.validReference(reference) || !controller.canSave).accessibilityIdentifier("vision-save-report")
                     }
                 }
                 .alert("验证未保存", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                     Button("知道了") { error = nil }
                 } message: { Text(error ?? "") }
         }.onAppear { bodyView = controller.declaredBodyView }
+    }
+
+    private var measurementSummary: String {
+        let rows = ReturnIntervalSummary.make(controller.repetitions, exercise: controller.exercise)
+        let measured = rows.filter { $0.seconds != nil }.count
+        return rows.isEmpty ? "返回区间未测得 · 动作质量未评估" :
+            "\(measured) / \(rows.count) 次有可见返回测量 · 非完整离心时长"
     }
 }
