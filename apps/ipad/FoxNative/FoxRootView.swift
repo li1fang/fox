@@ -31,11 +31,13 @@ struct FoxCommand: View {
     var prominent = false
     var destructive = false
     let action: () -> Void
+    @ScaledMetric(relativeTo: .title3) private var textSize = 20
 
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: icon)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: textSize, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true).padding(.vertical, 8)
                 .frame(maxWidth: .infinity, minHeight: 54)
                 .foregroundStyle(prominent ? .white : (destructive ? FoxStyle.coral : FoxStyle.ink))
                 .background(prominent ? FoxStyle.green : Color.white)
@@ -339,9 +341,15 @@ struct FoxRootView: View {
 struct SessionSummary: View {
     let session: TrainingSession
     var edit: ((LocalSetRecord) -> Void)? = nil
+    @ScaledMetric(relativeTo: .title2) private var headingSize = 22
+    @ScaledMetric(relativeTo: .title3) private var detailSize = 21
+    @ScaledMetric(relativeTo: .body) private var observationSize = 18
+    @ScaledMetric(relativeTo: .title3) private var noteSize = 20
+    @ScaledMetric(relativeTo: .largeTitle) private var metricSize = 30
+    @ScaledMetric(relativeTo: .largeTitle) private var metricWidth = 140
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 20)], alignment: .leading, spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: metricWidth), spacing: 20)], alignment: .leading, spacing: 16) {
                 metric("已完成", value: "\(session.records.filter { $0.status == "completed" }.count) 组")
                 metric("部分完成", value: "\(session.records.filter { $0.status == "partial" }.count) 组")
                 metric("实际训练", value: durationText(session.records.reduce(0) { $0 + $1.durationSeconds }))
@@ -351,7 +359,7 @@ struct SessionSummary: View {
             ForEach(session.records) { record in
                 VStack(alignment: .leading, spacing: 8) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("\(record.exerciseName) · 第 \(record.target.setIndex) 组").font(.system(size: 22, weight: .semibold))
+                        Text("\(record.exerciseName) · 第 \(record.target.setIndex) 组").font(.system(size: headingSize, weight: .semibold))
                         HStack {
                         Text(record.status == "skipped" ? "已跳过" : (record.status == "partial" ? "部分完成" : "已完成")).foregroundStyle(.secondary)
                         Spacer()
@@ -367,9 +375,9 @@ struct SessionSummary: View {
                             ?? record.reps.map { "\($0) 次" } ?? (record.status == "skipped" ? "—" : (record.target.targetReps != nil ? "次数未确认" : "计时动作")))
                         Text(weightText(record.weight, unit: record.target.weightUnit))
                         Text(durationText(record.durationSeconds))
-                    }.font(.system(size: 21)).monospacedDigit()
+                    }.font(.system(size: detailSize)).monospacedDigit()
                     if let evidence = record.visualEvidence {
-                        Text("视觉观测：\(evidence.settings.arm.label) \(evidence.automaticCount) 次").font(.system(size: 18))
+                        Text("视觉观测：\(evidence.settings.arm.label) \(evidence.automaticCount) 次").font(.system(size: observationSize))
                         if evidence.hasIncompleteCoverage { Text("观测不完整").foregroundStyle(.secondary) }
                         if let rhythm = record.rhythmAssessment {
                             let measurable = rhythm.phases.filter { $0.status == .measured }
@@ -378,13 +386,13 @@ struct SessionSummary: View {
                                 if !samples.isEmpty {
                                     let mean = samples.reduce(0) { $0 + $1.observedSeconds } / Double(samples.count)
                                     Text("\(phase == "lift" ? "抬起" : phase == "peak" ? "顶部" : "下放")阈值段：平均 \(mean.formatted(.number.precision(.fractionLength(1)))) 秒")
-                                        .font(.system(size: 17)).foregroundStyle(.secondary)
+                                        .font(.body).foregroundStyle(.secondary)
                                 }
                             }
-                            Text("完整离心节奏：未评估").font(.system(size: 17)).foregroundStyle(.secondary)
+                            Text("完整离心节奏：未评估").font(.body).foregroundStyle(.secondary)
                             if rhythm.status == .estimated { Text("部分阶段有缺失或使用躯干参考，相关节奏偏差未评估").foregroundStyle(.secondary) }
                         }
-                        Text("动作质量：未评估").font(.system(size: 17)).foregroundStyle(.secondary)
+                        Text("动作质量：未评估").font(.body).foregroundStyle(.secondary)
                         ReturnIntervalView(rows: ReturnIntervalSummary.make(evidence: evidence))
                     }
                     if !record.feedback.isEmpty { Text(record.feedback.map(\.label).joined(separator: " · ")).foregroundStyle(.secondary) }
@@ -396,13 +404,13 @@ struct SessionSummary: View {
             if session.records.count < session.plan.totalSets {
                 Text("另有 \(session.plan.totalSets - session.records.count) 组未执行").foregroundStyle(.secondary)
             }
-            if !session.summaryNote.isEmpty { Text(session.summaryNote).font(.system(size: 20)) }
+            if !session.summaryNote.isEmpty { Text(session.summaryNote).font(.system(size: noteSize)) }
         }
     }
     private func metric(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 17)).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 30, weight: .semibold)).monospacedDigit()
+            Text(title).font(.body).foregroundStyle(.secondary)
+            Text(value).font(.system(size: metricSize, weight: .semibold)).monospacedDigit()
         }
     }
 }

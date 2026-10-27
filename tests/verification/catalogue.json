@@ -2,6 +2,9 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxUITests/FoxUnifiedTrainingUITests/testWaitingPreparationOffersManualContinuationWithoutInventedCount","file":"apps/ipad/FoxUITests/FoxUnifiedTrainingUITests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxUnifiedTrainingUITests/testLostObservationOffersManualContinuationAndPreservesObservedFacts","file":"apps/ipad/FoxUITests/FoxUnifiedTrainingUITests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxUnifiedTrainingUITests/testAccessibleTextScalesConfirmationAndKeepsJourneyReachable","file":"apps/ipad/FoxUITests/FoxUnifiedTrainingUITests.swift","scope":"public","surface":"iphone"},
     {"id":"FoxAppTests/UnifiedTrainingTests/testManualStartedAttemptCannotEnableVisionUntilNextSet","file":"apps/ipad/FoxAppTests/UnifiedTrainingTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/UnifiedTrainingTests/testDeniedCameraManualPauseStaysManualAfterReload","file":"apps/ipad/FoxAppTests/UnifiedTrainingTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/UnifiedTrainingTests/testBackgroundPreviewStopsAndLateCameraCallbackCannotRestartIt","file":"apps/ipad/FoxAppTests/UnifiedTrainingTests.swift","scope":"public","surface":"ipad"},

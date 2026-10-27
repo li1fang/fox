@@ -83,15 +83,17 @@ struct TrainingCountField: View {
     @Binding var text: String
     let identifier: String
     let label: String
+    @ScaledMetric(relativeTo: .largeTitle) private var valueSize = 32
+    @ScaledMetric(relativeTo: .largeTitle) private var fieldWidth = 160
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             TextField("次数", text: $text).keyboardType(.numberPad).textFieldStyle(.roundedBorder)
-                .font(.system(size: 32, weight: .semibold)).accessibilityIdentifier(identifier)
+                .font(.system(size: valueSize, weight: .semibold)).accessibilityIdentifier(identifier)
                 .accessibilityLabel(label)
             HStack(spacing: 12) {
                 step(-1, icon: "minus"); step(1, icon: "plus")
             }
-        }.frame(maxWidth: 160)
+        }.frame(maxWidth: fieldWidth)
     }
     private func step(_ delta: Int, icon: String) -> some View {
         Button { if let value = TrainingCountInput.adjusted(text, by: delta) { text = value } } label: {

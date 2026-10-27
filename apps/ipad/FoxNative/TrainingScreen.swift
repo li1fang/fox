@@ -18,6 +18,8 @@ struct TrainingScreen: View {
     @State private var summaryNote = ""
     @State private var editingRecord: LocalSetRecord?
     @State private var showingDetails = false
+    @ScaledMetric(relativeTo: .title) private var summaryTitleSize = 28
+    @ScaledMetric(relativeTo: .title3) private var noteSize = 20
 
     private var selectedArm: ArmSide { TrainingArmChoice.current(armChoice, session: session) }
     private var armBinding: Binding<ArmSide> {
@@ -53,9 +55,9 @@ struct TrainingScreen: View {
         if session.stage == .summary {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("核对训练记录").font(.system(size: 28, weight: .bold))
+                    Text("核对训练记录").font(.system(size: summaryTitleSize, weight: .bold))
                     SessionSummary(session: session) { editingRecord = $0 }
-                    TextField("本次训练备注", text: $summaryNote, axis: .vertical).textFieldStyle(.roundedBorder).font(.system(size: 20))
+                    TextField("本次训练备注", text: $summaryNote, axis: .vertical).textFieldStyle(.roundedBorder).font(.system(size: noteSize))
                 }.padding(28).frame(maxWidth: 1100).frame(maxWidth: .infinity)
             }
             .accessibilityIdentifier("training-summary").scrollDismissesKeyboard(.interactively)
@@ -129,8 +131,16 @@ struct TrainingScreen: View {
                     .accessibilityLabel("重新就位").accessibilityIdentifier("rebind-vision-set").help("重新就位")
             }
             Text(statusDetail).font(.callout).foregroundStyle(.secondary)
-                .lineLimit(2).frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 2).frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
                 .accessibilityIdentifier(hasCamera ? "workout-task-detail" : "workout-manual-detail")
+            if hasCamera && (visual.isPreparing || visual.needsRebind) {
+                Button { store.workoutVision.useManual() } label: {
+                    Label("人工记录", systemImage: "video.slash")
+                        .font(.headline).fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("training-manual-continue")
+                .accessibilityHint("保留已观测次数，继续按计划节奏训练，结束后核对实际完成")
+            }
         }
     }
 
@@ -302,15 +312,17 @@ private struct TrainingRhythmSquare: View {
 struct WeightControl: View {
     @Binding var weight: Double?
     let unit: String?
+    @ScaledMetric(relativeTo: .title2) private var valueSize = 26
+    @ScaledMetric(relativeTo: .title3) private var unitSize = 20
     var body: some View {
         HStack(spacing: 12) {
             if unit == "bodyweight" {
-                Text("自重").font(.system(size: 26, weight: .medium))
+                Text("自重").font(.system(size: valueSize, weight: .medium))
             } else {
                 TextField("重量", value: $weight, format: .number).keyboardType(.decimalPad)
-                    .font(.system(size: 26, weight: .medium)).textFieldStyle(.roundedBorder)
+                    .font(.system(size: valueSize, weight: .medium)).textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("actual-weight")
-                Text(unit == "machine_level" ? "档" : (unit ?? "kg")).font(.system(size: 20))
+                Text(unit == "machine_level" ? "档" : (unit ?? "kg")).font(.system(size: unitSize))
                 if unit == nil || unit == "kg" {
                     Menu {
                         Button("未设定") { weight = nil }
@@ -338,13 +350,18 @@ struct SetFeedbackView: View {
     @State private var feedbackExpanded = false
     @FocusState private var editing: Bool
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .title2) private var headingSize = 26
+    @ScaledMetric(relativeTo: .title3) private var observationSize = 20
+    @ScaledMetric(relativeTo: .body) private var labelSize = 18
+    @ScaledMetric(relativeTo: .largeTitle) private var durationSize = 36
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 if verticalSizeClass == .compact {
                     Text("\(session.exercise.name) · 第 \(session.setIndex + 1) 组核对").font(.headline)
-                } else { Text("确认本组").font(.system(size: 26, weight: .semibold)) }
+                } else { Text("确认本组").font(.system(size: headingSize, weight: .semibold)) }
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 40) { actualCount; actualWeight.frame(width: 260); actualDuration }.fixedSize(horizontal: true, vertical: false)
                     VStack(alignment: .leading, spacing: 16) {
@@ -356,7 +373,7 @@ struct SetFeedbackView: View {
                     }
                 }
                 if let evidence = session.currentVisualEvidence, evidence.hasObservedFrames {
-                    Text("观测 \(evidence.settings.arm.label) \(evidence.automaticCount) 次，待你确认").font(.system(size: 20)).foregroundStyle(FoxStyle.green)
+                    Text("观测 \(evidence.settings.arm.label) \(evidence.automaticCount) 次，待你确认").font(.system(size: observationSize)).foregroundStyle(FoxStyle.green)
                     ReturnIntervalView(rows: ReturnIntervalSummary.make(evidence: evidence))
                 }
                 Text("这一组感觉如何").font(.headline)
@@ -413,15 +430,15 @@ struct SetFeedbackView: View {
     @ViewBuilder private var actualCount: some View {
                     if session.target.targetReps != nil {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("实际次数").font(.system(size: 18)).foregroundStyle(.secondary)
+                            Text("实际次数").font(.system(size: labelSize)).foregroundStyle(.secondary)
                             if session.exercise.repetitionBasis == .perSide {
-                                HStack(spacing: 16) {
+                                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16)) : AnyLayout(HStackLayout(spacing: 16))) {
                                     VStack(alignment: .leading) {
-                                        Text("左臂").font(.system(size: 18))
+                                        Text("左臂").font(.system(size: labelSize))
                                         TrainingCountField(text: $leftReps, identifier: "actual-left-reps", label: "左臂次数")
                                     }
                                     VStack(alignment: .leading) {
-                                        Text("右臂").font(.system(size: 18))
+                                        Text("右臂").font(.system(size: labelSize))
                                         TrainingCountField(text: $rightReps, identifier: "actual-right-reps", label: "右臂次数")
                                     }
                                 }
@@ -436,14 +453,14 @@ struct SetFeedbackView: View {
     }
     private var actualWeight: some View {
         VStack(alignment: .leading, spacing: 10) {
-                        Text("实际重量").font(.system(size: 18)).foregroundStyle(.secondary)
+                        Text("实际重量").font(.system(size: labelSize)).foregroundStyle(.secondary)
                         WeightControl(weight: $weight, unit: session.target.weightUnit).frame(maxWidth: 320)
                     }
     }
     private var actualDuration: some View {
         VStack(alignment: .leading, spacing: 10) {
-                        Text("实际用时").font(.system(size: 18)).foregroundStyle(.secondary)
-                        Text(durationText(session.accumulatedSeconds)).font(.system(size: 36, weight: .semibold)).monospacedDigit()
+                        Text("实际用时").font(.system(size: labelSize)).foregroundStyle(.secondary)
+                        Text(durationText(session.accumulatedSeconds)).font(.system(size: durationSize, weight: .semibold)).monospacedDigit()
                     }
     }
 }

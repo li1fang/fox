@@ -1,12 +1,13 @@
 import XCTest
 
 final class FoxUnifiedTrainingUITests: XCTestCase {
-    private func launch(_ fixture: String = "normal") -> XCUIApplication {
+    private func launch(_ fixture: String = "normal", category: String? = nil) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_POSE_FIXTURE": fixture]
         app.launchArguments = ["--ui-testing-reset"]
+        if let category { app.launchArguments += ["-UIPreferredContentSizeCategoryName", category] }
         app.launch()
         return app
     }
@@ -27,6 +28,85 @@ final class FoxUnifiedTrainingUITests: XCTestCase {
     private func shot(_ name: String) {
         let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         image.name = "p1-\(name)"; image.lifetime = .keepAlways; add(image)
+    }
+
+    func testWaitingPreparationOffersManualContinuationWithoutInventedCount() {
+        let app = launch("no_person"); enter(app)
+        app.buttons["begin-set"].tap()
+        visible(app.buttons["training-manual-continue"], in: app)
+        XCTAssertEqual(app.buttons["training-manual-continue"].label, "人工记录")
+        XCTAssertEqual(app.staticTexts["workout-automatic-count"].label, "0")
+        shot("waiting-manual-choice")
+        app.buttons["training-manual-continue"].tap()
+        visible(app.buttons["complete-set"], in: app)
+        XCTAssertTrue(app.staticTexts["tempo-phase"].exists)
+        XCTAssertFalse(app.buttons["training-manual-continue"].exists)
+        app.buttons["complete-set"].tap()
+        let count = app.textFields["actual-left-reps"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        let displayedValue = count.value as? String
+        XCTAssertTrue(displayedValue == "" || displayedValue == count.placeholderValue,
+                      "An unobserved count must stay blank, not become zero or the target")
+        XCTAssertFalse(app.buttons["submit-feedback"].isEnabled)
+    }
+
+    func testLostObservationOffersManualContinuationAndPreservesObservedFacts() {
+        let app = launch("subject_loss"); enter(app)
+        app.buttons["begin-set"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.buttons["rebind-vision-set"].isEnabled
+        }, object: nil)], timeout: 20), .completed)
+        XCTAssertTrue(app.buttons["training-manual-continue"].waitForExistence(timeout: 20))
+        visible(app.buttons["training-manual-continue"], in: app)
+        XCTAssertEqual(app.staticTexts["workout-automatic-count"].label, "1")
+        shot("lost-manual-choice")
+        app.buttons["training-manual-continue"].tap()
+        visible(app.buttons["pause-set"], in: app)
+        XCTAssertTrue(app.staticTexts["tempo-phase"].exists)
+        XCTAssertEqual(app.staticTexts["workout-automatic-count"].label, "1")
+        app.buttons["pause-set"].tap()
+        app.buttons["begin-set"].tap()
+        app.buttons["complete-set"].tap()
+        XCTAssertEqual(app.textFields["actual-left-reps"].value as? String, "1")
+        XCTAssertTrue(app.staticTexts["观测 左臂 1 次，待你确认"].exists)
+        app.buttons["submit-feedback"].tap()
+        app.buttons["confirm-summary"].tap()
+        visible(app.staticTexts["training-saved-receipt"], in: app)
+    }
+
+    func testAccessibleTextScalesConfirmationAndKeepsJourneyReachable() {
+        let normal = launch("denied", category: "UICTContentSizeCategoryL"); enter(normal)
+        let normalActionHeight = normal.buttons["begin-set"].frame.height
+        normal.buttons["begin-set"].tap(); normal.buttons["complete-set"].tap()
+        visible(normal.textFields["actual-left-reps"], in: normal)
+        let normalCountHeight = normal.textFields["actual-left-reps"].frame.height
+        let normalHeadingHeight = normal.staticTexts["确认本组"].frame.height
+        normal.terminate()
+
+        let app = launch("denied", category: "UICTContentSizeCategoryAccessibilityXL"); enter(app)
+        visible(app.buttons["begin-set"], in: app)
+        XCTAssertGreaterThan(app.buttons["begin-set"].frame.height, normalActionHeight)
+        app.buttons["begin-set"].tap(); app.buttons["pause-set"].tap()
+        app.terminate(); app.launchArguments.removeAll(where: { $0 == "--ui-testing-reset" }); app.launch()
+        app.buttons["home-training"].tap()
+        visible(app.buttons["begin-set"], in: app)
+        app.buttons["begin-set"].tap(); app.buttons["complete-set"].tap()
+        visible(app.textFields["actual-left-reps"], in: app)
+        XCTAssertGreaterThan(app.textFields["actual-left-reps"].frame.height, normalCountHeight * 1.2)
+        XCTAssertGreaterThan(app.staticTexts["确认本组"].frame.height, normalHeadingHeight * 1.2)
+        XCTAssertEqual(app.textFields["actual-left-reps"].label, "左臂次数")
+        visible(app.buttons["actual-left-reps-plus"], in: app)
+        app.buttons["actual-left-reps-plus"].tap()
+        visible(app.buttons["submit-feedback"], in: app)
+        shot("accessible-confirmation")
+        app.buttons["submit-feedback"].tap()
+        visible(app.buttons["confirm-summary"], in: app)
+        shot("accessible-summary")
+        app.buttons["confirm-summary"].tap()
+        visible(app.staticTexts["training-saved-receipt"], in: app)
+        app.buttons["view-saved-training"].tap()
+        XCTAssertTrue(app.otherElements["record-detail"].waitForExistence(timeout: 5) || app.scrollViews["record-detail"].exists)
+        shot("accessible-saved-record")
     }
 
     func testDirectTrialShowsPreviewWithoutStartingTimerOrCounting() {
