@@ -120,6 +120,33 @@ final class FoxUnifiedTrainingUITests: XCTestCase {
         shot("trial-ready")
     }
 
+    func testManualContinuationRemainsReachableInLandscapePreparationAndLoss() {
+        for fixture in ["no_person", "subject_loss"] {
+            let app = launch(fixture); enter(app)
+            app.buttons["begin-set"].tap()
+            if fixture == "subject_loss" {
+                XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+                    predicate: NSPredicate(format: "enabled == true"), object: app.buttons["rebind-vision-set"])], timeout: 20), .completed)
+            }
+            for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
+                XCUIDevice.shared.orientation = orientation
+                XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    let frame = app.windows.firstMatch.frame
+                    return !frame.isEmpty && frame.width > frame.height
+                }, object: nil)], timeout: 8), .completed)
+                let manual = app.buttons["training-manual-continue"]
+                visible(manual, in: app)
+                XCTAssertLessThanOrEqual(manual.frame.maxY, app.otherElements["training-actions"].frame.minY)
+                shot("manual-\(fixture)-landscape-\(orientation.rawValue)")
+            }
+            app.buttons["training-manual-continue"].tap()
+            visible(app.buttons["complete-set"], in: app)
+            XCTAssertEqual(app.staticTexts["workout-automatic-count"].label, fixture == "subject_loss" ? "1" : "0")
+            XCTAssertTrue(app.staticTexts["tempo-phase"].exists)
+            app.terminate()
+        }
+    }
+
     private func pairedModes(_ app: XCUIApplication, orientations: [UIDeviceOrientation]) {
         enter(app)
         let controls = ["begin-set", "skip-set", "training-vision-toggle", "phone-training-details", "guidance-quick-mute"]

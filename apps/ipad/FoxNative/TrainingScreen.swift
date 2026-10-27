@@ -27,6 +27,7 @@ struct TrainingScreen: View {
     }
     private var hasCamera: Bool { store.usesVision && session.stage != .rest }
     private var preparing: Bool { session.currentObservationId != nil && session.stage != .active }
+    private var offersManualContinuation: Bool { hasCamera && (visual.isPreparing || visual.needsRebind) }
 
     init(store: TrainingStore, session: TrainingSession, phoneLandscapeNavigation: AnyView? = nil, onConfirmed: @escaping () -> Void) {
         self.store = store; self.session = session; self.onConfirmed = onConfirmed
@@ -123,6 +124,7 @@ struct TrainingScreen: View {
                 Button { showingDetails = true } label: {
                     Image(systemName: "slider.horizontal.3").font(.title3).frame(width: 44, height: 44)
                 }.accessibilityLabel("本组设置").accessibilityIdentifier("phone-training-details").help("本组设置")
+                if landscape && offersManualContinuation { manualContinuation(compact: true) }
                 Spacer(minLength: 0)
                 // Recovery is an additional control, never a replacement for pause or finish.
                 Button { store.workoutVision.rebindSubject() } label: {
@@ -133,15 +135,19 @@ struct TrainingScreen: View {
             Text(statusDetail).font(.callout).foregroundStyle(.secondary)
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 2).frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
                 .accessibilityIdentifier(hasCamera ? "workout-task-detail" : "workout-manual-detail")
-            if hasCamera && (visual.isPreparing || visual.needsRebind) {
-                Button { store.workoutVision.useManual() } label: {
-                    Label("人工记录", systemImage: "video.slash")
-                        .font(.headline).fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("training-manual-continue")
-                .accessibilityHint("保留已观测次数，继续按计划节奏训练，结束后核对实际完成")
-            }
+            if !landscape && offersManualContinuation { manualContinuation(compact: false) }
         }
+    }
+
+    private func manualContinuation(compact: Bool) -> some View {
+        Button { store.workoutVision.useManual() } label: {
+            Group {
+                if compact { Text("人工记录") }
+                else { Label("人工记录", systemImage: "video.slash") }
+            }.font(.headline).fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("training-manual-continue")
+        .accessibilityHint("保留已观测次数，继续按计划节奏训练，结束后核对实际完成")
     }
 
     private var statusDetail: String {

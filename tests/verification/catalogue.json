@@ -2,6 +2,7 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxUITests/FoxUnifiedTrainingUITests/testManualContinuationRemainsReachableInLandscapePreparationAndLoss","file":"apps/ipad/FoxUITests/FoxUnifiedTrainingUITests.swift","scope":"public","surface":"iphone"},
     {"id":"FoxUITests/FoxUnifiedTrainingUITests/testWaitingPreparationOffersManualContinuationWithoutInventedCount","file":"apps/ipad/FoxUITests/FoxUnifiedTrainingUITests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxUITests/FoxUnifiedTrainingUITests/testLostObservationOffersManualContinuationAndPreservesObservedFacts","file":"apps/ipad/FoxUITests/FoxUnifiedTrainingUITests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxUITests/FoxUnifiedTrainingUITests/testAccessibleTextScalesConfirmationAndKeepsJourneyReachable","file":"apps/ipad/FoxUITests/FoxUnifiedTrainingUITests.swift","scope":"public","surface":"iphone"},
