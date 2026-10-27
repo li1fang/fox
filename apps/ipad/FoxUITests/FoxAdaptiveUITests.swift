@@ -54,6 +54,7 @@ final class FoxAdaptiveUITests: XCTestCase {
             app.scrollViews.firstMatch.swipeUp()
         }
         tap(start, in: app)
+        tap(app.buttons["training-vision-toggle"], in: app)
         for index in 0..<4 {
             XCUIDevice.shared.orientation = index % 2 == 0 ? .portrait : .landscapeLeft
             if index > 0 { tap(app.buttons["rest-ready"], in: app) }
@@ -65,7 +66,7 @@ final class FoxAdaptiveUITests: XCTestCase {
                 snapshot(app, "adaptive-manual-active")
             }
             tap(app.buttons["complete-set"], in: app)
-            let count = app.textFields["actual-reps"]
+            let count = app.textFields["actual-left-reps"]
             XCTAssertTrue(count.waitForExistence(timeout: 5)); tap(count, in: app); count.typeText("8")
             tap(app.buttons["feedback-dismiss-keyboard"], in: app)
             let keyboardGone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.keyboards.firstMatch)

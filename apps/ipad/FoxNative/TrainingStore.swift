@@ -11,6 +11,25 @@ final class TrainingStore: ObservableObject {
     private var repository: LocalTrainingRepository?
     let fileURL: URL
     private let diagnosticRoot: URL?
+    private let preferences: UserDefaults?
+    @Published private var manualSessionID: String?
+    private var preferenceKey: String { "FoxTraining.manual.\(fileURL.path)" }
+    var visionRequested: Bool { session.map { manualSessionID != $0.id.uuidString } ?? true }
+    private var manuallyStartedAttempt: Bool {
+        session.map { $0.setStartedAt != nil && $0.currentVisualEvidence == nil } ?? false
+    }
+    var canEnableVision: Bool {
+        guard let session, [.ready, .paused].contains(session.stage), session.exercise.visualObservation != nil else { return false }
+        return !manuallyStartedAttempt && session.currentVisualEvidence?.fallbackReason == nil
+    }
+    var usesVision: Bool {
+        guard visionRequested, !manuallyStartedAttempt, let session, session.exercise.visualObservation != nil,
+              session.currentVisualEvidence?.fallbackReason == nil else { return false }
+        switch workoutVision.controller.cameraState {
+        case .denied, .restricted, .unavailable, .failed: return false
+        default: return true
+        }
+    }
     lazy var workoutVision = WorkoutVisionCoordinator(store: self, diagnosticRoot: diagnosticRoot)
     lazy var guidance = GuidanceSession(vision: workoutVision.controller, store: self)
 
@@ -23,11 +42,13 @@ final class TrainingStore: ObservableObject {
             .appendingPathComponent(testing ? "ui-test-records.json" : "training-records.v1.json")
     }
 
-    init(archiveURL: URL? = nil, diagnosticRoot: URL? = nil) {
+    init(archiveURL: URL? = nil, diagnosticRoot: URL? = nil, preferences: UserDefaults? = nil) {
         self.diagnosticRoot = diagnosticRoot
+        self.preferences = preferences ?? (archiveURL == nil ? .standard : nil)
         let environment = ProcessInfo.processInfo.environment
         let testing = environment["FOX_UI_TESTING"] == "1"
         fileURL = archiveURL ?? Self.defaultArchiveURL
+        manualSessionID = self.preferences?.string(forKey: "FoxTraining.manual.\(fileURL.path)")
         if testing && ProcessInfo.processInfo.arguments.contains("--ui-testing-reset") && !Self.testResetConsumed {
             Self.testResetConsumed = true
             try? FileManager.default.removeItem(at: fileURL)
@@ -84,7 +105,36 @@ final class TrainingStore: ObservableObject {
         perform { try $0.update { $0.plan = plan } }
     }
 
-    func start() { perform { try $0.start(plan: archive.plan, at: Date()) } }
+    func start() { startNewSession(TrainingCapabilities.prepared(archive.plan)) }
+
+    func startTrial(_ exercise: VisionExercise = .curl) {
+        guard session == nil else { return }
+        startNewSession(TrainingCapabilities.trial(exercise))
+    }
+
+    private func startNewSession(_ plan: TrainingPlan) {
+        perform { repository in
+            try repository.update { archive in
+                guard archive.currentSession == nil else { throw TrainingError.activeSessionExists }
+                archive.sessions.append(try TrainingSession(plan: plan, now: Date()))
+            }
+        }
+    }
+
+    func setVisionEnabled(_ enabled: Bool) {
+        guard let session, [.ready, .active, .paused].contains(session.stage) else { return }
+        if !enabled {
+            guard workoutVision.disableVision() else { return }
+            manualSessionID = session.id.uuidString
+        } else {
+            // A manual segment cannot be relabelled as visual. The next set can enable it again.
+            guard canEnableVision else { return }
+            manualSessionID = nil
+            workoutVision.stop()
+        }
+        preferences?.set(manualSessionID, forKey: preferenceKey)
+        if enabled { workoutVision.preview() }
+    }
 
     func pauseIfActive() {
         if session?.stage == .active { updateSession { try $0.pause(at: Date()) } }

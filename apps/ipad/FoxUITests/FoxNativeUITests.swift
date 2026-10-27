@@ -63,11 +63,13 @@ final class FoxNativeUITests: XCTestCase {
                 XCTAssertEqual(result, .completed)
             }
             if index == 0 {
+                app.buttons["phone-training-details"].tap()
                 let confirm = app.buttons["confirm-set-weight"]
                 XCTAssertTrue(confirm.waitForExistence(timeout: 5))
                 if !confirm.isHittable { app.swipeUp() }
                 confirm.tap()
                 XCTAssertFalse(confirm.isEnabled)
+                app.buttons["phone-training-details-done"].tap()
             }
             let begin = app.buttons["begin-set"]
             readyToTap(begin, in: app)
@@ -80,7 +82,7 @@ final class FoxNativeUITests: XCTestCase {
                 XCTAssertLessThanOrEqual(app.buttons["complete-set"].frame.maxY, app.frame.maxY)
             }
             app.buttons["complete-set"].tap()
-            let count = app.textFields["actual-reps"]
+            let count = app.textFields["actual-left-reps"]
             XCTAssertTrue(count.waitForExistence(timeout: 5))
             count.tap()
             count.typeText("10")
@@ -138,12 +140,12 @@ final class FoxNativeUITests: XCTestCase {
             tree.name = "summary-editor-not-opened-accessibility"; tree.lifetime = .keepAlways; add(tree)
         }
         XCTAssertTrue(editorOpened)
-        let correctedCount = app.textFields["summary-reps"]
+        let correctedCount = app.textFields["summary-left-reps"]
         correctedCount.tap()
         correctedCount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2) + "12")
         app.dismissNumericKeyboardPopover()
         app.buttons["保存"].tap()
-        XCTAssertTrue(app.staticTexts["12 次"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["左 12 / 右 未确认 次"].firstMatch.waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "offline-summary"
         screenshot.lifetime = .keepAlways
@@ -157,7 +159,7 @@ final class FoxNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["record-confirmed"].waitForExistence(timeout: 5))
         app.buttons["record-confirmed"].tap()
         XCTAssertTrue(app.scrollViews["record-detail"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["12 次"].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["左 12 / 右 未确认 次"].firstMatch.exists)
         let review = app.staticTexts["软件问题：语音反馈测试"]
         for _ in 0..<8 { if review.exists { break }; app.scrollViews["record-detail"].swipeUp() }
         XCTAssertTrue(review.exists)
@@ -182,7 +184,7 @@ final class FoxNativeUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["已暂停"].waitForExistence(timeout: 5))
         app.buttons["complete-set"].tap()
-        XCTAssertEqual(app.textFields["actual-reps"].value as? String, "次数")
+        XCTAssertEqual(app.textFields["actual-left-reps"].value as? String, "次数")
         app.buttons["结束训练"].tap()
         app.buttons["结束并核对记录"].tap()
         XCTAssertTrue(app.staticTexts["次数未确认"].waitForExistence(timeout: 5))

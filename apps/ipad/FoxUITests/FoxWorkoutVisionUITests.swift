@@ -47,11 +47,11 @@ final class FoxWorkoutVisionUITests: XCTestCase {
         for index in 0..<4 {
             if index > 0 { app.buttons["rest-ready"].tap() }
             if index == 1 {
-                if UIDevice.current.userInterfaceIdiom == .phone { app.buttons["phone-training-details"].tap() }
+                app.buttons["phone-training-details"].tap()
                 app.segmentedControls["workout-observation-arm"].buttons["右臂"].tap()
-                if UIDevice.current.userInterfaceIdiom == .phone { app.buttons["phone-training-details-done"].tap() }
+                app.buttons["phone-training-details-done"].tap()
             }
-            app.buttons["begin-vision-set"].tap()
+            app.buttons["begin-set"].tap()
             waitForCount(2, in: app)
             XCTAssertLessThanOrEqual(app.buttons["complete-set"].frame.maxY, app.frame.maxY)
             if index == 0 {
@@ -80,9 +80,8 @@ final class FoxWorkoutVisionUITests: XCTestCase {
 
     func testDeniedCameraCanSwitchToManualWithoutInventedCount() {
         let app = launch(fixture: "denied")
-        app.buttons["begin-vision-set"].tap()
-        XCTAssertTrue(app.buttons["manual-count"].waitForExistence(timeout: 5))
-        app.buttons["manual-count"].tap()
+        XCTAssertTrue(app.staticTexts["workout-tracking-status"].label.contains("人工"))
+        app.buttons["begin-set"].tap()
         app.buttons["complete-set"].tap()
         XCTAssertEqual(app.textFields["actual-left-reps"].value as? String, "次数")
         XCTAssertEqual(app.textFields["actual-right-reps"].value as? String, "次数")
@@ -98,9 +97,9 @@ final class FoxWorkoutVisionUITests: XCTestCase {
 
     func testLostSubjectCanRebindInSameSetAndKeepPreviousCount() {
         let app = launch(fixture: "subject_loss")
-        app.buttons["begin-vision-set"].tap()
+        app.buttons["begin-set"].tap()
         let rebind = app.buttons["rebind-vision-set"]
-        XCTAssertTrue(rebind.waitForExistence(timeout: 15))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: rebind)], timeout: 15), .completed)
         XCTAssertTrue(rebind.isHittable)
         XCTAssertTrue(app.frame.contains(rebind.frame))
         XCTAssertEqual(app.staticTexts["workout-automatic-count"].label, "1")
@@ -112,7 +111,7 @@ final class FoxWorkoutVisionUITests: XCTestCase {
 
     func testFailedEarlyEndKeepsCameraAndObservationForRetry() {
         let app = launch(fixture: "walk_in", failEarlyEndOnce: true)
-        app.buttons["begin-vision-set"].tap()
+        app.buttons["begin-set"].tap()
         waitForCount(2, in: app)
         app.buttons["结束训练"].tap()
         app.buttons["结束并核对记录"].tap()
@@ -141,7 +140,7 @@ final class FoxWorkoutVisionUITests: XCTestCase {
     func testPortraitPauseBackgroundResumePreservesFinishedCyclesAndActualSides() {
         let app = launch(fixture: "walk_in")
         XCUIDevice.shared.orientation = .portrait
-        app.buttons["begin-vision-set"].tap()
+        app.buttons["begin-set"].tap()
         let count = app.staticTexts["workout-automatic-count"]
         waitForCount(2, in: app)
         XCTAssertLessThanOrEqual(app.buttons["complete-set"].frame.maxY, app.frame.maxY)
@@ -154,11 +153,11 @@ final class FoxWorkoutVisionUITests: XCTestCase {
         XCUIDevice.shared.press(.home); app.activate()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
         XCTAssertEqual(count.label, "2")
-        let resume = app.buttons["begin-vision-set"]
+        let resume = app.buttons["begin-set"]
         let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: resume)
         XCTAssertEqual(XCTWaiter.wait(for: [hittable], timeout: 5), .completed)
         resume.press(forDuration: 0.2)
-        XCTAssertTrue(app.buttons["cancel-vision-preparation"].waitForExistence(timeout: 3))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS '取消就位'"), object: app.buttons["begin-set"])], timeout: 3), .completed)
         waitForCount(4, in: app)
         app.buttons["complete-set"].tap()
         XCTAssertEqual(app.textFields["actual-left-reps"].value as? String, "4")

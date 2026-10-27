@@ -74,7 +74,7 @@ final class GuidanceSession: ObservableObject {
     }
     var usesVision: Bool {
         guard let store else { return true }
-        return store.session?.exercise.visualObservation != nil && store.session?.currentVisualEvidence?.fallbackReason == nil
+        return store.usesVision
     }
     var effectiveMode: GuidanceMode { usesVision || mode == .off ? mode : .planned }
     func setSpeech(_ enabled: Bool) { defaults?.set(enabled, forKey: "FoxGuidance.speech"); output.setSpeechEnabled(enabled) }
@@ -97,7 +97,7 @@ final class GuidanceSession: ObservableObject {
         if case .countdown(let n) = vision.startState { countdown = n } else { countdown = nil }
         if let store {
             guard let session = store.session else { output.interrupt(reason: "session_ended"); return }
-            let visual = session.exercise.visualObservation != nil && session.currentVisualEvidence?.fallbackReason == nil
+            let visual = store.usesVision
             let stage: GuidanceStage = vision.isPreparing ? (countdown == nil ? .preparing : .countdown) :
                 GuidanceStage(rawValue: session.stage.rawValue) ?? .idle
             let context = GuidanceContext(sessionID: session.id.uuidString,

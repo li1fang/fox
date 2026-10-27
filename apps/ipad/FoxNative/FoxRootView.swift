@@ -55,11 +55,14 @@ struct FoxRootView: View {
     @StateObject private var store: TrainingStore
     @StateObject private var vision: VisionLabController
     @State private var tab: String
-    init(store: TrainingStore? = nil, vision: VisionLabController? = nil, initialTab: String? = nil, onClose: (() -> Void)? = nil) {
+    private let trialExercise: VisionExercise?
+    @State private var entryConsumed = false
+    init(store: TrainingStore? = nil, vision: VisionLabController? = nil, initialTab: String? = nil, trialExercise: VisionExercise? = nil, onClose: (() -> Void)? = nil) {
         _store = StateObject(wrappedValue: store ?? TrainingStore())
         _vision = StateObject(wrappedValue: vision ?? VisionLabController())
         _tab = State(initialValue: initialTab ?? (ProcessInfo.processInfo.environment["FOX_START_SCREEN"] == "vision" ? "vision" : "plan"))
         self.onClose = onClose
+        self.trialExercise = trialExercise
     }
     @State private var importing = false
     @State private var ending = false
@@ -117,6 +120,8 @@ struct FoxRootView: View {
         .foregroundStyle(FoxStyle.ink)
         .preferredColorScheme(.light)
         .onAppear {
+            if !entryConsumed, let trialExercise { store.startTrial(trialExercise) }
+            entryConsumed = true
             if store.session != nil && tab != "vision" { tab = "training" }
             else if store.session == nil && tab == "training" { tab = "plan" }
             updateIdleTimer()
@@ -242,6 +247,7 @@ struct FoxRootView: View {
         if store.session?.stage == .active,
            !store.updateSession({ try $0.pause(at: Date()) }) { return }
         if vision.cameraState != .stopped { vision.stopCamera() }
+        store.workoutVision.stop()
         UIApplication.shared.isIdleTimerDisabled = false
         onClose?()
     }
@@ -265,7 +271,7 @@ struct FoxRootView: View {
                 if let date = store.archive.plan.scheduledDate {
                     Text("\(date) · \(store.archive.plan.scheduledTimeZone ?? "")").font(.system(size: 18)).foregroundStyle(.secondary)
                 }
-                TrainingPlanOutline(plan: store.archive.plan)
+                TrainingPlanOutline(plan: TrainingCapabilities.prepared(store.archive.plan))
             }.padding(24).frame(maxWidth: 1000)
                 .frame(maxWidth: .infinity, alignment: .center)
         }.safeAreaInset(edge: .bottom) {

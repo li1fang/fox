@@ -59,6 +59,28 @@ final class WorkoutVisionCoordinator {
         controller.startCamera()
     }
 
+    // Preview is not an armed start and does not create observation or recording facts.
+    func preview() {
+        guard let store, store.usesVision, let session = store.session,
+              [.ready, .paused].contains(session.stage), session.currentObservationId == nil else { return }
+        if controller.cameraState == .stopped { controller.startCamera() }
+    }
+
+    func stopUnarmedPreview() {
+        guard store?.session?.currentObservationId == nil else { return }
+        stop()
+    }
+
+    @discardableResult
+    func disableVision() -> Bool {
+        guard let store, flush() else { return false }
+        if store.session?.currentVisualEvidence != nil {
+            guard store.updateSession({ try $0.useManualCounting(reason: .userChoice, at: controller.wallTime) }) else { return false }
+        }
+        stop()
+        return true
+    }
+
     @discardableResult
     func flush() -> Bool {
         guard let store, let binding, let id = observationId,

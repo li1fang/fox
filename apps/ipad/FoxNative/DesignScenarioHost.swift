@@ -147,7 +147,8 @@ enum DesignFixtures {
         if scenario == .trainingWaiting || scenario == .trainingFeedbackRotated { archive.plan = try TrainingPlan.realExerciseDay1Draft() }
         try LocalTrainingRepository.encoder().encode(archive).write(to: directory.appendingPathComponent("training.json"))
         let store = TrainingStore(archiveURL: directory.appendingPathComponent("training.json"), diagnosticRoot: directory.appendingPathComponent("Diagnostics"))
-        store.start()
+        // These are archived manual/visual scenarios, not the new-session capability resolver.
+        store.perform { try $0.start(plan: archive.plan, at: Date()) }
         let now = Date()
         if [.trainingActive, .trainingRotated, .trainingLargeType, .trainingPaused, .trainingRest, .trainingFeedback, .trainingFeedbackRotated, .trainingSummary].contains(scenario) {
             guard store.updateSession({ try $0.startSet(at: now.addingTimeInterval(-25)) }) else { throw TrainingError.invalidTransition }

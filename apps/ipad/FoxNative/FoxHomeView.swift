@@ -1,7 +1,14 @@
 import FoxJournalCore
+import FoxTrainingCore
 import SwiftUI
 
 private struct HomeCardIdentity: LayoutValueKey { static let defaultValue = "" }
+
+private enum HomeTrainingRoute: Identifiable {
+    case plan, trial(VisionExercise)
+    var id: String { switch self { case .plan: return "plan"; case .trial(let exercise): return "trial-\(exercise.rawValue)" } }
+    var exercise: VisionExercise? { if case .trial(let exercise) = self { return exercise }; return nil }
+}
 
 private struct HomeMasonry: Layout {
     let columns: Int
@@ -68,7 +75,7 @@ struct FoxHomeView: View {
     }
     @FocusState private var editing: Bool
     @State private var selected: CaptureRecord?
-    @State private var showingTraining = false
+    @State private var trainingRoute: HomeTrainingRoute?
     @State private var showingBackup = false
     @State private var trainingSelection: HomeTrainingSelection?
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -158,8 +165,8 @@ struct FoxHomeView: View {
                 }
             }
             .task { if automaticallyLoad { await journal.load() }; await trainingArchive.load() }
-            .fullScreenCover(isPresented: $showingTraining, onDismiss: { Task { await trainingArchive.load() } }) {
-                FoxRootView(onClose: { showingTraining = false }).foxReservedSpace().interactiveDismissDisabled()
+            .fullScreenCover(item: $trainingRoute, onDismiss: { Task { await trainingArchive.load() } }) { route in
+                FoxRootView(trialExercise: route.exercise, onClose: { trainingRoute = nil }).foxReservedSpace().interactiveDismissDisabled()
             }
             .sheet(isPresented: $showingBackup) { JournalBackupView(journal: journal) }
             .sheet(item: $trainingSelection) { selection in HomeTrainingDetail(selection: selection) { trainingSelection = nil } }
@@ -226,20 +233,34 @@ struct FoxHomeView: View {
     }
 
     private var training: some View {
-        Button { editing = false; showingTraining = true } label: {
+        VStack(alignment: .leading, spacing: 14) {
+        Button { editing = false; trainingRoute = .trial(.curl) } label: {
             HStack(spacing: 16) {
                 Image(systemName: "figure.strengthtraining.traditional")
                     .font(.title).foregroundStyle(FoxStyle.accent)
                     .frame(width: 52, height: 64)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("训练").font(.title3.bold())
-                    Text(!trainingArchive.loaded ? "正在读取本机档案" : trainingArchive.snapshot.plan == nil && trainingArchive.error == nil ? "本机暂无训练档案" : "计划与记录")
+                    Text(trainingArchive.snapshot.current == nil ? "试练一组" : "继续训练").font(.title3.bold())
+                    Text(trainingArchive.snapshot.current?.exercise.name ?? "哑铃弯举 · 相机辅助")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").foregroundStyle(.secondary)
-            }.modifier(HomeCard())
-        }.buttonStyle(.plain).accessibilityIdentifier("home-training").disabled(journal.busy || photos.loading)
+            }.contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityIdentifier("home-try-training")
+        HStack {
+            Button { editing = false; trainingRoute = .plan } label: {
+                Label("计划与记录", systemImage: "list.bullet").frame(minHeight: 44)
+            }.accessibilityIdentifier("home-training")
+            Spacer(minLength: 8)
+            Menu {
+                ForEach(VisionExercise.allCases, id: \.self) { exercise in
+                    Button(exercise.label) { editing = false; trainingRoute = .trial(exercise) }
+                }
+            } label: { Image(systemName: "chevron.down").frame(width: 44, height: 44) }
+                .accessibilityLabel("选择试练动作").help("选择试练动作").disabled(trainingArchive.snapshot.current != nil)
+        }.font(.subheadline)
+        }.modifier(HomeCard()).disabled(journal.busy || photos.loading)
     }
 
     private func trainingProjection(title: String, name: String, detail: String, count: String, id: String, action: @escaping () -> Void) -> some View {

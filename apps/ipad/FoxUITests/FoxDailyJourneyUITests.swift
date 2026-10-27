@@ -61,7 +61,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
         app.buttons["start-training"].tap()
         app.buttons["begin-set"].tap()
         app.buttons["complete-set"].tap()
-        XCTAssertTrue(app.textFields["actual-reps"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["actual-left-reps"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["submit-feedback"].isEnabled, "A target must never become an actual count automatically")
         shot("03-feedback")
         app.scrollViews["set-feedback"].swipeUp()
@@ -87,9 +87,9 @@ final class FoxDailyJourneyUITests: XCTestCase {
         app.buttons["home-training"].tap(); app.buttons["start-training"].tap()
         app.buttons["begin-set"].tap(); app.buttons["complete-set"].tap()
         XCTAssertFalse(app.buttons["submit-feedback"].isEnabled)
-        visible(app.buttons["actual-reps-plus"], in: app)
-        app.buttons["actual-reps-plus"].tap(); app.buttons["actual-reps-plus"].tap()
-        XCTAssertEqual(app.textFields["actual-reps"].value as? String, "2")
+        visible(app.buttons["actual-left-reps-plus"], in: app)
+        app.buttons["actual-left-reps-plus"].tap(); app.buttons["actual-left-reps-plus"].tap()
+        XCTAssertEqual(app.textFields["actual-left-reps"].value as? String, "2")
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         XCTAssertFalse(app.textFields["trial-software-issue"].exists)
         app.buttons["submit-feedback"].tap()
@@ -103,7 +103,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
         app.buttons["home-training"].tap()
         XCTAssertTrue(app.staticTexts["已暂停"].waitForExistence(timeout: 5))
         app.buttons["结束训练"].tap(); app.buttons["结束并核对记录"].tap()
-        XCTAssertTrue(app.staticTexts["2 次"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["左 2 / 右 未确认 次"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["confirm-summary"].tap()
         visible(app.staticTexts["training-saved-receipt"], in: app)
         let historyTitle = app.staticTexts["training-history-title"].firstMatch
@@ -118,7 +118,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
         app.terminate(); app.launchArguments = []; app.launch()
         app.buttons["home-training"].tap(); app.buttons["记录"].tap()
         app.buttons["record-confirmed"].tap()
-        XCTAssertTrue(app.staticTexts["2 次"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["左 2 / 右 未确认 次"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testFourVisualSetsConfirmAndReopenWithoutOptionalInput() {
@@ -131,7 +131,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
                 visible(app.staticTexts["training-set-saved"], in: app)
                 app.buttons["rest-ready"].tap()
             }
-            app.buttons["begin-vision-set"].tap()
+            app.buttons["begin-set"].tap()
             let count = app.staticTexts["workout-automatic-count"]
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '2'"), object: count)], timeout: 20), .completed)
             app.buttons["complete-set"].tap()

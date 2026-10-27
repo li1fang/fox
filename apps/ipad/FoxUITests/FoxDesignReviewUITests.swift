@@ -42,13 +42,12 @@ final class FoxDesignReviewUITests: XCTestCase {
             let loaded = ready.waitForExistence(timeout: 12)
             if !loaded { capture("\(scenario.id)-unready", app: app) }
             XCTAssertTrue(loaded, scenario.id)
-            if scenario == .trainingWaiting { XCTAssertTrue(app.buttons["cancel-vision-preparation"].waitForExistence(timeout: 5)) }
+            if scenario == .trainingWaiting { XCTAssertTrue(app.buttons["begin-set"].waitForExistence(timeout: 5)) }
             capture(scenario.id, app: app)
             if scenario == .trainingRotated && app.frame.height < 500 {
-                let phone = UIDevice.current.userInterfaceIdiom == .phone
-                if !phone { XCTAssertTrue(app.scrollViews["training-observation"].exists) }
-                let viewport = phone ? app.frame : app.scrollViews["training-observation"].frame
-                for id in phone ? ["set-elapsed", "tempo-phase", "phone-target-reps", "phone-target-weight"] : ["set-elapsed", "tempo-phase"] {
+                XCTAssertTrue(app.otherElements["training-stage-surface"].exists)
+                let viewport = app.frame
+                for id in ["set-elapsed", "tempo-phase", "phone-target-reps", "phone-target-weight"] {
                     let value = app.staticTexts[id]
                     XCTAssertTrue(value.exists, id)
                     XCTAssertGreaterThanOrEqual(value.frame.minY, viewport.minY, id)
@@ -78,7 +77,7 @@ final class FoxDesignReviewUITests: XCTestCase {
             case .trainingActive, .trainingRotated, .trainingLargeType: primary = ["complete-set", "pause-set"]
             case .trainingPaused: primary = ["begin-set", "complete-set"]
             case .trainingReady: primary = ["begin-set", "skip-set"]
-            case .trainingWaiting: primary = ["cancel-vision-preparation", "manual-count"]
+            case .trainingWaiting: primary = ["begin-set", "skip-set"]
             case .trainingRest: primary = ["rest-ready"]
             case .trainingFeedback, .trainingFeedbackRotated: primary = ["submit-feedback"]
             case .trainingSummary: primary = ["confirm-summary"]
@@ -195,8 +194,8 @@ final class FoxDesignReviewUITests: XCTestCase {
         screenshot.name = "design-\(id)"; screenshot.lifetime = .keepAlways; add(screenshot)
         let targets = ["journal-note", "journal-save", "journal-camera", "home-training", "journal-save-error",
                        "journal-edit", "journal-edit-note", "journal-edit-save", "journal-edit-error", "journal-reload-latest", "journal-export-backup",
-                       "begin-set", "begin-vision-set", "cancel-vision-preparation", "manual-count", "complete-set", "pause-set", "rest-ready",
-                       "submit-feedback", "confirm-summary", "actual-reps", "actual-left-reps", "actual-right-reps", "set-elapsed", "tempo-phase", "training-observation", "phone-target-reps", "phone-target-weight", "phone-training-details", "workout-automatic-count", "workout-tracking-status", "diagnostic-keep", "diagnostic-discard"]
+                       "begin-set", "manual-count", "complete-set", "pause-set", "rest-ready",
+                       "submit-feedback", "confirm-summary", "actual-reps", "actual-left-reps", "actual-right-reps", "set-elapsed", "tempo-phase", "training-stage-surface", "phone-target-reps", "phone-target-weight", "phone-training-details", "workout-automatic-count", "workout-tracking-status", "diagnostic-keep", "diagnostic-discard"]
         let recordIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'journal-record-' ")).allElementsBoundByIndex.prefix(8).map(\.identifier)
         let projectionIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-training-projection-' ")).allElementsBoundByIndex.map(\.identifier)
         let identifiers = targets + recordIDs + projectionIDs + ["journal-detail-note", "photo-zoom-level"]

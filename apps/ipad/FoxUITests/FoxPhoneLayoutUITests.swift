@@ -13,7 +13,7 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         app.launchArguments = ["--ui-testing-reset"]
         launchFeedbackInPortrait(app)
         app.buttons["start-training"].tap(); app.buttons["begin-set"].tap(); app.buttons["complete-set"].tap()
-        let count = app.textFields["actual-reps"]
+        let count = app.textFields["actual-left-reps"]
         XCTAssertTrue(count.waitForExistence(timeout: 5)); count.tap(); count.typeText("2")
         visible(app.buttons["feedback-dismiss-keyboard"], in: app, diagnosticID: "feedback-dismiss-keyboard")
         app.buttons["feedback-dismiss-keyboard"].tap()
@@ -559,8 +559,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 10))
         app.buttons["home-training"].tap()
         app.buttons["training-tools"].tap(); app.buttons["准备 Day 1 草稿"].tap(); app.buttons["start-training"].tap()
-        visible(app.buttons["begin-vision-set"], in: app)
-        app.buttons["begin-vision-set"].tap()
+        visible(app.buttons["begin-set"], in: app)
+        app.buttons["begin-set"].tap()
         let counted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '2'"), object: app.staticTexts["workout-automatic-count"])
         XCTAssertEqual(XCTWaiter.wait(for: [counted], timeout: 20), .completed)
         let identity = try previewIdentity(in: app)
@@ -608,6 +608,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         visible(app.buttons["training-page-menu"], in: app)
         visible(app.staticTexts["set-elapsed"], in: app)
         visible(app.staticTexts["tempo-phase"], in: app)
+        XCTAssertLessThanOrEqual(app.staticTexts["set-elapsed"].frame.maxX,
+                                 app.otherElements["training-stage-surface"].frame.minX)
         screenshot("phone-manual-larger-text-landscape", app: app)
     }
 }

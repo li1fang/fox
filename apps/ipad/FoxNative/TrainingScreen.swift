@@ -9,33 +9,43 @@ struct TrainingScreen: View {
     @ObservedObject private var visual: VisionLabController
     @ObservedObject private var guidance: GuidanceSession
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @State private var armChoice: TrainingArmChoice?
+    @State private var summaryNote = ""
+    @State private var editingRecord: LocalSetRecord?
+    @State private var showingDetails = false
+
     private var selectedArm: ArmSide { TrainingArmChoice.current(armChoice, session: session) }
     private var armBinding: Binding<ArmSide> {
         Binding(get: { selectedArm }, set: { armChoice = TrainingArmChoice(attemptID: session.currentSetAttemptId, arm: $0) })
     }
-    @State private var summaryNote = ""
-    @State private var editingRecord: LocalSetRecord?
-    @State private var diagnosticsExpanded = false
-    @State private var showingPhoneDetails = false
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var compactFeedback: Bool { session.stage == .feedback && verticalSizeClass == .compact }
-    private var sideBySide: Bool { FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) }
+    private var hasCamera: Bool { store.usesVision && session.stage != .rest }
+    private var preparing: Bool { session.currentObservationId != nil && session.stage != .active }
 
     init(store: TrainingStore, session: TrainingSession, phoneLandscapeNavigation: AnyView? = nil, onConfirmed: @escaping () -> Void) {
         self.store = store; self.session = session; self.onConfirmed = onConfirmed
         self.phoneLandscapeNavigation = phoneLandscapeNavigation
-        visual = store.workoutVision.controller
-        guidance = store.guidance
+        visual = store.workoutVision.controller; guidance = store.guidance
     }
 
     var body: some View {
-        content.onAppear { guidance.start() }.onDisappear { guidance.stop() }
+        content
+            .onAppear { guidance.start(); store.workoutVision.preview() }
+            .onDisappear { guidance.stop(); store.workoutVision.stop() }
+            .onChange(of: session.currentSetAttemptId) { _ in store.workoutVision.preview() }
+            .onChange(of: session.stage) { stage in
+                if stage == .ready { store.workoutVision.preview() }
+            }
             .onChange(of: scenePhase) { phase in
-                if phase == .active { guidance.start() } else { guidance.stop() }
+                if phase == .active { guidance.start(); store.workoutVision.preview() }
+                else {
+                    guidance.stop()
+                    if phase == .background { store.workoutVision.stopUnarmedPreview() }
+                }
             }
     }
 
@@ -48,8 +58,7 @@ struct TrainingScreen: View {
                     TextField("本次训练备注", text: $summaryNote, axis: .vertical).textFieldStyle(.roundedBorder).font(.system(size: 20))
                 }.padding(28).frame(maxWidth: 1100).frame(maxWidth: .infinity)
             }
-            .accessibilityIdentifier("training-summary")
-            .scrollDismissesKeyboard(.interactively)
+            .accessibilityIdentifier("training-summary").scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
                 FoxCommand(title: "确认并保存", icon: "checkmark", prominent: true) {
                     store.updateSession { try $0.confirm(note: summaryNote, at: Date()) }
@@ -62,496 +71,231 @@ struct TrainingScreen: View {
                     return store.errorMessage == nil
                 }
             }
-        } else if UIDevice.current.userInterfaceIdiom == .phone && session.stage != .feedback {
-            phoneTrainingBody
-                .sheet(isPresented: $showingPhoneDetails) { phoneDetails }
+        } else if session.stage == .feedback {
+            SetFeedbackView(store: store, session: session).padding(.horizontal, 20)
         } else {
-            VStack(spacing: compactFeedback ? 0 : 18) {
-                if !compactFeedback {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 24) { heading; progress.fixedSize() }.fixedSize(horizontal: true, vertical: false)
-                    VStack(alignment: .leading, spacing: 10) { heading; progress }
-                }
-                }
-                if session.stage == .feedback {
-                    SetFeedbackView(store: store, session: session)
-                } else {
-                    GeometryReader { geometry in
-                        if geometry.size.height < 260 && !typeSize.isAccessibilitySize {
-                            ScrollView {
-                                VStack(spacing: 16) { compactPerformancePanel; targets }
-                            }.accessibilityIdentifier("training-observation")
-                        } else if geometry.size.width >= 850 && !typeSize.isAccessibilitySize {
-                            HStack(spacing: 28) {
-                                ScrollView { performancePanel }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                                ScrollView { targets }.frame(width: 300)
-                            }
-                        } else {
-                            ScrollView {
-                                VStack(spacing: 20) {
-                                    performancePanel
-                                    targets
-                                }.frame(maxWidth: .infinity)
-                            }
-                        }
-                    }
-                }
-            }.padding(.horizontal, 20).padding(.vertical, compactFeedback ? 0 : 20)
-                .safeAreaInset(edge: .bottom) {
-                    if session.stage != .feedback {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: actionColumnCount), spacing: 10) { actions }
-                            .padding(16).background(.bar).accessibilityIdentifier("training-actions")
-                    }
-                }
+            GeometryReader { geometry in
+                trainingLayout(landscape: UIDevice.current.userInterfaceIdiom == .phone
+                    ? FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) : geometry.size.width >= 850)
+            }.sheet(isPresented: $showingDetails) { details }
         }
     }
 
-    private var usesPhoneCamera: Bool {
-        session.stage != .rest && session.exercise.visualObservation != nil && session.currentVisualEvidence?.fallbackReason == nil
-    }
-
-    private var showsPlannedTempo: Bool {
-        session.currentVisualEvidence == nil || session.currentVisualEvidence?.fallbackReason != nil || visual.taskMessage().allowsPlannedTempo
-    }
-
-    private var phoneTrainingBody: some View {
-        let landscape = sideBySide
-        let actionsLayout = landscape ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 10))
-        return PhoneCameraLayout(landscape: landscape, spacing: landscape ? 12 : 8) {
-            VStack(spacing: 6) {
-                if landscape { phoneLandscapeNavigation }
-                if landscape && typeSize.isAccessibilitySize { ScrollView { phoneSidebarInformation } }
-                else { phoneSidebarInformation }
+    private func trainingLayout(landscape: Bool) -> some View {
+            PhoneCameraLayout(landscape: landscape, spacing: 12, cameraLeading: UIDevice.current.userInterfaceIdiom != .phone) {
+                if typeSize.isAccessibilitySize { ScrollView { information(landscape: landscape) }.frame(maxHeight: landscape ? 205 : 300) }
+                else { information(landscape: landscape) }
+                stage(landscape: landscape)
+                HStack(spacing: 10) { actions }.accessibilityElement(children: .contain).accessibilityIdentifier("training-actions")
             }
-            GeometryReader { stage in phoneStage(size: stage.size) }
-            actionsLayout { phoneActions }
-        }
-        .padding(.horizontal, landscape ? 12 : 16).padding(.vertical, landscape ? 12 : 8)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: landscape)
+            .padding(12)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: landscape)
     }
 
-    private var phoneSidebarInformation: some View {
-        VStack(spacing: 6) {
-            phoneHeading
-            phoneTargets
-            if usesPhoneCamera { workoutTask }
-            if sideBySide && usesPhoneCamera {
-                if session.stage == .ready || session.stage == .paused {
-                    Picker("观测手臂", selection: armBinding) {
-                        ForEach(ArmSide.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }.pickerStyle(.segmented).disabled(session.currentVisualEvidence != nil)
-                        .accessibilityIdentifier("workout-quick-arm")
-                }
-                TimelineView(.periodic(from: .now, by: 0.1)) { phoneObservation(at: $0.date) }
-                TrainingRecordingStatus(capture: visual.diagnosticCapture)
+    private func information(landscape: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if landscape && UIDevice.current.userInterfaceIdiom == .phone { phoneLandscapeNavigation }
+            if landscape && typeSize.isAccessibilitySize {
+                TimelineView(.periodic(from: .now, by: 0.1)) { observation(at: $0.date) }
             }
-        }
-    }
-
-    private var phoneHeading: some View {
-        HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(session.exercise.name).font(.headline).fixedSize(horizontal: false, vertical: true)
-                    Text("第 \(session.setIndex + 1) / \(session.exercise.targetSets.count) 组 · 今日 \(session.records.count) / \(session.plan.totalSets) 组")
-                        .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("phone-training-progress")
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if usesPhoneCamera { GuidanceMuteButton(session: guidance) }
-                Button { showingPhoneDetails = true } label: {
-                    Image(systemName: "slider.horizontal.3").font(.title2).frame(width: 44, height: 44)
+            Text(session.exercise.name).font(.headline).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Text("第 \(session.setIndex + 1) / \(session.exercise.targetSets.count) 组 · 今日 \(session.records.count) / \(session.plan.totalSets) 组")
+                .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("phone-training-progress")
+            HStack {
+                Text(session.target.targetReps.map { "\($0) 次\(session.exercise.repetitionBasis == .perSide ? " / 侧" : "")" }
+                     ?? durationText(session.target.targetDurationSeconds ?? 0))
+                    .accessibilityIdentifier("phone-target-reps")
+                Spacer(minLength: 4)
+                Text(weightText(session.currentWeight, unit: session.target.weightUnit)).accessibilityIdentifier("phone-target-weight")
+            }.font(.title3.bold()).monospacedDigit()
+            if !landscape || !typeSize.isAccessibilitySize {
+                TimelineView(.periodic(from: .now, by: 0.1)) { observation(at: $0.date) }
+            }
+            HStack(spacing: 8) {
+                Button { store.setVisionEnabled(!hasCamera) } label: {
+                    Image(systemName: hasCamera ? "video" : "video.slash").font(.title3).frame(width: 44, height: 44)
+                }.disabled(session.stage == .rest || (!hasCamera && !store.canEnableVision) || session.exercise.visualObservation == nil)
+                    .accessibilityLabel(hasCamera ? "关闭视觉" : "开启视觉")
+                    .accessibilityIdentifier("training-vision-toggle").help("切换视觉")
+                GuidanceMuteButton(session: guidance)
+                Button { showingDetails = true } label: {
+                    Image(systemName: "slider.horizontal.3").font(.title3).frame(width: 44, height: 44)
                 }.accessibilityLabel("本组设置").accessibilityIdentifier("phone-training-details").help("本组设置")
+                Spacer(minLength: 0)
+                // Recovery is an additional control, never a replacement for pause or finish.
+                Button { store.workoutVision.rebindSubject() } label: {
+                    Image(systemName: "arrow.clockwise").font(.title3).frame(width: 44, height: 44)
+                }.disabled(!hasCamera || !visual.needsRebind)
+                    .accessibilityLabel("重新就位").accessibilityIdentifier("rebind-vision-set").help("重新就位")
             }
-    }
-
-    private var phoneTargets: some View {
-        HStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(session.stage == .rest ? "下一组目标" : "本组目标").font(.caption).foregroundStyle(.secondary)
-                    Text(session.target.targetReps.map { "\($0) 次\(session.exercise.repetitionBasis == .perSide ? " / 侧" : "")" } ?? durationText(session.target.targetDurationSeconds ?? 0))
-                        .font(.title3.bold()).monospacedDigit().accessibilityIdentifier("phone-target-reps")
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(session.stage == .ready && session.currentWeightConfirmation == nil ? "重量待确认" : "重量").font(.caption).foregroundStyle(.secondary)
-                    Text(weightText(session.currentWeight, unit: session.target.weightUnit)).font(.title3.weight(.semibold))
-                        .accessibilityIdentifier("phone-target-weight")
-                }.onTapGesture { if session.stage == .ready { showingPhoneDetails = true } }
-            }.padding(.vertical, 4)
-    }
-
-    @ViewBuilder private func phoneStage(size: CGSize) -> some View {
-        if usesPhoneCamera {
-            VStack(spacing: 6) {
-                if !sideBySide {
-                    TimelineView(.periodic(from: .now, by: 0.1)) { phoneObservation(at: $0.date) }
-                }
-                phoneWorkoutCamera
-                if !sideBySide { TrainingRecordingStatus(capture: visual.diagnosticCapture) }
-            }
-        } else {
-            TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
-                if session.stage == .rest { phoneRest(at: timeline.date, short: size.height < 230) }
-                else { phoneManual(at: timeline.date, size: size) }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            Text(statusDetail).font(.callout).foregroundStyle(.secondary)
+                .lineLimit(2).frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
+                .accessibilityIdentifier(hasCamera ? "workout-task-detail" : "workout-manual-detail")
         }
     }
 
-    private func phoneObservation(at date: Date) -> some View {
-        HStack(spacing: 12) {
-            Text("\(session.currentVisualEvidence?.automaticCount ?? 0)").font(.title.bold()).monospacedDigit()
-                .accessibilityIdentifier("workout-automatic-count")
+    private var statusDetail: String {
+        if hasCamera {
+            if session.currentObservationId == nil && session.stage == .ready {
+                return session.exercise.visualObservation?.exercise.guidance ?? "准备好后开始"
+            }
+            return visual.taskMessage(automaticCount: session.currentVisualEvidence?.automaticCount ?? 0).detail
+        }
+        if session.stage == .rest { return "上一组已保存，准备好后继续。" }
+        if session.currentVisualEvidence?.fallbackReason != nil { return "已观测次数保留；本组余下次数由你核对，下组可重新开启视觉。" }
+        if session.exercise.visualObservation == nil { return "本动作使用计划节奏，结束后确认实际完成。" }
+        return store.visionRequested ? "\(visual.cameraState.label)，可按计划节奏训练。" : "视觉已关闭，结束后确认实际完成。"
+    }
+
+    private func observation(at date: Date) -> some View {
+        HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text((session.currentVisualEvidence?.settings.arm ?? selectedArm).label).font(.caption)
-                Text(visual.isPreparing ? visual.qualityLabel : session.stage == .paused ? "已暂停" : session.currentObservationId == nil ? "相机待机" : visual.qualityLabel)
-                    .font(.subheadline).accessibilityIdentifier("workout-tracking-status")
-            }.foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-            Text(durationText(session.elapsed(at: date))).font(.headline).monospacedDigit()
+                Text(session.currentVisualEvidence.map { String($0.automaticCount) } ?? (hasCamera ? "0" : "—"))
+                    .font(.title2.bold()).monospacedDigit().accessibilityIdentifier("workout-automatic-count")
+                Text(hasCamera || session.currentVisualEvidence?.hasObservedFrames == true ? "视觉观测" : "人工核对")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: true, vertical: false)
+            }
+            Text(hasCamera ? (preparing ? visual.qualityLabel : session.stage == .paused ? "已暂停" :
+                session.currentObservationId == nil ? "视觉已开启" : visual.qualityLabel) :
+                session.stage == .paused ? "已暂停" : "人工记录")
+                .font(.subheadline).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("workout-tracking-status")
+            Text(durationText(session.elapsed(at: date))).font(.headline).monospacedDigit().fixedSize(horizontal: true, vertical: false)
                 .accessibilityIdentifier("set-elapsed")
-        }
+        }.frame(minHeight: 44)
     }
 
-    private var phoneWorkoutCamera: some View {
-        PhoneCameraStage(controller: visual, idleLabel: session.currentObservationId == nil ? (session.stage == .paused ? "已暂停" : "相机待机") : nil,
-            guidance: guidance)
-    }
-
-    private func phoneManual(at date: Date, size: CGSize) -> some View {
-        let elapsed = session.elapsed(at: date)
-        let short = size.height < 230
-        return Group {
-            if short {
-                HStack(spacing: 24) {
-                    phoneClock(elapsed: elapsed)
-                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active,
-                                 drawingSize: max(32, min(90, size.height - 48)), inactiveLabel: inactiveTempoLabel)
-                        .frame(maxWidth: .infinity)
+    private func stage(landscape: Bool) -> some View {
+        ZStack {
+            Color(uiColor: .secondarySystemGroupedBackground)
+            // Keep the preview's identity through mode/size changes; only its visibility changes.
+            PosePreview(controller: visual).opacity(hasCamera ? 1 : 0)
+            if session.stage == .rest {
+                TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
+                    let remaining = session.restRemaining(at: timeline.date)
+                    VStack(spacing: 12) {
+                        Label(session.records.last?.status == "skipped" ? "跳过已记录" : "上一组已保存", systemImage: "checkmark.circle")
+                            .font(.subheadline).accessibilityIdentifier("training-set-saved")
+                        Text(remaining > 0 ? "休息" : "准备下一组").font(.headline)
+                        Text(durationText(ceil(remaining))).font(.system(size: 48, weight: .semibold)).monospacedDigit()
+                            .accessibilityIdentifier("rest-remaining")
+                        ProgressView(value: max(0, min(1, 1 - remaining / max(1, session.restDurationSeconds)))).frame(maxWidth: 240)
+                    }.padding(12)
                 }
             } else {
-                VStack(spacing: 24) {
-                    phoneClock(elapsed: elapsed)
-                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active,
-                                 drawingSize: max(64, min(170, size.height - 180)), inactiveLabel: inactiveTempoLabel)
+                TrainingRhythmSquare(output: guidance.output, visual: hasCamera,
+                    running: hasCamera ? visual.isCounting : session.stage == .active,
+                    paused: session.stage == .paused)
+                if case .countdown(let remaining) = visual.startState, hasCamera {
+                    Text(String(remaining)).font(.system(size: 72, weight: .bold)).monospacedDigit()
+                        .foregroundStyle(.white).padding(12).background(.black.opacity(0.7))
+                        .accessibilityIdentifier("vision-countdown")
                 }
             }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func phoneClock(elapsed: Double) -> some View {
-        VStack(spacing: 6) {
-            Text(session.stage == .active ? "本组用时" : session.stage == .paused ? "已暂停" : "准备开始")
-                .font(.subheadline).foregroundStyle(FoxStyle.green).accessibilityIdentifier("training-stage")
-            Text(durationText(elapsed)).font(.system(size: 42, weight: .semibold)).monospacedDigit()
-                .accessibilityIdentifier("set-elapsed")
-            if session.currentVisualEvidence?.fallbackReason != nil {
-                Text("人工记录中").font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("workout-tracking-status")
-            }
-        }.frame(maxWidth: .infinity)
-    }
-
-    private func phoneRest(at date: Date, short: Bool) -> some View {
-        let rest = session.restRemaining(at: date)
-        return VStack(spacing: short ? 8 : 20) {
-            restReceipt
-            Text(rest > 0 ? "休息" : "准备下一组").font(.headline).foregroundStyle(FoxStyle.green)
-            Text(durationText(ceil(rest))).font(.system(size: short ? 42 : 72, weight: .semibold)).monospacedDigit()
-                .accessibilityIdentifier("rest-remaining")
-            ProgressView(value: max(0, min(1, 1 - rest / max(1, session.restDurationSeconds))))
-                .frame(maxWidth: 300)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var phoneDetails: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    targets
-                    if session.stage == .ready && session.exercise.visualObservation != nil && session.currentVisualEvidence?.fallbackReason == nil {
-                        FoxCommand(title: "跳过本组", icon: "forward.end") {
-                            showingPhoneDetails = false; store.updateSession { try $0.skip(at: Date()) }
-                        }.accessibilityIdentifier("skip-set")
-                    }
-                    if (session.stage == .active && session.currentObservationId != nil) || (session.stage == .paused && usesPhoneCamera) {
-                        FoxCommand(title: "改为人工记录", icon: "hand.tap") {
-                            store.workoutVision.useManual(); showingPhoneDetails = false
-                        }.accessibilityIdentifier("manual-count")
-                    }
-                }.padding(20)
-            }.scrollDismissesKeyboard(.interactively)
-                .navigationTitle("本组设置").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingPhoneDetails = false }.accessibilityIdentifier("phone-training-details-done") } }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain).accessibilityIdentifier("training-stage-surface")
     }
 
-    @ViewBuilder private var phoneActions: some View {
+    @ViewBuilder private var actions: some View {
         if session.stage == .ready || session.stage == .paused {
-            if usesPhoneCamera {
-                if session.currentObservationId == nil {
-                    FoxCommand(title: "就位后开始", icon: "viewfinder", prominent: true) { store.workoutVision.prepare(arm: selectedArm) }
-                        .accessibilityIdentifier("begin-vision-set")
-                    if session.stage == .paused {
-                        FoxCommand(title: "完成本组", icon: "checkmark") { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
-                    } else {
-                        FoxCommand(title: "人工开始", icon: "hand.tap") { store.updateSession { try $0.startSet(at: Date()) } }
-                            .accessibilityIdentifier("begin-set")
-                    }
-                } else {
-                    if visual.needsRebind { rebindAction } else {
-                        FoxCommand(title: "取消就位", icon: "xmark") { _ = store.workoutVision.pause() }
-                            .accessibilityIdentifier("cancel-vision-preparation")
-                    }
-                    FoxCommand(title: "人工记录", icon: "hand.tap") { store.workoutVision.useManual() }
-                        .accessibilityIdentifier("manual-count")
+            FoxCommand(title: preparing ? "取消就位" : session.stage == .paused ? "继续本组" : "开始本组",
+                       icon: preparing ? "xmark" : "play.fill", prominent: true) {
+                if preparing { _ = store.workoutVision.pause() }
+                else if hasCamera { store.workoutVision.prepare(arm: selectedArm) }
+                else {
+                    if session.currentObservationId != nil { store.workoutVision.useManual() }
+                    else { store.updateSession { try $0.startSet(at: Date()) } }
                 }
+            }.accessibilityIdentifier("begin-set")
+            if session.stage == .ready {
+                FoxCommand(title: "跳过本组", icon: "forward.end") {
+                    if session.currentObservationId != nil && !store.workoutVision.pause() { return }
+                    store.workoutVision.stop()
+                    store.updateSession { try $0.skip(at: Date()) }
+                }.accessibilityIdentifier("skip-set")
             } else {
-                FoxCommand(title: session.stage == .paused ? "继续本组" : "开始本组", icon: "play.fill", prominent: true) {
-                    store.updateSession { try $0.startSet(at: Date()) }
-                }.accessibilityIdentifier("begin-set")
-                if session.stage == .ready {
-                    FoxCommand(title: "跳过本组", icon: "forward.end") { store.updateSession { try $0.skip(at: Date()) } }.accessibilityIdentifier("skip-set")
-                } else {
-                    FoxCommand(title: "完成本组", icon: "checkmark") { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
-                }
+                FoxCommand(title: "完成本组", icon: "checkmark") { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
             }
         } else if session.stage == .active {
             FoxCommand(title: "完成本组", icon: "checkmark", prominent: true) { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
-            if visual.needsRebind { rebindAction } else {
-                FoxCommand(title: "暂停", icon: "pause.fill") { _ = store.workoutVision.pause() }.accessibilityIdentifier("pause-set")
-            }
+            FoxCommand(title: "暂停", icon: "pause.fill") { _ = store.workoutVision.pause() }.accessibilityIdentifier("pause-set")
         } else if session.stage == .rest {
             FoxCommand(title: "准备下一组", icon: "play.fill", prominent: true) { store.updateSession { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
             FoxCommand(title: "30 秒", icon: "plus") { store.updateSession { try $0.extendRest(by: 30, at: Date()) } }.accessibilityIdentifier("extend-rest")
         }
     }
 
-    private var rebindAction: some View {
-        FoxCommand(title: "重新就位", icon: "arrow.clockwise") { store.workoutVision.rebindSubject() }
-            .accessibilityIdentifier("rebind-vision-set")
-    }
-
-    private var restReceipt: some View {
-        Label(session.records.last?.status == "skipped" ? "跳过已记录" : "上一组已保存", systemImage: "checkmark.circle")
-            .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("training-set-saved")
-    }
-    private var inactiveTempoLabel: String { session.stage == .paused ? "节奏已暂停" : "待开始" }
-
-    private var actionColumnCount: Int {
-        if typeSize.isAccessibilitySize { return 1 }
-        let third = (session.stage == .ready || session.stage == .paused)
-            ? session.exercise.visualObservation != nil && session.currentVisualEvidence?.fallbackReason == nil
-            : session.stage == .active && session.currentObservationId != nil
-        return sizeClass == .compact ? 2 : (third ? 3 : 2)
-    }
-
-    private var compactPerformancePanel: some View {
-        TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
-            let elapsed = session.elapsed(at: timeline.date)
-            HStack(spacing: 24) {
-                if session.stage == .rest {
-                    Text(durationText(ceil(session.restRemaining(at: timeline.date))))
-                        .font(.system(size: 48, weight: .semibold)).monospacedDigit()
-                    VStack { restReceipt; Text("休息 · 下一组").font(.headline) }
-                } else if let evidence = session.currentVisualEvidence {
-                    Text(String(evidence.automaticCount)).font(.system(size: 64, weight: .bold, design: .rounded))
-                        .monospacedDigit().frame(minWidth: 90).accessibilityIdentifier("workout-automatic-count")
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(evidence.settings.arm.label).font(.headline)
-                        Text(evidence.fallbackReason != nil ? "人工记录中" : visual.qualityLabel).font(.callout)
-                            .accessibilityIdentifier("workout-tracking-status")
-                        Text(durationText(elapsed)).font(.title3).monospacedDigit().accessibilityIdentifier("set-elapsed")
+    private var details: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text(session.exercise.name).font(.title2.bold())
+                    Text(statusDetail).foregroundStyle(.secondary)
+                    if visual.cameraState == .denied || visual.cameraState == .restricted {
+                        Button {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                        } label: { Label("打开相机设置", systemImage: "gearshape").frame(minHeight: 44) }
+                            .accessibilityIdentifier("vision-open-settings")
                     }
-                    TrainingRecordingStatus(capture: visual.diagnosticCapture)
-                } else {
-                    Text(durationText(elapsed)).font(.system(size: 48, weight: .semibold)).monospacedDigit()
-                        .accessibilityIdentifier("set-elapsed")
-                    Text(session.stage == .active ? "本组用时" : session.stage == .paused ? "已暂停" : "准备开始")
-                        .font(.headline).accessibilityIdentifier("training-stage")
-                }
-                if session.stage != .rest && showsPlannedTempo {
-                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, compact: true, inactiveLabel: inactiveTempoLabel)
-                        .frame(width: 90, height: 78)
-                }
-            }.frame(maxWidth: .infinity).frame(minHeight: 80)
+                    if session.stage == .ready {
+                        WeightControl(weight: Binding(get: { session.currentWeight }, set: { value in store.updateSession { try $0.setWeight(value) } }), unit: session.target.weightUnit)
+                        Button {
+                            if let binding = session.currentSetBinding { store.updateSession { try $0.confirmCurrentWeight(binding: binding, at: Date()) } }
+                        } label: { Label(session.currentWeightConfirmation == nil ? "确认本组重量" : "本组重量已确认", systemImage: "checkmark.circle") }
+                            .disabled(session.currentWeightConfirmation != nil).accessibilityIdentifier("confirm-set-weight")
+                    }
+                    if session.exercise.visualObservation != nil {
+                        Picker("观察侧", selection: armBinding) {
+                            Text("左臂").tag(ArmSide.left); Text("右臂").tag(ArmSide.right)
+                        }.pickerStyle(.segmented).disabled(session.currentVisualEvidence != nil || session.stage == .active)
+                            .accessibilityIdentifier("workout-observation-arm")
+                    }
+                    if store.visionRequested && session.exercise.visualObservation != nil {
+                        Button {
+                            store.setVisionEnabled(false); showingDetails = false
+                        } label: { Label("关闭视觉 · 人工记录", systemImage: "video.slash") }.accessibilityIdentifier("manual-count")
+                    }
+                    GuidanceControls(session: guidance, allowsPlannedMode: true)
+                    DisclosureGroup("录像与诊断") { VisionDiagnosticControls(controller: visual) }
+                        .accessibilityIdentifier("training-diagnostics")
+                }.padding(20)
+            }.scrollDismissesKeyboard(.interactively).navigationTitle("本组设置").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingDetails = false }.accessibilityIdentifier("phone-training-details-done") } }
         }
-    }
-
-    private var heading: some View {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(session.exercise.name).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
-                        Text("第 \(session.setIndex + 1) / \(session.exercise.targetSets.count) 组 · 动作 \(session.exerciseIndex + 1) / \(session.plan.exercises.count)").font(.body).foregroundStyle(.secondary)
-                    }
-    }
-    private var progress: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("今日进度 \(session.records.count) / \(session.plan.totalSets) 组").font(.callout)
-            ProgressView(value: session.progress).frame(maxWidth: 200)
-        }
-    }
-
-    private var performancePanel: some View {
-        TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
-            let elapsed = session.elapsed(at: timeline.date)
-            let rest = session.restRemaining(at: timeline.date)
-            VStack(spacing: 18) {
-                if session.stage == .rest {
-                    restReceipt
-                    Text(rest > 0 ? "休息" : "准备下一组").font(.system(size: 26, weight: .semibold)).foregroundStyle(FoxStyle.green)
-                    Text(durationText(ceil(rest))).font(.system(size: 100, weight: .medium, design: .rounded)).monospacedDigit().minimumScaleFactor(0.6)
-                    ProgressView(value: max(0, min(1, 1 - rest / max(1, session.restDurationSeconds)))).frame(maxWidth: 480)
-                } else if session.currentVisualEvidence != nil {
-                    VStack(spacing: 12) {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 22) { cameraPreview.frame(width: 230); observedCount }
-                            VStack(spacing: 12) { observedCount; cameraPreview }
-                        }
-                        if case .countdown(let remaining) = visual.startState {
-                            Text(String(remaining)).font(.system(size: 64, weight: .bold)).monospacedDigit()
-                        } else if visual.isPreparing {
-                            Text(visual.qualityLabel).font(.title2.bold()).foregroundStyle(FoxStyle.green)
-                        } else if session.stage == .paused && session.currentObservationId == nil {
-                            Text("已暂停").font(.system(size: 24, weight: .semibold)).foregroundStyle(FoxStyle.green)
-                        } else if showsPlannedTempo {
-                            VStack(spacing: 4) {
-                                Text("计划节奏").font(.caption).foregroundStyle(.secondary)
-                                TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, inactiveLabel: inactiveTempoLabel)
-                                    .frame(width: 180, height: 200)
-                            }
-                        } else {
-                            Text("等待有效观测").font(.title2.bold()).foregroundStyle(.secondary)
-                        }
-                        Text("本组用时 \(durationText(elapsed))").font(.title2.bold()).monospacedDigit()
-                            .accessibilityIdentifier("set-elapsed")
-                    }
-                } else {
-                    Text(session.stage == .active ? "节奏提示" : (session.stage == .paused ? "已暂停" : "准备开始"))
-                        .font(.title3.bold()).foregroundStyle(FoxStyle.green).accessibilityIdentifier("training-stage")
-                    VStack(spacing: 6) {
-                        Text("本组用时").font(.body).foregroundStyle(.secondary)
-                        Text(durationText(elapsed)).font(.system(size: 44, weight: .semibold)).monospacedDigit().accessibilityIdentifier("set-elapsed")
-                    }
-                    TempoDisplay(tempo: session.exercise.tempo, elapsed: elapsed, running: session.stage == .active, inactiveLabel: inactiveTempoLabel)
-                        .frame(width: 220, height: 220)
-                }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private var cameraPreview: some View {
-        PosePreview(controller: visual).frame(maxWidth: 330).frame(height: 150).clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                if let frame = visual.latest?.frame {
-                    GuidanceCameraOverlay(output: guidance.output, imageSize: CGSize(width: frame.width, height: frame.height), active: visual.isCounting)
-                }
-            }
-            .overlay(alignment: .topTrailing) { GuidanceMuteButton(session: guidance).padding(6) }
-            .overlay(alignment: .topLeading) {
-                TrainingRecordingStatus(capture: visual.diagnosticCapture).padding(6)
-            }
-    }
-    private var observedCount: some View {
-                            VStack(spacing: 4) {
-                                Text(session.currentVisualEvidence?.settings.arm.label ?? "观测").font(.title3)
-                                Text(String(session.currentVisualEvidence?.automaticCount ?? 0))
-                                    .font(.system(size: 84, weight: .bold, design: .rounded)).monospacedDigit()
-                                    .accessibilityIdentifier("workout-automatic-count")
-                                Text(session.currentVisualEvidence?.fallbackReason != nil ? "人工记录中" : visual.qualityLabel)
-                                    .font(.callout).foregroundStyle(.secondary)
-                                    .accessibilityIdentifier("workout-tracking-status")
-                                workoutTask
-                            }
-    }
-
-    @ViewBuilder private var workoutTask: some View {
-        if session.currentVisualEvidence?.fallbackReason == nil {
-            VisionTaskDetail(message: visual.taskMessage(automaticCount: session.currentVisualEvidence?.automaticCount ?? 0),
-                identifier: "workout-task-detail")
-        }
-    }
-
-    private var targets: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            DisclosureGroup("视听引导") { GuidanceControls(session: guidance, allowsPlannedMode: true).padding(.top, 8) }
-            Text(session.stage == .rest ? "下一组目标" : "本组目标").font(.system(size: 20)).foregroundStyle(.secondary)
-            Text(session.target.targetReps.map { "\($0) 次\(session.exercise.repetitionBasis == .perSide ? " / 侧" : "")" } ?? durationText(session.target.targetDurationSeconds ?? 0))
-                .font(.system(size: 56, weight: .bold)).monospacedDigit()
-            if session.stage == .ready {
-                WeightControl(weight: Binding(get: { session.currentWeight }, set: { weight in store.updateSession { try $0.setWeight(weight) } }), unit: session.target.weightUnit)
-                if let binding = session.currentSetBinding {
-                    Button {
-                        store.updateSession { try $0.confirmCurrentWeight(binding: binding, at: Date()) }
-                    } label: {
-                        Label(session.currentWeightConfirmation == nil ? "确认本组重量" : "本组重量已确认",
-                              systemImage: session.currentWeightConfirmation == nil ? "checkmark.circle" : "checkmark.circle.fill")
-                    }.disabled(session.currentWeightConfirmation != nil)
-                        .accessibilityIdentifier("confirm-set-weight")
-                }
-            } else {
-                Text(weightText(session.currentWeight, unit: session.target.weightUnit)).font(.system(size: 26, weight: .medium))
-            }
-            if session.stage == .ready || session.stage == .paused {
-                if session.exercise.visualObservation != nil, session.currentVisualEvidence?.fallbackReason == nil {
-                    Picker("观察侧", selection: armBinding) {
-                        Text("左臂").tag(ArmSide.left); Text("右臂").tag(ArmSide.right)
-                    }.pickerStyle(.segmented).disabled(session.currentVisualEvidence != nil).accessibilityIdentifier("workout-observation-arm")
-                    Text(session.exercise.visualObservation?.exercise.guidance ?? "").font(.system(size: 18)).foregroundStyle(.secondary)
-                }
-            }
-            if session.exercise.visualObservation != nil || visual.diagnosticCapture.isActive || !visual.diagnosticCapture.packages.isEmpty {
-                Divider()
-                DisclosureGroup("录像与诊断", isExpanded: $diagnosticsExpanded) { VisionDiagnosticControls(controller: visual) }
-                    .font(.callout).accessibilityIdentifier("training-diagnostics")
-            }
-        }.padding(.vertical, 16)
-    }
-
-    @ViewBuilder private var actions: some View {
-            if session.stage == .ready || session.stage == .paused {
-                if session.exercise.visualObservation != nil, session.currentVisualEvidence?.fallbackReason == nil {
-                    if session.currentObservationId == nil {
-                        FoxCommand(title: "就位后开始", icon: "viewfinder", prominent: true) { store.workoutVision.prepare(arm: selectedArm) }
-                            .accessibilityIdentifier("begin-vision-set")
-                    } else {
-                        if visual.needsRebind { rebindAction } else {
-                            FoxCommand(title: "取消就位", icon: "xmark") { _ = store.workoutVision.pause() }
-                                .accessibilityIdentifier("cancel-vision-preparation")
-                        }
-                    }
-                }
-                if session.currentObservationId != nil {
-                    FoxCommand(title: "改为人工记录", icon: "hand.tap") { store.workoutVision.useManual() }.accessibilityIdentifier("manual-count")
-                } else {
-                    let canUseVision = session.exercise.visualObservation != nil && session.currentVisualEvidence?.fallbackReason == nil
-                    FoxCommand(title: canUseVision ? (session.stage == .paused ? "人工继续本组" : "人工开始本组") :
-                        (session.stage == .paused ? "继续本组" : "开始本组"), icon: canUseVision ? "hand.tap" : "play.fill", prominent: !canUseVision) {
-                        store.updateSession { try $0.startSet(at: Date()) }
-                    }.accessibilityIdentifier("begin-set")
-                }
-                if session.stage == .ready {
-                    FoxCommand(title: "跳过本组", icon: "forward.end") { store.updateSession { try $0.skip(at: Date()) } }.accessibilityIdentifier("skip-set")
-                } else {
-                    FoxCommand(title: "完成本组", icon: "checkmark") { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
-                }
-            } else if session.stage == .active {
-                FoxCommand(title: "完成本组", icon: "checkmark", prominent: true) { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
-                if visual.needsRebind { rebindAction } else {
-                    FoxCommand(title: "暂停", icon: "pause.fill") { _ = store.workoutVision.pause() }.accessibilityIdentifier("pause-set")
-                }
-                if session.currentObservationId != nil {
-                    FoxCommand(title: "改为人工记录", icon: "hand.tap") { store.workoutVision.useManual() }.accessibilityIdentifier("manual-count")
-                }
-            } else if session.stage == .rest {
-                FoxCommand(title: "准备下一组", icon: "play.fill", prominent: true) { store.updateSession { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
-                FoxCommand(title: "再休息 30 秒", icon: "plus") { store.updateSession { try $0.extendRest(by: 30, at: Date()) } }.accessibilityIdentifier("extend-rest")
-            }
     }
 }
 
-private struct TrainingRecordingStatus: View {
-    @ObservedObject var capture: VisionDiagnosticStore
+// Both modes use the same bounded region. Only fill/contrast differ; presentation still comes
+// from the existing guidance engine, never from a second counter or a fabricated return phase.
+private struct TrainingRhythmSquare: View {
+    @ObservedObject var output: GuidanceOutputController
+    let visual: Bool
+    let running: Bool
+    let paused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        if capture.isActive || capture.finishing {
-            Label(capture.status, systemImage: capture.isActive ? "record.circle" : "hourglass")
-                .font(.caption).padding(6)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
-                .accessibilityIdentifier("training-recording-status")
-        }
+        GeometryReader { geometry in
+            let side = max(48, min(geometry.size.width, geometry.size.height) * 0.38)
+            let state = output.presentation
+            VStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(visual ? Color.green.opacity(0.22) : FoxStyle.green)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(visual ? .white.opacity(0.8) : FoxStyle.green, lineWidth: 2))
+                    .frame(width: side, height: side)
+                    .scaleEffect(running && !reduceMotion ? state.scale : 0.8)
+                Text(paused ? "节奏已暂停" : !running ? "待开始" : state.source == .planned ? "计划 · \(state.label)" : state.label)
+                    .font(.callout.weight(.semibold)).foregroundStyle(visual ? .white : FoxStyle.ink)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    .padding(4).background(visual ? Color.black.opacity(0.55) : Color(uiColor: .secondarySystemGroupedBackground))
+                    .accessibilityIdentifier(visual ? "observed-tempo-phase" : "tempo-phase")
+            }
+            .frame(width: max(1, geometry.size.width - 24), height: geometry.size.height)
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            .opacity(output.overlayEnabled ? 1 : 0)
+            .accessibilityElement(children: .contain).accessibilityIdentifier("training-square-region")
+        }.allowsHitTesting(false)
     }
 }
 
