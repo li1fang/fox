@@ -366,4 +366,163 @@ final class WorkoutVisionTests: XCTestCase {
         XCTAssertEqual(restored.archive.currentSession?.currentVisualEvidence?.automaticCount, 1)
         XCTAssertEqual(try XCTUnwrap(restored.archive.currentSession?.lastCheckpointAt).timeIntervalSince(start), 9.9, accuracy: 0.001)
     }
+    // The client must consume this API instead of hasObservedFrames for prefill.
+    private func countSuggestion(_ evidence: WorkoutVisualEvidence) -> Int? {
+        evidence.suggestedCount
+    }
+
+    private func zeroUpdate(_ session: inout TrainingSession, id: UUID, valid: Int,
+                            interruptions: Int = 0, attempts: [PoseAttemptEvent] = [], at seconds: Double = 8) throws {
+        try session.updateVisual(binding: XCTUnwrap(session.currentSetBinding), observationId: id,
+            repetitions: [], attempts: attempts, metrics: .init(processedFrames: 40, validFrames: valid, interruptions: interruptions),
+            resetCounts: interruptions > 0 ? ["dropoutTimeout": interruptions] : [:], at: start.addingTimeInterval(seconds))
+    }
+
+    private func saveManualZero(_ session: inout TrainingSession, at seconds: Double = 10) throws -> LocalSetRecord {
+        try session.finishSet(at: start.addingTimeInterval(seconds))
+        try session.submit(reps: nil, sideRepetitions: .init(left: 0), feedback: [], notes: "人工确认零次",
+                           at: start.addingTimeInterval(seconds + 1))
+        let decoded = try LocalTrainingRepository.decoder().decode(TrainingSession.self,
+            from: LocalTrainingRepository.encoder().encode(session))
+        var archive = TrainingArchive(); archive.plan = decoded.plan; archive.sessions = [decoded]
+        try archive.validate()
+        XCTAssertEqual(decoded.records, session.records)
+        return try XCTUnwrap(decoded.records.first)
+    }
+
+    func testD1PreparationFailureNeverSuggestsZeroOrAcceptsCountingFrames() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try session.prepareVisual(settings: settings, configuration: .standard, runtimePolicy: .standard, source: .fixture, at: start)
+        XCTAssertThrowsError(try zeroUpdate(&session, id: id, valid: 0))
+        try session.cancelVisualPreparation(at: start.addingTimeInterval(3))
+        let evidence = try XCTUnwrap(session.currentVisualEvidence)
+        XCTAssertNil(countSuggestion(evidence))
+        XCTAssertNil(evidence.segments[0].startedAt)
+        XCTAssertEqual(evidence.segments[0].metrics.processedFrames, 0)
+        XCTAssertEqual(session.stage, .ready)
+    }
+
+    func testD1AllInvalidCountingFramesRequireManualCountAndPersistOriginalEvidence() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try begin(&session)
+        try zeroUpdate(&session, id: id, valid: 0)
+        XCTAssertNil(countSuggestion(try XCTUnwrap(session.currentVisualEvidence)))
+        let record = try saveManualZero(&session)
+        XCTAssertEqual(record.countingMethod, "manual_with_visual")
+        XCTAssertEqual(record.sideRepetitions?.left, 0)
+        XCTAssertEqual(record.visualEvidence?.segments[0].metrics.validFrames, 0)
+        XCTAssertEqual(record.visualEvidence?.automaticCount, 0)
+    }
+
+    func testD1BriefValidObservationThenLossDoesNotSuggestZero() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try begin(&session)
+        try zeroUpdate(&session, id: id, valid: 1, interruptions: 1)
+        let evidence = try XCTUnwrap(session.currentVisualEvidence)
+        XCTAssertTrue(evidence.hasIncompleteCoverage)
+        XCTAssertNil(countSuggestion(evidence))
+        XCTAssertEqual(try saveManualZero(&session).countingMethod, "manual_with_visual")
+    }
+
+    func testD1ValidFrameTotalsAloneDoNotProveReliableZero() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try begin(&session)
+        try zeroUpdate(&session, id: id, valid: 40)
+        let evidence = try XCTUnwrap(session.currentVisualEvidence)
+        XCTAssertFalse(evidence.hasIncompleteCoverage)
+        XCTAssertNil(countSuggestion(evidence), "Aggregates cannot prove continuous usable coverage or a complete movement")
+        XCTAssertEqual(try saveManualZero(&session).countingMethod, "manual_with_visual")
+    }
+
+    func testD1IncompleteAttemptAndResumeDoNotJoinIntoZeroEvidence() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try begin(&session)
+        let attempt = PoseAttemptEvent(startedAtSeconds: 0.5, endedAtSeconds: 2,
+                                       outcome: .observedBelowMinimum, reason: .incompleteRange)
+        try zeroUpdate(&session, id: id, valid: 40, attempts: [attempt])
+        try session.pause(at: start.addingTimeInterval(9))
+        let resumed = try begin(&session, at: start.addingTimeInterval(20))
+        try zeroUpdate(&session, id: resumed, valid: 0, at: 28)
+        let evidence = try XCTUnwrap(session.currentVisualEvidence)
+        XCTAssertEqual(evidence.segments.count, 2)
+        XCTAssertEqual(evidence.segments[0].attempts, [attempt])
+        XCTAssertTrue(evidence.hasIncompleteCoverage)
+        XCTAssertNil(countSuggestion(evidence))
+        XCTAssertEqual(try saveManualZero(&session, at: 30).countingMethod, "manual_with_visual")
+    }
+
+    func testD1NonzeroCountSurvivesUnknownEccentricMeasurement() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try begin(&session)
+        try update(&session, id: id, reps: [repetition()])
+        let evidence = try XCTUnwrap(session.currentVisualEvidence)
+        XCTAssertEqual(countSuggestion(evidence), 1)
+        XCTAssertNil(evidence.repetitions[0].eccentric?.durationSeconds)
+        try session.finishSet(at: start.addingTimeInterval(10))
+        try session.submit(reps: nil, sideRepetitions: .init(left: 1), feedback: [], notes: "", at: start.addingTimeInterval(11))
+        XCTAssertEqual(session.records[0].countingMethod, "vision_confirmed")
+        XCTAssertEqual(session.records[0].visualEvidence?.repetitions, evidence.repetitions)
+        let restored = try LocalTrainingRepository.decoder().decode(TrainingSession.self, from: LocalTrainingRepository.encoder().encode(session))
+        var archive = TrainingArchive(); archive.plan = restored.plan; archive.sessions = [restored]
+        try archive.validate()
+    }
+
+    func testD1LegacyZeroProvenanceRemainsReadableAndFutureVersionIsRejected() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try begin(&session)
+        try zeroUpdate(&session, id: id, valid: 0)
+        let record = try saveManualZero(&session)
+        XCTAssertEqual(record.countingEvidenceVersion, 1)
+        var archive = TrainingArchive(); archive.plan = session.plan; archive.sessions = [session]
+        let encoded = try LocalTrainingRepository.encoder().encode(archive)
+        for legacy in [true, false] {
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            var sessions = try XCTUnwrap(json["sessions"] as? [[String: Any]])
+            var records = try XCTUnwrap(sessions[0]["records"] as? [[String: Any]])
+            if legacy {
+                records[0].removeValue(forKey: "countingEvidenceVersion")
+                records[0]["countingMethod"] = "vision_confirmed"
+            } else { records[0]["countingEvidenceVersion"] = 2 }
+            sessions[0]["records"] = records; json["sessions"] = sessions
+            let restored = try LocalTrainingRepository.decoder().decode(TrainingArchive.self,
+                from: JSONSerialization.data(withJSONObject: json))
+            if legacy {
+                try restored.validate()
+                XCTAssertNil(restored.sessions[0].records[0].countingEvidenceVersion)
+                XCTAssertNil(restored.sessions[0].records[0].visualEvidence?.suggestedCount)
+            } else { XCTAssertThrowsError(try restored.validate()) }
+        }
+    }
+
+    func testD1UnknownCountAcceptsManualNonzeroWithoutPromotingItToVisualCorrection() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        let id = try begin(&session)
+        try zeroUpdate(&session, id: id, valid: 0)
+        try session.finishSet(at: start.addingTimeInterval(10))
+        try session.submit(reps: nil, sideRepetitions: .init(left: 5), feedback: [], notes: "人工计数",
+                           at: start.addingTimeInterval(11))
+        XCTAssertEqual(session.records[0].countingMethod, "manual_with_visual")
+        XCTAssertEqual(session.records[0].sideRepetitions?.left, 5)
+        XCTAssertEqual(session.records[0].visualEvidence?.automaticCount, 0)
+    }
+
+    func testD1ManualZeroRepositoryReloadPreservesPolicyAndUnknownSuggestion() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("fox-d1-zero-\(UUID())/records.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let repository = try LocalTrainingRepository(fileURL: url)
+        try repository.start(plan: plan(sets: 1), at: start)
+        try repository.updateCurrent {
+            let id = try begin(&$0)
+            try zeroUpdate(&$0, id: id, valid: 0)
+            _ = try saveManualZero(&$0)
+            try $0.confirm(note: "人工确认", at: start.addingTimeInterval(20))
+        }
+        let restored = try LocalTrainingRepository(fileURL: url)
+        let record = try XCTUnwrap(restored.archive.sessions.first?.records.first)
+        XCTAssertEqual(record.countingEvidenceVersion, 1)
+        XCTAssertEqual(record.countingMethod, "manual_with_visual")
+        XCTAssertEqual(record.sideRepetitions?.left, 0)
+        XCTAssertNil(record.visualEvidence?.suggestedCount)
+        XCTAssertEqual(record.visualEvidence?.segments.first?.metrics.processedFrames, 40)
+    }
 }

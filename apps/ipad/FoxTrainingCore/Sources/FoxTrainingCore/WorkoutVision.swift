@@ -123,6 +123,11 @@ public struct WorkoutVisualEvidence: Codable, Equatable {
     public var automaticCount: Int { segments.reduce(0) { $0 + $1.repetitions.count } }
     public var repetitions: [CurlRepetition] { segments.flatMap(\.repetitions) }
     public var hasObservedFrames: Bool { segments.contains { $0.metrics.processedFrames > 0 } }
+    /// Accepted cycles are useful even when a phase is unknown. Empty cycle lists,
+    /// including all-valid frame totals, do not prove usable continuous coverage.
+    /// Never prefill zero from the existing aggregate metrics; users may confirm it.
+    public var suggestedCount: Int? { automaticCount > 0 ? automaticCount : nil }
+
     public var hasIncompleteCoverage: Bool {
         fallbackReason != nil || segments.contains {
             $0.interruption == .pause || $0.interruption == .restart || $0.interruption == .cameraInterrupted ||
@@ -241,7 +246,9 @@ extension LocalSetRecord {
     var resolvedCountingMethod: String {
         guard let evidence = visualEvidence, evidence.hasObservedFrames else { return "manual" }
         guard let actual = sideRepetitions?.count(for: evidence.settings.arm) ?? reps else { return "unconfirmed" }
-        if evidence.fallbackReason != nil { return "manual_with_visual" }
+        if evidence.fallbackReason != nil || (countingEvidenceVersion == 1 && evidence.suggestedCount == nil) {
+            return "manual_with_visual"
+        }
         return actual == evidence.automaticCount ? "vision_confirmed" : "vision_corrected"
     }
 }

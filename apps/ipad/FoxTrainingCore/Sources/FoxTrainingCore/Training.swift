@@ -140,6 +140,9 @@ public struct LocalSetRecord: Codable, Equatable, Identifiable {
     public var startedAt: Date?
     public var endedAt: Date
     public var countingMethod = "manual"
+    /// nil preserves the provenance interpretation of legacy archives. Version 1
+    /// never treats an empty accepted-cycle list as a visually confirmed zero.
+    public var countingEvidenceVersion: Int? = nil
     public var repetitionBasis: RepetitionBasis? = nil
     public var targetSide: ArmSide? = nil
     public var sideRepetitions: SideRepetitions? = nil
@@ -459,6 +462,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         record.targetSide = exercise.targetSide
         record.weightConfirmation = status == "skipped" ? nil : currentWeightConfirmation
         record.visualEvidence = currentVisualEvidence
+        record.countingEvidenceVersion = currentVisualEvidence == nil ? nil : 1
         if let evidence = currentVisualEvidence {
             record.rhythmAssessment = WorkoutRhythmAssessment.assess(repetitions: evidence.repetitions, tempo: exercise.tempo)
             record.formAssessment = WorkoutFormAssessment()
@@ -596,6 +600,7 @@ public struct TrainingArchive: Codable, Equatable {
                           evidence.segments.allSatisfy({ $0.endedAt != nil }),
                           record.rhythmAssessment == WorkoutRhythmAssessment.assess(repetitions: evidence.repetitions, tempo: exercise.tempo),
                           record.formAssessment == WorkoutFormAssessment(),
+                          (record.countingEvidenceVersion == nil || record.countingEvidenceVersion == 1),
                           record.countingMethod == record.resolvedCountingMethod else {
                         throw TrainingError.corruptArchive
                     }

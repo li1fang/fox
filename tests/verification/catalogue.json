@@ -2,6 +2,17 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1ManualZeroRepositoryReloadPreservesPolicyAndUnknownSuggestion","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1LegacyZeroProvenanceRemainsReadableAndFutureVersionIsRejected","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1UnknownCountAcceptsManualNonzeroWithoutPromotingItToVisualCorrection","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1PreparationFailureNeverSuggestsZeroOrAcceptsCountingFrames","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1AllInvalidCountingFramesRequireManualCountAndPersistOriginalEvidence","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1BriefValidObservationThenLossDoesNotSuggestZero","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1ValidFrameTotalsAloneDoNotProveReliableZero","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1IncompleteAttemptAndResumeDoNotJoinIntoZeroEvidence","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/WorkoutVisionTests/testD1NonzeroCountSurvivesUnknownEccentricMeasurement","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/WorkoutVisionTests.swift","scope":"public","surface":"host"},
+
     {"id":"FoxAppTests/JournalSyncAppTests/testConcurrentSyncAndConflictTapCannotReleaseRunningOwner","file":"apps/ipad/FoxAppTests/JournalSyncAppTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/JournalSyncAppTests/testHomeLoadsLocalTrainingWhileSyncWaits","file":"apps/ipad/FoxAppTests/JournalSyncAppTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxSyncCoreTests/SyncEngineTests/testSavedCredentialRecoversUnboundRepositoryWithoutAnotherClaim","file":"apps/ipad/FoxSyncCore/Tests/FoxSyncCoreTests/SyncEngineTests.swift","scope":"public","surface":"host"},

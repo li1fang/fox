@@ -1,0 +1,42 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Conservative automatic count suggestion and versioned new-record provenance for zero observations",
+  "nonGoals": [
+    "UI changes",
+    "Motion threshold changes",
+    "New pose inference",
+    "Device/private originals access",
+    "CI changes"
+  ],
+  "invariants": [
+    "Preserve accepted counts and observed returns",
+    "No fabricated zero or phase duration",
+    "Legacy archives stay valid"
+  ],
+  "modules": [
+    "FoxTrainingCore",
+    "Focused tests",
+    "verification catalogue",
+    "D1 count contract"
+  ],
+  "acceptance": [
+    "Six focused counterexamples red then green",
+    "Legacy archive and future-version guards",
+    "Existing motion/count/return and persistence regressions",
+    "Fresh-context review"
+  ],
+  "stopConditions": [
+    "Resource conflict",
+    "Input drift",
+    "Missing toolchain",
+    "Unknown disclosure rights"
+  ],
+  "evidence": [
+    "Ignored external red/green receipts",
+    "Narrow local commit"
+  ],
+  "humanUnknowns": [
+    "No field-camera accuracy claim",
+    "Zero remains unknown without coverage evidence"
+  ]
+}
