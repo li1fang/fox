@@ -38,6 +38,8 @@
 
 ## 接手与资源规则
 
+- [个人资料库同步](../planning/PERSONAL_SYNC_V1.zh-CN.md)：数据与服务维护同步契约与服务核心，客户端后续接入本地 Journal/outbox 和配对 UI。现有 SSH 归档、Python 双副本验证、原生双设备同步分别验收，不相互冒充。
+
 - 共享资料查询/取回见 [Linux 资料库契约与入口](../planning/SHARED_ARCHIVE_V1.zh-CN.md)。同一 Mac 三条工作线共用私有连接配置；先按标签查询，再按稳定 ID 取回，不直接编辑服务器数据库或原件。并非自动授权处理所有私人数据，也不代表全量设备资料已归档。
 - [批量资料目录](../planning/ARCHIVE_BULK_20261028.zh-CN.md)：私有 `~/.config/fox/archive-current.json` 指向有效总清单、视觉索引与 iPhone 备份图文索引。视觉先读索引，按组取录像/报告；数据线先区分备份时间与真实读取时间，不把旧快照称为手机当前状态。
 

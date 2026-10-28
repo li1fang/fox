@@ -2,6 +2,7 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"tests/scripts/test_personal_sync.py","file":"tests/scripts/test_personal_sync.py","scope":"public","surface":"host"},
     {"id":"tests/scripts/test_archive_batch.py","file":"tests/scripts/test_archive_batch.py","scope":"public","surface":"host"},
     {"id":"tests/scripts/test_archive.py","file":"tests/scripts/test_archive.py","scope":"public","surface":"host"},
     {"id":"FoxTrainingCoreTests/GuidanceTests/testLegacyReplayInputKeepsWeightPromptWithoutNewFields","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/GuidanceTests.swift","scope":"public","surface":"host"},

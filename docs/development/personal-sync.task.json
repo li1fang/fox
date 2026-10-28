@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Personal sync contract, durable core and authenticated Linux two-peer synthetic loop",
+  "nonGoals": ["Native deployment", "Real-data migration", "Network listener", "Full accounts", "Source deletion", "CI trigger changes"],
+  "invariants": ["Preserve originals", "Retain conflicts", "Reject incomplete attachments", "Authenticate access"],
+  "modules": ["scripts/personal_sync.py", "tests/scripts/test_personal_sync.py", "docs/planning", "docs/development", "tests/verification/catalogue.json", "package.json"],
+  "acceptance": ["test:sync", "test:archive", "verify:repository", "Linux tests and two-peer SSH smoke"],
+  "stopConditions": ["Unknown database version", "Identity mismatch", "Data loss risk", "Concurrent source edits"],
+  "evidence": ["Failing tests first", "Synthetic receipts", "Fresh-context review"],
+  "humanUnknowns": ["Native pairing and app sync remain unimplemented"]
+}
