@@ -7,6 +7,10 @@ public struct SideRepetitions: Codable, Equatable {
     public var right: Int?
     public init(left: Int? = nil, right: Int? = nil) { self.left = left; self.right = right }
     public func count(for side: ArmSide) -> Int? { side == .left ? left : right }
+    func meets(_ expected: Int, side: ArmSide?) -> Bool {
+        if let side { return (count(for: side) ?? -1) >= expected }
+        return (left ?? -1) >= expected && (right ?? -1) >= expected
+    }
     public var commonCount: Int? { left != nil && left == right ? left : nil }
     public func validate() throws {
         guard left != nil || right != nil,

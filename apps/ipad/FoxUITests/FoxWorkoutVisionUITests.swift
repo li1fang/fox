@@ -48,7 +48,7 @@ final class FoxWorkoutVisionUITests: XCTestCase {
             if index > 0 { app.buttons["rest-ready"].tap() }
             if index == 1 {
                 app.buttons["phone-training-details"].tap()
-                app.segmentedControls["workout-observation-arm"].buttons["右臂"].tap()
+                app.buttons["training-other-arm"].tap()
                 app.buttons["phone-training-details-done"].tap()
             }
             app.buttons["begin-set"].tap()

@@ -19,7 +19,7 @@ final class UnifiedTrainingTests: XCTestCase {
         let explicit = try TrainingPlan.realExerciseDay1Draft()
         XCTAssertEqual(TrainingCapabilities.prepared(explicit), explicit)
         for exercise in VisionExercise.allCases {
-            let trial = TrainingCapabilities.trial(exercise)
+            let trial = TrainingCapabilities.trial(try XCTUnwrap(TrainingActivity(rawValue: exercise.rawValue)))
             try trial.validate()
             XCTAssertEqual(trial.exercises[0].visualObservation?.exercise, exercise)
             XCTAssertEqual(trial.totalSets, 1)

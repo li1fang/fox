@@ -14,6 +14,8 @@ public struct TempoSample: Equatable {
         case "lift": return "抬起"
         case "lower": return "放下"
         case "peak": return "停留"
+        case "contract": return "轻轻收缩"
+        case "relax": return "完全放松"
         default: return "保持"
         }
     }
@@ -32,8 +34,8 @@ public enum TempoTimeline {
                 let progress = remaining / max(0.1, item.seconds)
                 let scale: Double
                 switch item.phase {
-                case "lift": scale = 0.65 + progress * 0.35
-                case "lower": scale = 1 - progress * 0.35
+                case "lift", "contract": scale = 0.65 + progress * 0.35
+                case "lower", "relax": scale = 1 - progress * 0.35
                 case "peak": scale = 1 + sin(progress * .pi * 8) * 0.025
                 default: scale = 1
                 }

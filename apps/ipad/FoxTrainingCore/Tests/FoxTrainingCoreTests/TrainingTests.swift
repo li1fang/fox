@@ -155,6 +155,22 @@ final class TrainingTests: XCTestCase {
         XCTAssertThrowsError(try reps.reviseRecord(id: reps.records[0].id, reps: 11, weight: 5, notes: ""))
     }
 
+    func testSingleSideTimedTargetDoesNotRequireInventedRepetitions() throws {
+        var target = plan(sets: 1, duration: 30)
+        target.exercises[0].repetitionBasis = .perSide
+        target.exercises[0].targetSide = .right
+        var session = try TrainingSession(plan: target, now: start)
+        try session.startSet(at: start)
+        try session.finishSet(at: start.addingTimeInterval(32))
+        try session.submit(reps: nil, feedback: [], notes: "", at: start.addingTimeInterval(40))
+        try session.reviseRecord(id: session.records[0].id, reps: nil, weight: nil, notes: "reviewed")
+        XCTAssertEqual(session.records[0].targetSide, .right)
+        XCTAssertEqual(session.records[0].status, "completed")
+        XCTAssertEqual(session.records[0].durationSeconds, 32)
+        XCTAssertNil(session.records[0].reps)
+        XCTAssertNil(session.records[0].sideRepetitions)
+    }
+
     func testWriteFailureDoesNotAdvanceInMemoryState() throws {
         let repository = try LocalTrainingRepository(fileURL: file(), writer: { _, _ in throw CocoaError(.fileWriteOutOfSpace) })
         XCTAssertThrowsError(try repository.start(plan: plan(), at: start))

@@ -8,6 +8,7 @@ final class TrainingStore: ObservableObject {
     @Published private(set) var archive = TrainingArchive()
     @Published var errorMessage: String?
     @Published private(set) var storageUnavailable = false
+    @Published private(set) var nextPractice: TrainingActivity?
     private var repository: LocalTrainingRepository?
     let fileURL: URL
     private let diagnosticRoot: URL?
@@ -107,7 +108,7 @@ final class TrainingStore: ObservableObject {
 
     func start() { startNewSession(TrainingCapabilities.prepared(archive.plan)) }
 
-    func startTrial(_ exercise: VisionExercise = .curl) {
+    func startTrial(_ exercise: TrainingActivity = .curl) {
         guard session == nil else { return }
         startNewSession(TrainingCapabilities.trial(exercise))
     }
@@ -119,6 +120,50 @@ final class TrainingStore: ObservableObject {
                 archive.sessions.append(try TrainingSession(plan: plan, now: Date()))
             }
         }
+    }
+
+    @discardableResult
+    func selectActivity(_ activity: TrainingActivity, arm: ArmSide = .left) -> Bool {
+        guard let session else { startTrial(activity); return self.session != nil }
+        guard session.canReplaceQuickPractice else {
+            nextPractice = activity.exerciseID == session.exercise.exerciseId ? nil : activity
+            return true
+        }
+        guard updateSession({ try $0.replaceQuickPractice(with: TrainingCapabilities.trial(activity, arm: arm), at: Date()) }) else { return false }
+        workoutVision.stop()
+        manualSessionID = nil
+        preferences?.removeObject(forKey: preferenceKey)
+        nextPractice = nil
+        workoutVision.preview()
+        return true
+    }
+
+    // Saving and continuing is one transaction: a failed write keeps the old summary and facts.
+    @discardableResult
+    func confirmSummary(note: String, nextActivity: TrainingActivity? = nil, arm: ArmSide = .left) -> Bool {
+        let saved = perform { repository in
+            try repository.update { archive in
+                guard let index = archive.sessions.lastIndex(where: { !$0.isFinished }), archive.sessions[index].stage == .summary else {
+                    throw TrainingError.invalidTransition
+                }
+                if nextActivity != nil && archive.sessions[index].records.contains(where: { $0.feedback.contains(.pain) }) {
+                    throw TrainingError.invalidTransition
+                }
+                try archive.sessions[index].confirm(note: note, at: Date())
+                if let nextActivity {
+                    archive.sessions.append(try TrainingSession(plan: TrainingCapabilities.trial(nextActivity, arm: arm), now: Date()))
+                }
+            }
+        }
+        if saved {
+            workoutVision.stop()
+            nextPractice = nil
+            if nextActivity != nil {
+                manualSessionID = nil
+                preferences?.removeObject(forKey: preferenceKey)
+            }
+        }
+        return saved
     }
 
     func setVisionEnabled(_ enabled: Bool) {

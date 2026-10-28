@@ -5,9 +5,9 @@ import SwiftUI
 private struct HomeCardIdentity: LayoutValueKey { static let defaultValue = "" }
 
 private enum HomeTrainingRoute: Identifiable {
-    case plan, trial(VisionExercise)
+    case plan, trial(TrainingActivity)
     var id: String { switch self { case .plan: return "plan"; case .trial(let exercise): return "trial-\(exercise.rawValue)" } }
-    var exercise: VisionExercise? { if case .trial(let exercise) = self { return exercise }; return nil }
+    var exercise: TrainingActivity? { if case .trial(let exercise) = self { return exercise }; return nil }
 }
 
 private struct HomeMasonry: Layout {
@@ -234,6 +234,7 @@ struct FoxHomeView: View {
 
     private var training: some View {
         VStack(alignment: .leading, spacing: 14) {
+        if trainingArchive.snapshot.current != nil {
         Button { editing = false; trainingRoute = .trial(.curl) } label: {
             HStack(spacing: 16) {
                 Image(systemName: "figure.strengthtraining.traditional")
@@ -248,17 +249,31 @@ struct FoxHomeView: View {
                 Image(systemName: "chevron.right").foregroundStyle(.secondary)
             }.contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("home-try-training")
+        } else {
+            Text("试练一组").font(.title3.bold())
+        }
+        ForEach(TrainingActivity.allCases) { activity in
+            Button { editing = false; trainingRoute = .trial(activity) } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "figure.strengthtraining.traditional")
+                        .font(.title2).foregroundStyle(FoxStyle.accent).frame(width: 36)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(activity.label).font(.headline)
+                        Text(activity.subtitle).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                }.frame(minHeight: 56).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityIdentifier(activity == .curl && trainingArchive.snapshot.current == nil ? "home-try-training" : "home-try-\(activity.rawValue)")
+                .disabled(trainingArchive.snapshot.current != nil)
+            if activity != .kegel { Divider() }
+        }
         HStack {
             Button { editing = false; trainingRoute = .plan } label: {
                 Label("计划与记录", systemImage: "list.bullet").frame(minHeight: 44)
             }.accessibilityIdentifier("home-training")
             Spacer(minLength: 8)
-            Menu {
-                ForEach(VisionExercise.allCases, id: \.self) { exercise in
-                    Button(exercise.label) { editing = false; trainingRoute = .trial(exercise) }
-                }
-            } label: { Image(systemName: "chevron.down").frame(width: 44, height: 44) }
-                .accessibilityLabel("选择试练动作").help("选择试练动作").disabled(trainingArchive.snapshot.current != nil)
         }.font(.subheadline)
         }.modifier(HomeCard()).disabled(journal.busy || photos.loading)
     }

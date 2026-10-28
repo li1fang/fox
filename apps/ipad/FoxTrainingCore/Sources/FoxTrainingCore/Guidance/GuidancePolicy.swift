@@ -53,7 +53,7 @@ public struct GuidancePolicy {
         } else if input.stage != lastStage || (input.stage == .countdown && input.countdown != lastCountdown) {
             kind = .lifecycle
             switch input.stage {
-            case .ready: text = "开始前请确认本组重量"
+            case .ready: text = input.requiresWeightConfirmation != false ? "开始前请确认本组重量" : "正常呼吸，准备好后开始"
             case .preparing: text = "准备好后，走回画面中"
             case .countdown:
                 text = input.countdown.map(String.init) ?? "准备开始"
@@ -87,6 +87,10 @@ public struct GuidancePolicy {
             }
             if !text.isEmpty { kind = .phase; phaseToken = token; lastSpokenPhase = token }
         }
+        if text.isEmpty, input.mode == .planned, presentation.source == .planned, !presentation.isMoving,
+           let token = presentation.phaseToken, token != lastSpokenPhase {
+            text = "本轮节奏结束，请确认实际完成"; kind = .phase; phaseToken = token; lastSpokenPhase = token
+        }
         guard let kind, !text.isEmpty else { return .init(presentation: presentation, cues: []) }
         cueSequence += 1
         let cue = GuidanceCue(id: "\(input.context.key)/\(cueSequence)", context: input.context, kind: kind, stage: input.stage,
@@ -112,6 +116,10 @@ public struct GuidancePolicy {
             stableSince = nil
             let sample = TempoTimeline.sample(input.tempo, elapsed: input.elapsed)
             guard sample.isValid else { return .unavailable }
+            if let limit = input.plannedCycleLimit, sample.cycle >= limit {
+                return .init(source: .planned, label: "计划节奏结束", scale: 0.65, isMoving: false,
+                    phaseToken: "\(input.context.key)/plan/finished")
+            }
             let label = input.exercise == .latPulldown ?
                 (sample.phase == "lift" ? "下拉" : sample.phase == "lower" ? "返回" : sample.label) : sample.label
             return .init(source: .planned, label: label, scale: sample.scale, isMoving: true,

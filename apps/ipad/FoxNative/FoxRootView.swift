@@ -57,9 +57,9 @@ struct FoxRootView: View {
     @StateObject private var store: TrainingStore
     @StateObject private var vision: VisionLabController
     @State private var tab: String
-    private let trialExercise: VisionExercise?
+    private let trialExercise: TrainingActivity?
     @State private var entryConsumed = false
-    init(store: TrainingStore? = nil, vision: VisionLabController? = nil, initialTab: String? = nil, trialExercise: VisionExercise? = nil, onClose: (() -> Void)? = nil) {
+    init(store: TrainingStore? = nil, vision: VisionLabController? = nil, initialTab: String? = nil, trialExercise: TrainingActivity? = nil, onClose: (() -> Void)? = nil) {
         _store = StateObject(wrappedValue: store ?? TrainingStore())
         _vision = StateObject(wrappedValue: vision ?? VisionLabController())
         _tab = State(initialValue: initialTab ?? (ProcessInfo.processInfo.environment["FOX_START_SCREEN"] == "vision" ? "vision" : "plan"))
@@ -371,8 +371,13 @@ struct SessionSummary: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 6) {
+                        if let side = record.targetSide {
+                            Text(record.target.targetReps == nil ? "\(side.label) · 计时动作" :
+                                "\(side.label) \(record.sideRepetitions?.count(for: side).map(String.init) ?? "未确认") 次 · 单侧")
+                        } else {
                         Text(record.sideRepetitions.map { "左 \($0.left.map(String.init) ?? "未确认") / 右 \($0.right.map(String.init) ?? "未确认") 次" }
                             ?? record.reps.map { "\($0) 次" } ?? (record.status == "skipped" ? "—" : (record.target.targetReps != nil ? "次数未确认" : "计时动作")))
+                        }
                         Text(weightText(record.weight, unit: record.target.weightUnit))
                         Text(durationText(record.durationSeconds))
                     }.font(.system(size: detailSize)).monospacedDigit()

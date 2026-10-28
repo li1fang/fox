@@ -108,7 +108,9 @@ final class GuidanceSession: ObservableObject {
                 targetReps: session.target.targetReps, motion: visual ? motion : nil,
                 tempo: session.exercise.tempo, elapsed: session.elapsed(at: vision.wallTime), countdown: countdown,
                 remainingSets: max(0, session.plan.totalSets - session.records.count),
-                restRemainingSeconds: session.stage == .rest ? session.restRemaining(at: vision.wallTime) : nil))
+                restRemainingSeconds: session.stage == .rest ? session.restRemaining(at: vision.wallTime) : nil,
+                requiresWeightConfirmation: session.target.weightUnit != "bodyweight",
+                plannedCycleLimit: session.exercise.exerciseId == "kegel" ? session.target.targetReps : nil))
         } else {
             let stage: GuidanceStage = vision.isPreparing ? (countdown == nil ? .preparing : .countdown) :
                 vision.isCounting ? .active : vision.trialFinished ? .feedback : vision.trialActive ? .paused : .idle

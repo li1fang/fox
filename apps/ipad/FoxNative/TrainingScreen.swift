@@ -18,6 +18,7 @@ struct TrainingScreen: View {
     @State private var summaryNote = ""
     @State private var editingRecord: LocalSetRecord?
     @State private var showingDetails = false
+    @State private var showingActivityPicker = false
     @ScaledMetric(relativeTo: .title) private var summaryTitleSize = 28
     @ScaledMetric(relativeTo: .title3) private var noteSize = 20
 
@@ -28,6 +29,8 @@ struct TrainingScreen: View {
     private var hasCamera: Bool { store.usesVision && session.stage != .rest }
     private var preparing: Bool { session.currentObservationId != nil && session.stage != .active }
     private var offersManualContinuation: Bool { hasCamera && (visual.isPreparing || visual.needsRebind) }
+    private var canContinuePractice: Bool { !session.records.contains { $0.feedback.contains(.pain) } }
+    private var nextActivity: TrainingActivity? { canContinuePractice ? store.nextPractice : nil }
 
     init(store: TrainingStore, session: TrainingSession, phoneLandscapeNavigation: AnyView? = nil, onConfirmed: @escaping () -> Void) {
         self.store = store; self.session = session; self.onConfirmed = onConfirmed
@@ -63,10 +66,26 @@ struct TrainingScreen: View {
             }
             .accessibilityIdentifier("training-summary").scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                FoxCommand(title: "确认并保存", icon: "checkmark", prominent: true) {
-                    store.updateSession { try $0.confirm(note: summaryNote, at: Date()) }
-                    if store.session == nil { onConfirmed() }
-                }.accessibilityIdentifier("confirm-summary").padding(16).background(.bar)
+                VStack(spacing: 8) {
+                    if canContinuePractice && session.plan.isQuickPractice == true && session.exercise.exerciseId == "dumbbell_curl" && nextActivity == nil {
+                        let side: ArmSide = session.exercise.targetSide == .right ? .left : .right
+                        Button {
+                            if store.confirmSummary(note: summaryNote, nextActivity: .curl, arm: side) { summaryNote = "" }
+                        } label: { Label("保存并换\(side.label)", systemImage: "arrow.triangle.swap").frame(minHeight: 44) }
+                            .accessibilityIdentifier("save-and-switch-arm")
+                    }
+                    FoxCommand(title: nextActivity.map { "保存并开始\($0.label)" } ?? "确认并保存", icon: "checkmark", prominent: true) {
+                        if store.confirmSummary(note: summaryNote, nextActivity: nextActivity) {
+                            summaryNote = ""
+                            if store.session == nil { onConfirmed() }
+                        }
+                    }.accessibilityIdentifier("confirm-summary")
+                    if nextActivity != nil {
+                        Button("仅保存并结束") {
+                            if store.confirmSummary(note: summaryNote) { onConfirmed() }
+                        }.frame(minHeight: 44).accessibilityIdentifier("save-without-next")
+                    }
+                }.padding(16).background(.bar)
             }
             .sheet(item: $editingRecord) { record in
                 RecordEditor(record: record) { reps, weight, notes, sides in
@@ -81,6 +100,14 @@ struct TrainingScreen: View {
                 trainingLayout(landscape: UIDevice.current.userInterfaceIdiom == .phone
                     ? FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) : geometry.size.width >= 850)
             }.sheet(isPresented: $showingDetails) { details }
+                .sheet(isPresented: $showingActivityPicker) {
+                    NavigationStack {
+                        activityPicker.navigationTitle("选择动作").navigationBarTitleDisplayMode(.inline)
+                            .toolbar { ToolbarItem(placement: .confirmationAction) {
+                                Button("完成") { showingActivityPicker = false }.accessibilityIdentifier("activity-picker-done")
+                            } }
+                    }
+                }
         }
     }
 
@@ -101,12 +128,19 @@ struct TrainingScreen: View {
             if landscape && typeSize.isAccessibilitySize {
                 TimelineView(.periodic(from: .now, by: 0.1)) { observation(at: $0.date) }
             }
-            Text(session.exercise.name).font(.headline).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Button { showingActivityPicker = true } label: {
+                HStack(spacing: 6) {
+                    Text(session.exercise.name).font(.headline).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption)
+                }.frame(minHeight: 32)
+            }.buttonStyle(.plain).accessibilityLabel("选择动作，当前\(session.exercise.name)")
+                .accessibilityHint(store.nextPractice.map { "下一动作：\($0.label)，本次保存后开始" } ?? "选择本次或下一次的动作")
+                .accessibilityIdentifier("training-activity-picker")
             Text("第 \(session.setIndex + 1) / \(session.exercise.targetSets.count) 组 · 今日 \(session.records.count) / \(session.plan.totalSets) 组")
                 .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("phone-training-progress")
             HStack {
-                Text(session.target.targetReps.map { "\($0) 次\(session.exercise.repetitionBasis == .perSide ? " / 侧" : "")" }
-                     ?? durationText(session.target.targetDurationSeconds ?? 0))
+                Text(session.target.targetReps.map { "\($0) 次\(session.exercise.targetSide.map { " · \($0.label)" } ?? (session.exercise.repetitionBasis == .perSide ? " / 侧" : ""))" }
+                     ?? (durationText(session.target.targetDurationSeconds ?? 0) + (session.exercise.targetSide.map { " · \($0.label)" } ?? "")))
                     .accessibilityIdentifier("phone-target-reps")
                 Spacer(minLength: 4)
                 Text(weightText(session.currentWeight, unit: session.target.weightUnit)).accessibilityIdentifier("phone-target-weight")
@@ -153,12 +187,16 @@ struct TrainingScreen: View {
     private var statusDetail: String {
         if hasCamera {
             if session.currentObservationId == nil && session.stage == .ready {
+                if session.exercise.visualObservation?.exercise == .curl {
+                    return "本组\(selectedArm.label)，请让\(selectedArm == .left ? "左" : "右")侧朝向镜头，准备好后开始。"
+                }
                 return session.exercise.visualObservation?.exercise.guidance ?? "准备好后开始"
             }
             return visual.taskMessage(automaticCount: session.currentVisualEvidence?.automaticCount ?? 0).detail
         }
         if session.stage == .rest { return "上一组已保存，准备好后继续。" }
         if session.currentVisualEvidence?.fallbackReason != nil { return "已观测次数保留；本组余下次数由你核对，下组可重新开启视觉。" }
+        if session.exercise.exerciseId == "kegel" { return "收缩 3 秒，放松 6 秒，正常呼吸；不舒服时停止。" }
         if session.exercise.visualObservation == nil { return "本动作使用计划节奏，结束后确认实际完成。" }
         return store.visionRequested ? "\(visual.cameraState.label)，可按计划节奏训练。" : "视觉已关闭，结束后确认实际完成。"
     }
@@ -185,7 +223,9 @@ struct TrainingScreen: View {
         ZStack {
             Color(uiColor: .secondarySystemGroupedBackground)
             // Keep the preview's identity through mode/size changes; only its visibility changes.
-            PosePreview(controller: visual).opacity(hasCamera ? 1 : 0)
+            if session.exercise.visualObservation != nil {
+                PosePreview(controller: visual).opacity(hasCamera ? 1 : 0)
+            }
             if session.stage == .rest {
                 TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
                     let remaining = session.restRemaining(at: timeline.date)
@@ -255,18 +295,24 @@ struct TrainingScreen: View {
                         } label: { Label("打开相机设置", systemImage: "gearshape").frame(minHeight: 44) }
                             .accessibilityIdentifier("vision-open-settings")
                     }
-                    if session.stage == .ready {
+                    NavigationLink { activityPicker.navigationTitle("选择动作") } label: {
+                        Label("选择动作 · \(session.exercise.name)", systemImage: "list.bullet")
+                    }.accessibilityIdentifier("details-activity-picker")
+                    if session.stage == .ready && session.target.weightUnit != "bodyweight" {
                         WeightControl(weight: Binding(get: { session.currentWeight }, set: { value in store.updateSession { try $0.setWeight(value) } }), unit: session.target.weightUnit)
                         Button {
                             if let binding = session.currentSetBinding { store.updateSession { try $0.confirmCurrentWeight(binding: binding, at: Date()) } }
                         } label: { Label(session.currentWeightConfirmation == nil ? "确认本组重量" : "本组重量已确认", systemImage: "checkmark.circle") }
                             .disabled(session.currentWeightConfirmation != nil).accessibilityIdentifier("confirm-set-weight")
                     }
-                    if session.exercise.visualObservation != nil {
-                        Picker("观察侧", selection: armBinding) {
-                            Text("左臂").tag(ArmSide.left); Text("右臂").tag(ArmSide.right)
-                        }.pickerStyle(.segmented).disabled(session.currentVisualEvidence != nil || session.stage == .active)
-                            .accessibilityIdentifier("workout-observation-arm")
+                    if session.exercise.visualObservation?.exercise == .curl {
+                        Text("本组\(selectedArm.label)").font(.headline)
+                        Button(selectedArm == .left ? "先练右臂" : "先练左臂") {
+                            let side: ArmSide = selectedArm == .left ? .right : .left
+                            if session.plan.isQuickPractice == true { _ = store.selectActivity(.curl, arm: side) }
+                            else { armBinding.wrappedValue = side }
+                        }.disabled(!TrainingArmChoice.canChange(session: session))
+                            .accessibilityIdentifier("training-other-arm")
                     }
                     if store.visionRequested && session.exercise.visualObservation != nil {
                         Button {
@@ -274,12 +320,37 @@ struct TrainingScreen: View {
                         } label: { Label("关闭视觉 · 人工记录", systemImage: "video.slash") }.accessibilityIdentifier("manual-count")
                     }
                     GuidanceControls(session: guidance, allowsPlannedMode: true)
-                    DisclosureGroup("录像与诊断") { VisionDiagnosticControls(controller: visual) }
-                        .accessibilityIdentifier("training-diagnostics")
+                    if session.exercise.visualObservation != nil {
+                        DisclosureGroup("录像与诊断") {
+                            if session.exercise.visualObservation?.exercise != .curl {
+                                Text("观察侧：\(selectedArm.label)").font(.callout)
+                                Button(selectedArm == .left ? "改为观察右侧" : "改为观察左侧") {
+                                    let side: ArmSide = selectedArm == .left ? .right : .left
+                                    if session.plan.isQuickPractice == true,
+                                       let activity = TrainingActivity(exerciseID: session.exercise.exerciseId) {
+                                        _ = store.selectActivity(activity, arm: side)
+                                    } else { armBinding.wrappedValue = side }
+                                }.disabled(!TrainingArmChoice.canChange(session: session))
+                                    .accessibilityIdentifier("diagnostic-other-arm")
+                            }
+                            VisionDiagnosticControls(controller: visual)
+                        }
+                            .accessibilityIdentifier("training-diagnostics")
+                    }
+                    if session.exercise.exerciseId == "kegel", let notes = session.exercise.notes {
+                        Text(notes).font(.callout).foregroundStyle(.secondary)
+                    }
                 }.padding(20)
             }.scrollDismissesKeyboard(.interactively).navigationTitle("本组设置").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingDetails = false }.accessibilityIdentifier("phone-training-details-done") } }
         }
+    }
+
+    private var activityPicker: some View {
+        TrainingActivityPicker(current: TrainingActivity(exerciseID: session.exercise.exerciseId),
+            next: store.nextPractice, canReplace: session.canReplaceQuickPractice) { activity in
+                if store.selectActivity(activity) { showingActivityPicker = false; showingDetails = false }
+            }
     }
 }
 
@@ -395,8 +466,10 @@ struct SetFeedbackView: View {
                     TrialReviewFields(information: $information, softwareIssue: $softwareIssue, trainingFeeling: $note)
                 }
                 Divider()
-                DisclosureGroup("录像与诊断") {
-                    VisionDiagnosticControls(controller: store.workoutVision.controller)
+                if session.exercise.visualObservation != nil {
+                    DisclosureGroup("录像与诊断") {
+                        VisionDiagnosticControls(controller: store.workoutVision.controller)
+                    }
                 }
             }.padding(.vertical, 12)
         }
@@ -439,14 +512,14 @@ struct SetFeedbackView: View {
                             Text("实际次数").font(.system(size: labelSize)).foregroundStyle(.secondary)
                             if session.exercise.repetitionBasis == .perSide {
                                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16)) : AnyLayout(HStackLayout(spacing: 16))) {
-                                    VStack(alignment: .leading) {
+                                    if session.exercise.targetSide != .right { VStack(alignment: .leading) {
                                         Text("左臂").font(.system(size: labelSize))
                                         TrainingCountField(text: $leftReps, identifier: "actual-left-reps", label: "左臂次数")
-                                    }
-                                    VStack(alignment: .leading) {
+                                    } }
+                                    if session.exercise.targetSide != .left { VStack(alignment: .leading) {
                                         Text("右臂").font(.system(size: labelSize))
                                         TrainingCountField(text: $rightReps, identifier: "actual-right-reps", label: "右臂次数")
-                                    }
+                                    } }
                                 }
                             } else {
                             TrainingCountField(text: $reps, identifier: "actual-reps", label: "实际次数")

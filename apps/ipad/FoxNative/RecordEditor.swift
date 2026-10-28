@@ -17,8 +17,8 @@ struct RecordEditor: View {
                 Section(record.exerciseName) {
                     if record.target.targetReps != nil {
                         if record.repetitionBasis == .perSide {
-                            TextField("左臂实际次数", text: $leftReps).keyboardType(.numberPad).accessibilityIdentifier("summary-left-reps")
-                            TextField("右臂实际次数", text: $rightReps).keyboardType(.numberPad).accessibilityIdentifier("summary-right-reps")
+                            if record.targetSide != .right { TextField("左臂实际次数", text: $leftReps).keyboardType(.numberPad).accessibilityIdentifier("summary-left-reps") }
+                            if record.targetSide != .left { TextField("右臂实际次数", text: $rightReps).keyboardType(.numberPad).accessibilityIdentifier("summary-right-reps") }
                         } else {
                         TextField("实际次数", text: $reps).keyboardType(.numberPad).accessibilityIdentifier("summary-reps")
                         }

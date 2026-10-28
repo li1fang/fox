@@ -8,8 +8,46 @@ struct TrainingArmChoice {
 
     static func current(_ choice: Self?, session: TrainingSession) -> ArmSide {
         if let evidence = session.currentVisualEvidence { return evidence.settings.arm }
+        if let side = session.exercise.targetSide { return side }
         if let choice, choice.attemptID == session.currentSetAttemptId { return choice.arm }
         return session.exercise.visualObservation?.arm ?? .left
+    }
+
+    static func canChange(session: TrainingSession) -> Bool {
+        guard session.currentVisualEvidence == nil, session.stage == .ready else { return false }
+        return session.plan.isQuickPractice == true ? session.canReplaceQuickPractice : session.exercise.targetSide == nil
+    }
+}
+
+struct TrainingActivityPicker: View {
+    let current: TrainingActivity?
+    let next: TrainingActivity?
+    let canReplace: Bool
+    let choose: (TrainingActivity) -> Void
+
+    var body: some View {
+        List {
+            if !canReplace {
+                Text("本次训练会保留。选择下一动作后，先完成并保存当前训练。")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            if let next {
+                Text("下一动作：\(next.label)").font(.callout).accessibilityIdentifier("activity-next")
+            }
+            ForEach(TrainingActivity.allCases) { activity in
+                Button { choose(activity) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "figure.strengthtraining.traditional").frame(width: 32)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(activity.label).font(.headline)
+                            Text(activity.subtitle).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        if (next ?? current) == activity { Image(systemName: "checkmark") }
+                    }.frame(minHeight: 60).contentShape(Rectangle())
+                }.accessibilityIdentifier("choose-activity-\(activity.rawValue)")
+            }
+        }.listStyle(.plain).accessibilityIdentifier("activity-list")
     }
 }
 

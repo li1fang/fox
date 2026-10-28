@@ -51,13 +51,19 @@ public struct GuidanceInput: Codable {
     public var countdown: Int?
     public var remainingSets: Int?
     public var restRemainingSeconds: Double?
+    /// Missing in legacy replay inputs; nil preserves their original weight prompt.
+    public var requiresWeightConfirmation: Bool?
+    /// Stops the planned cue loop, not the workout or its actual repetition count.
+    public var plannedCycleLimit: Int?
     public init(context: GuidanceContext, time: Double, stage: GuidanceStage, exercise: VisionExercise?,
                 mode: GuidanceMode, count: Int, targetReps: Int?, motion: MotionObservation?,
-                tempo: [TempoPhase], elapsed: Double, countdown: Int? = nil, remainingSets: Int? = nil, restRemainingSeconds: Double? = nil) {
+                tempo: [TempoPhase], elapsed: Double, countdown: Int? = nil, remainingSets: Int? = nil, restRemainingSeconds: Double? = nil,
+                requiresWeightConfirmation: Bool = true, plannedCycleLimit: Int? = nil) {
         self.context = context; self.time = time; self.stage = stage; self.exercise = exercise; self.mode = mode
         self.count = count; self.targetReps = targetReps; self.motion = motion; self.tempo = tempo
         self.elapsed = elapsed; self.countdown = countdown; self.remainingSets = remainingSets
         self.restRemainingSeconds = restRemainingSeconds
+        self.requiresWeightConfirmation = requiresWeightConfirmation; self.plannedCycleLimit = plannedCycleLimit
     }
 }
 

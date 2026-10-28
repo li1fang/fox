@@ -2,6 +2,17 @@ import XCTest
 @testable import FoxTrainingCore
 
 final class GuidanceTests: XCTestCase {
+    func testLegacyReplayInputKeepsWeightPromptWithoutNewFields() throws {
+        let encoded = try JSONEncoder().encode(input(0, stage: .ready))
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "requiresWeightConfirmation")
+        legacy.removeValue(forKey: "plannedCycleLimit")
+        let value = try JSONDecoder().decode(GuidanceInput.self, from: JSONSerialization.data(withJSONObject: legacy))
+        var policy = GuidancePolicy()
+        XCTAssertEqual(policy.update(value).cues.first?.text, "开始前请确认本组重量")
+        XCTAssertNil(value.plannedCycleLimit)
+    }
+
     func testReadyQuestionAndRestExpiryAreOncePerContextAndDoNotRequireASR() {
         var policy = GuidancePolicy()
         var value = input(0, stage: .ready)

@@ -38,6 +38,8 @@ public struct Exercise: Codable, Equatable, Identifiable {
     public var notes: String?
     public var visualObservation: WorkoutObservationSettings? = nil
     public var repetitionBasis: RepetitionBasis? = nil
+    /// Nil retains a bilateral target; a side is an explicit single-side plan, not a guess.
+    public var targetSide: ArmSide? = nil
     public var id: String { exerciseId }
 
     public init(id: String = UUID().uuidString, name: String, sets: [SetTarget], notes: String? = nil) {
@@ -57,6 +59,7 @@ public struct TrainingPlan: Codable, Equatable {
     public var exercises: [Exercise]
     public var scheduledDate: String? = nil
     public var scheduledTimeZone: String? = nil
+    public var isQuickPractice: Bool? = nil
     public var totalSets: Int { exercises.reduce(0) { $0 + $1.targetSets.count } }
 
     public init(focus: String, exercises: [Exercise]) {
@@ -81,6 +84,10 @@ public struct TrainingPlan: Codable, Equatable {
               Set(exercises.map(\.exerciseId)).count == exercises.count else { throw TrainingError.invalidPlan }
         for exercise in exercises {
             try exercise.visualObservation?.validate()
+            guard exercise.targetSide == nil || (exercise.repetitionBasis == .perSide &&
+                (exercise.visualObservation == nil || exercise.visualObservation?.arm == exercise.targetSide)) else {
+                throw TrainingError.invalidPlan
+            }
             let visualBasis: RepetitionBasis = exercise.visualObservation?.exercise == .latPulldown ? .total : .perSide
             guard exercise.visualObservation == nil || (exercise.repetitionBasis == visualBasis && exercise.targetSets.allSatisfy { $0.targetReps != nil }) else {
                 throw TrainingError.invalidPlan
@@ -134,6 +141,7 @@ public struct LocalSetRecord: Codable, Equatable, Identifiable {
     public var endedAt: Date
     public var countingMethod = "manual"
     public var repetitionBasis: RepetitionBasis? = nil
+    public var targetSide: ArmSide? = nil
     public var sideRepetitions: SideRepetitions? = nil
     public var visualEvidence: WorkoutVisualEvidence? = nil
     public var correctionReason: String? = nil
@@ -190,6 +198,19 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
     public var isFinished: Bool { stage == .confirmed }
     public var progress: Double { Double(records.count) / Double(max(1, plan.totalSets)) }
 
+    public var canReplaceQuickPractice: Bool {
+        plan.isQuickPractice == true && stage == .ready && records.isEmpty && setStartedAt == nil &&
+            currentVisualEvidence == nil && currentObservationId == nil && currentWeightConfirmation == nil
+    }
+
+    public mutating func replaceQuickPractice(with plan: TrainingPlan, at now: Date) throws {
+        guard canReplaceQuickPractice, plan.isQuickPractice == true else { throw TrainingError.invalidTransition }
+        var replacement = try TrainingSession(plan: plan, now: now)
+        replacement.id = id
+        replacement.startedAt = startedAt
+        self = replacement
+    }
+
     public init(plan: TrainingPlan, now: Date) throws {
         try plan.validate()
         self.plan = plan
@@ -244,7 +265,8 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
     public mutating func prepareVisual(settings: WorkoutObservationSettings, configuration: PoseCounterConfiguration,
                                        runtimePolicy: PoseRuntimePolicy, source: VisionInputSource, at now: Date) throws -> UUID {
         guard stage == .ready || stage == .paused, currentObservationId == nil,
-              exercise.visualObservation?.exercise == settings.exercise, target.targetReps != nil else {
+              exercise.visualObservation?.exercise == settings.exercise, target.targetReps != nil,
+              exercise.targetSide == nil || exercise.targetSide == settings.arm else {
             throw TrainingError.invalidTransition
         }
         var next = self
@@ -332,10 +354,12 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         guard sideRepetitions == nil || (exercise.repetitionBasis == .perSide && target.targetReps != nil),
               sideRepetitions == nil || reps == nil || sideRepetitions!.commonCount == reps,
               target.targetReps == nil || reps != nil || sideRepetitions != nil else { throw TrainingError.invalidRecord }
-        let sides = sideRepetitions ?? (exercise.repetitionBasis == .perSide && reps != nil ? SideRepetitions(left: reps, right: reps) : nil)
+        let sides = sideRepetitions ?? (exercise.repetitionBasis == .perSide && reps != nil
+            ? SideRepetitions(left: exercise.targetSide == .right ? nil : reps, right: exercise.targetSide == .left ? nil : reps) : nil)
+        guard target.targetReps == nil || exercise.targetSide == nil || sides?.count(for: exercise.targetSide!) != nil else { throw TrainingError.invalidRecord }
         let actual = sides.map(\.commonCount) ?? reps
         let reached = target.targetReps.map { expected in
-            sides.map { ($0.left ?? -1) >= expected && ($0.right ?? -1) >= expected } ?? ((actual ?? 0) >= expected)
+            sides.map { $0.meets(expected, side: exercise.targetSide) } ?? ((actual ?? 0) >= expected)
         } ?? (accumulatedSeconds >= (target.targetDurationSeconds ?? 0))
         let status = feedback.contains(.pain) || !reached ? "partial" : "completed"
         // This command confirms the complete review form, including an explicitly unknown weight.
@@ -382,7 +406,9 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         guard sideRepetitions == nil || (records[index].repetitionBasis == .perSide && target.targetReps != nil),
               sideRepetitions == nil || reps == nil || sideRepetitions!.commonCount == reps else { throw TrainingError.invalidRecord }
         let sides = sideRepetitions ?? (records[index].repetitionBasis == .perSide && reps != nil
-            ? SideRepetitions(left: reps, right: reps) : records[index].sideRepetitions)
+            ? SideRepetitions(left: records[index].targetSide == .right ? nil : reps,
+                right: records[index].targetSide == .left ? nil : reps) : records[index].sideRepetitions)
+        guard target.targetReps == nil || records[index].targetSide == nil || sides?.count(for: records[index].targetSide!) != nil else { throw TrainingError.invalidRecord }
         guard target.targetReps == nil || reps != nil || sides != nil else { throw TrainingError.invalidRecord }
         records[index].sideRepetitions = sides
         records[index].reps = target.targetReps == nil ? nil : (sides.map(\.commonCount) ?? reps)
@@ -391,7 +417,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
             source: .summaryCorrection, confirmedAt: now)
         records[index].notes = notes
         if let expected = target.targetReps {
-            let reached = sides.map { ($0.left ?? -1) >= expected && ($0.right ?? -1) >= expected } ?? ((reps ?? 0) >= expected)
+            let reached = sides.map { $0.meets(expected, side: records[index].targetSide) } ?? ((reps ?? 0) >= expected)
             records[index].status = reached && !records[index].feedback.contains(.pain) ? "completed" : "partial"
         }
         var revised = records[index]
@@ -425,6 +451,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
             feedback: Set(feedback).sorted { $0.rawValue < $1.rawValue }, notes: notes,
             startedAt: setStartedAt, endedAt: stage == .feedback ? lastCheckpointAt : now)
         record.repetitionBasis = exercise.repetitionBasis; record.sideRepetitions = sides
+        record.targetSide = exercise.targetSide
         record.weightConfirmation = status == "skipped" ? nil : currentWeightConfirmation
         record.visualEvidence = currentVisualEvidence
         if let evidence = currentVisualEvidence {
@@ -504,6 +531,7 @@ public struct TrainingArchive: Codable, Equatable {
             if let evidence = session.currentVisualEvidence {
                 try evidence.validate()
                 guard evidence.binding == session.currentSetBinding,
+                      session.exercise.targetSide == nil || evidence.settings.arm == session.exercise.targetSide,
                       evidence.settings.exercise == session.exercise.visualObservation?.exercise,
                       session.currentObservationId == nil || (evidence.segments.last?.id == session.currentObservationId && evidence.segments.last?.endedAt == nil) else {
                     throw TrainingError.corruptArchive
@@ -519,6 +547,10 @@ public struct TrainingArchive: Codable, Equatable {
                       record.reps.map({ (0...1000).contains($0) }) ?? true,
                       record.weight.map({ $0.isFinite && (0...1000).contains($0) }) ?? true else { throw TrainingError.corruptArchive }
                 try record.sideRepetitions?.validate()
+                guard record.targetSide == nil || (record.repetitionBasis == .perSide &&
+                    session.plan.exercises.first(where: { $0.exerciseId == record.exerciseId })?.targetSide == record.targetSide) else {
+                    throw TrainingError.corruptArchive
+                }
                 try record.trialReview?.validate()
                 try record.weightConfirmation?.validate(attemptID: record.id, weight: record.weight, unit: record.target.weightUnit)
                 guard record.sideRepetitions == nil || (record.repetitionBasis == .perSide && record.reps == record.sideRepetitions?.commonCount) else {
