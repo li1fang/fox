@@ -390,8 +390,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_POSE_FIXTURE": "no_person", "FOX_POSE_IMAGE_FIXTURE": "1"]
         app.launchArguments = ["--ui-testing-reset"]
         app.launch()
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 10))
-        app.buttons["home-training"].tap()
+        XCTAssertTrue(app.buttons["home-capabilities"].waitForExistence(timeout: 10))
+        app.openManualTrainingPlan()
         app.buttons["training-tools"].tap()
         app.buttons["视觉实验"].tap()
         XCTAssertTrue(app.otherElements["pose-preview"].waitForExistence(timeout: 8))
@@ -556,8 +556,8 @@ final class FoxPhoneLayoutUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_POSE_FIXTURE": "walk_in", "FOX_POSE_IMAGE_FIXTURE": "1"]
         app.launchArguments = ["--ui-testing-reset"]; app.launch()
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 10))
-        app.buttons["home-training"].tap()
+        XCTAssertTrue(app.buttons["home-capabilities"].waitForExistence(timeout: 10))
+        app.openManualTrainingPlan()
         app.buttons["training-tools"].tap(); app.buttons["准备 Day 1 草稿"].tap(); app.buttons["start-training"].tap()
         visible(app.buttons["begin-set"], in: app)
         app.buttons["begin-set"].tap()

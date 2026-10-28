@@ -192,15 +192,19 @@ final class FoxDesignReviewUITests: XCTestCase {
     private func capture(_ id: String, app: XCUIApplication) {
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "design-\(id)"; screenshot.lifetime = .keepAlways; add(screenshot)
-        let targets = ["journal-note", "journal-save", "journal-camera", "home-training", "home-try-training", "journal-save-error",
+        let targets = ["journal-note", "journal-save", "journal-camera", "home-prepare-curl", "home-capabilities", "home-plan", "home-history", "home-history-list", "journal-save-error",
                        "home-training-retry", "journal-retry-load", "journal-dismiss-notice", "journal-load-more",
+                       "home-service-cards", "home-service-refresh", "home-service-apply-updates", "home-service-pending", "home-service-synthetic", "home-service-error", "home-service-empty",
                        "journal-edit", "journal-edit-note", "journal-edit-save", "journal-edit-error", "journal-reload-latest", "journal-export-backup",
                        "begin-set", "manual-count", "complete-set", "pause-set", "rest-ready",
                        "submit-feedback", "confirm-summary", "actual-reps", "actual-left-reps", "actual-right-reps", "set-elapsed", "tempo-phase", "training-stage-surface", "phone-target-reps", "phone-target-weight", "phone-training-details", "workout-automatic-count", "workout-tracking-status", "diagnostic-keep", "diagnostic-discard"]
         let recordIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'journal-record-' ")).allElementsBoundByIndex.prefix(8).map(\.identifier)
         let projectionIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-training-projection-' ")).allElementsBoundByIndex.map(\.identifier)
-        let entryIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-try-' AND identifier != 'home-try-training' ")).allElementsBoundByIndex.map(\.identifier)
-        let identifiers = targets + entryIDs + recordIDs + projectionIDs + ["journal-detail-note", "photo-zoom-level"]
+        let entryIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-try-' OR identifier BEGINSWITH 'home-preparation-' OR identifier BEGINSWITH 'home-resume-' OR identifier BEGINSWITH 'home-review-' OR identifier BEGINSWITH 'home-open-' OR identifier BEGINSWITH 'home-history-' ")).allElementsBoundByIndex.map(\.identifier)
+        let serviceIDs = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'home-card-' OR identifier BEGINSWITH 'home-submission-' ")).allElementsBoundByIndex.map(\.identifier)
+        var seenIdentifiers: Set<String> = []
+        let identifiers = (targets + entryIDs + recordIDs + projectionIDs + serviceIDs + ["journal-detail-note", "photo-zoom-level"])
+            .filter { seenIdentifiers.insert($0).inserted }
         // Resolve present targets together; absent IDs must not each trigger a fresh AX tree search.
         let matches = app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", identifiers)).allElementsBoundByIndex
         var firstByID: [String: XCUIElement] = [:]

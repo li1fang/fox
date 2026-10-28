@@ -11,21 +11,25 @@ final class FoxActivityEntryUITests: XCTestCase {
         return app
     }
 
-    func testFourActionsAreDirectlyDiscoverableOnHome() {
+    func testFourActionsAreDiscoverableInCapabilityDirectory() {
         let app = launch()
-        for id in ["home-try-training", "home-try-lateralRaise", "home-try-latPulldown", "home-try-kegel"] {
+        visible(app.buttons["home-capabilities"], in: app)
+        app.buttons["home-capabilities"].tap()
+        XCTAssertTrue(app.navigationBars["训练动作"].waitForExistence(timeout: 5))
+        for id in ["home-try-curl", "home-try-lateralRaise", "home-try-latPulldown", "home-try-kegel"] {
             let button = app.buttons[id]
             XCTAssertTrue(button.waitForExistence(timeout: 5), id)
             if !button.isHittable { app.swipeUp() }
             XCTAssertTrue(button.isHittable, id)
+            XCTAssertTrue(button.isEnabled, id)
         }
-        shot("home-four-actions")
+        shot("capability-four-actions")
     }
 
     func testQueuedActivityDoesNotHidePreparationOrRecoveryGuidance() {
         for fixture in ["no_person", "subject_loss"] {
             let app = launch(fixture: fixture)
-            app.buttons["home-try-training"].tap(); app.buttons["begin-set"].tap()
+            app.buttons["home-prepare-curl"].tap(); app.buttons["begin-set"].tap()
             if fixture == "subject_loss" {
                 XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
                     app.buttons["rebind-vision-set"].isEnabled
@@ -45,8 +49,8 @@ final class FoxActivityEntryUITests: XCTestCase {
     }
 
     func testOptionalObservationCorrectionIsSecondaryAndKeepsExplicitSide() {
-        let app = launch(); app.buttons["home-try-training"].tap()
-        choose("lateralRaise", in: app)
+        let app = launch(); app.openTrainingCapability("home-try-lateralRaise")
+        visible(app.buttons["begin-set"], in: app)
         app.buttons["phone-training-details"].tap()
         XCTAssertFalse(app.buttons["training-other-arm"].exists)
         app.buttons["training-diagnostics"].tap()
@@ -82,8 +86,8 @@ final class FoxActivityEntryUITests: XCTestCase {
 
     func testKegelSharesLayoutAndSavesManualRecordWithoutCameraAcrossRotation() {
         let app = launch()
-        app.buttons["home-try-training"].tap()
-        choose("kegel", in: app)
+        app.openTrainingCapability("home-try-kegel")
+        visible(app.buttons["begin-set"], in: app)
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
             XCUIDevice.shared.orientation = orientation
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -115,12 +119,16 @@ final class FoxActivityEntryUITests: XCTestCase {
         app.buttons["submit-feedback"].tap(); app.buttons["confirm-summary"].tap()
         visible(app.staticTexts["training-saved-receipt"], in: app)
         app.terminate(); app.launchArguments = []; app.launch()
-        app.buttons["home-training"].tap(); app.buttons["记录"].tap()
-        XCTAssertTrue(app.buttons["record-confirmed"].waitForExistence(timeout: 5))
+        let history = app.openReadOnlyTrainingHistory()
+        XCTAssertEqual(history.count, 1)
+        XCTAssertTrue(history.firstMatch.label.contains("已确认训练回顾"))
+        history.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["本机档案 · 只读"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "凯格尔")).firstMatch.exists)
     }
 
     func testSwitchDuringActiveSetWaitsForSaveAndCurlCanContinueOnRight() {
-        let app = launch(); app.buttons["home-try-training"].tap()
+        let app = launch(); app.buttons["home-prepare-curl"].tap()
         app.buttons["training-vision-toggle"].tap()
         app.buttons["begin-set"].tap()
         choose("kegel", in: app)

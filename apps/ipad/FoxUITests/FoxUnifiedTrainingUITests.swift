@@ -20,8 +20,8 @@ final class FoxUnifiedTrainingUITests: XCTestCase {
     }
 
     private func enter(_ app: XCUIApplication) {
-        visible(app.buttons["home-try-training"], in: app)
-        app.buttons["home-try-training"].tap()
+        visible(app.buttons["home-prepare-curl"], in: app)
+        app.buttons["home-prepare-curl"].tap()
         visible(app.buttons["begin-set"], in: app)
     }
 
@@ -88,7 +88,7 @@ final class FoxUnifiedTrainingUITests: XCTestCase {
         XCTAssertGreaterThan(app.buttons["begin-set"].frame.height, normalActionHeight)
         app.buttons["begin-set"].tap(); app.buttons["pause-set"].tap()
         app.terminate(); app.launchArguments.removeAll(where: { $0 == "--ui-testing-reset" }); app.launch()
-        app.buttons["home-training"].tap()
+        app.resumeOnlyStartedTraining()
         visible(app.buttons["begin-set"], in: app)
         app.buttons["begin-set"].tap(); app.buttons["complete-set"].tap()
         visible(app.textFields["actual-left-reps"], in: app)
@@ -205,10 +205,15 @@ final class FoxUnifiedTrainingUITests: XCTestCase {
         app.buttons["confirm-summary"].tap()
         visible(app.staticTexts["training-saved-receipt"], in: app)
         app.terminate(); app.launchArguments = []; app.launch()
-        visible(app.buttons["home-training"], in: app)
-        app.buttons["home-training"].tap()
+        let plan = app.buttons["home-training-projection-plan"]
+        XCTAssertTrue(plan.waitForExistence(timeout: 5))
+        for _ in 0..<6 { if plan.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(plan.isHittable); plan.tap()
         XCTAssertTrue(app.staticTexts["我的哑铃训练"].waitForExistence(timeout: 5), "Trial must preserve the original plan")
-        app.buttons["记录"].tap()
-        visible(app.buttons["record-confirmed"], in: app)
+        app.navigationBars["训练档案"].buttons["完成"].tap()
+        let history = app.openReadOnlyTrainingHistory()
+        XCTAssertEqual(history.count, 1)
+        visible(history.firstMatch, in: app)
+        XCTAssertTrue(history.firstMatch.label.contains("已确认训练回顾"))
     }
 }

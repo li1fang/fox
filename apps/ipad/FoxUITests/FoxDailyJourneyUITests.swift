@@ -1,6 +1,48 @@
 import XCTest
 
 extension XCUIApplication {
+    private func revealTrainingEntry(_ element: XCUIElement) {
+        for _ in 0..<6 { if element.isHittable { break }; swipeUp() }
+        for _ in 0..<12 { if element.isHittable { break }; swipeDown() }
+        XCTAssertTrue(element.isHittable)
+    }
+
+    func openManualTrainingPlan() {
+        openTrainingCapability("home-plan")
+        XCTAssertTrue(buttons["start-training"].waitForExistence(timeout: 5))
+    }
+
+    func openTrainingCapability(_ identifier: String) {
+        let catalogue = buttons["home-capabilities"]
+        XCTAssertTrue(catalogue.waitForExistence(timeout: 5))
+        revealTrainingEntry(catalogue); catalogue.tap()
+        XCTAssertTrue(navigationBars["训练动作"].waitForExistence(timeout: 5))
+        let entry = buttons[identifier]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        revealTrainingEntry(entry); entry.tap()
+    }
+
+    @discardableResult
+    func resumeOnlyStartedTraining() -> String {
+        let routes = buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-resume-'"))
+        XCTAssertTrue(routes.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(routes.count, 1, "This fixture must identify exactly one started session")
+        let identifier = routes.firstMatch.identifier
+        XCTAssertNotNil(UUID(uuidString: String(identifier.dropFirst("home-resume-".count))))
+        let target = buttons[identifier]
+        revealTrainingEntry(target); target.tap()
+        return identifier
+    }
+
+    func openReadOnlyTrainingHistory() -> XCUIElementQuery {
+        let history = buttons["home-history"]
+        XCTAssertTrue(history.waitForExistence(timeout: 5))
+        revealTrainingEntry(history); history.tap()
+        XCTAssertTrue(descendants(matching: .any).matching(identifier: "home-history-list").firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(buttons["begin-set"].exists, "History must not open an executing training view")
+        return buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-history-' AND identifier != 'home-history-list'"))
+    }
+
     func openOptionalTrainingFeedback() {
         let toggle = buttons["补充反馈（可选）"]
         let form = scrollViews["set-feedback"]
@@ -35,7 +77,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
         if failConfirm { app.launchEnvironment["FOX_UI_FAIL_CONFIRM_ONCE"] = "1" }
         app.launchArguments = ["--ui-testing-reset"]
         app.launch()
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["home-capabilities"].waitForExistence(timeout: 10))
         return app
     }
 
@@ -54,7 +96,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
     func testEntryAndFeedbackAudit() {
         let app = launch()
         shot("01-home")
-        app.buttons["home-training"].tap()
+        app.openManualTrainingPlan()
         XCTAssertTrue(app.buttons["start-training"].waitForExistence(timeout: 5))
         shot("02-plan")
         for _ in 0..<6 { if app.buttons["start-training"].isHittable { break }; app.swipeUp() }
@@ -70,7 +112,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
 
     func testPlanActionIsPinnedAndExperimentToolsAreSecondary() {
         let app = launch()
-        app.buttons["home-training"].tap()
+        app.openManualTrainingPlan()
         visible(app.buttons["start-training"], in: app)
         XCTAssertFalse(app.buttons["准备 Day 1 草稿"].exists)
         visible(app.buttons["training-tools"], in: app)
@@ -84,7 +126,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
 
     func testManualCountConfirmationNeedsNoKeyboardAndRestAcknowledgesSave() {
         let app = launch()
-        app.buttons["home-training"].tap(); app.buttons["start-training"].tap()
+        app.openManualTrainingPlan(); app.buttons["start-training"].tap()
         app.buttons["begin-set"].tap(); app.buttons["complete-set"].tap()
         XCTAssertFalse(app.buttons["submit-feedback"].isEnabled)
         visible(app.buttons["actual-left-reps-plus"], in: app)
@@ -100,7 +142,7 @@ final class FoxDailyJourneyUITests: XCTestCase {
         app.buttons["rest-ready"].tap()
         app.buttons["begin-set"].tap(); app.buttons["pause-set"].tap()
         app.buttons["training-home"].tap()
-        app.buttons["home-training"].tap()
+        app.resumeOnlyStartedTraining()
         XCTAssertTrue(app.staticTexts["已暂停"].waitForExistence(timeout: 5))
         app.buttons["结束训练"].tap(); app.buttons["结束并核对记录"].tap()
         XCTAssertTrue(app.staticTexts["左 2 / 右 未确认 次"].firstMatch.waitForExistence(timeout: 5))
@@ -114,16 +156,19 @@ final class FoxDailyJourneyUITests: XCTestCase {
         XCTAssertLessThanOrEqual(app.buttons["record-confirmed"].frame.height, 180)
         shot("07-saved")
         app.buttons["training-saved-home"].tap()
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["home-history"].waitForExistence(timeout: 5))
         app.terminate(); app.launchArguments = []; app.launch()
-        app.buttons["home-training"].tap(); app.buttons["记录"].tap()
-        app.buttons["record-confirmed"].tap()
+        let reopened = app.openReadOnlyTrainingHistory()
+        XCTAssertEqual(reopened.count, 1)
+        XCTAssertTrue(reopened.firstMatch.label.contains("已确认训练回顾"))
+        reopened.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["本机档案 · 只读"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["左 2 / 右 未确认 次"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testFourVisualSetsConfirmAndReopenWithoutOptionalInput() {
         let app = launch(visual: true)
-        app.buttons["home-training"].tap()
+        app.openManualTrainingPlan()
         app.buttons["training-tools"].tap(); app.buttons["准备 Day 1 草稿"].tap()
         app.buttons["start-training"].tap()
         for index in 0..<4 {
@@ -148,13 +193,16 @@ final class FoxDailyJourneyUITests: XCTestCase {
         app.buttons["view-saved-training"].tap()
         XCTAssertTrue(app.staticTexts["视觉观测：左臂 2 次"].firstMatch.waitForExistence(timeout: 5))
         app.terminate(); app.launchArguments = []; app.launch()
-        app.buttons["home-training"].tap(); app.buttons["记录"].tap()
-        XCTAssertEqual(app.buttons.matching(identifier: "record-confirmed").count, 1)
+        let reopened = app.openReadOnlyTrainingHistory()
+        XCTAssertEqual(reopened.count, 1)
+        XCTAssertTrue(reopened.firstMatch.label.contains("已确认训练回顾"))
+        reopened.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["视觉观测：左臂 2 次"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testFailedConfirmationKeepsSummaryAndRetrySavesOnlyOnce() {
         let app = launch(failConfirm: true)
-        app.buttons["home-training"].tap(); app.buttons["start-training"].tap()
+        app.openManualTrainingPlan(); app.buttons["start-training"].tap()
         app.buttons["begin-set"].tap(); app.buttons["pause-set"].tap()
         app.buttons["结束训练"].tap(); app.buttons["结束并核对记录"].tap()
         visible(app.buttons["confirm-summary"], in: app)

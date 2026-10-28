@@ -16,7 +16,7 @@ final class FoxHomeUITests: XCTestCase {
     func testHomeSavesToRealLocalRepositoryAndSurvivesRelaunch() {
         let app = launch()
         XCTAssertEqual(app.webViews.count, 0)
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["home-history"].waitForExistence(timeout: 10))
         let field = app.descendants(matching: .any).matching(identifier: "journal-note").firstMatch
         field.tap(); field.typeText("Woke up with a headache.\nBreakfast at 08:10.")
         app.buttons["journal-save"].tap()
@@ -46,10 +46,11 @@ final class FoxHomeUITests: XCTestCase {
 
     func testTrainingCanReturnHomeWithoutStartingAWorkout() {
         let app = launch()
-        app.buttons["home-training"].tap()
+        app.openManualTrainingPlan()
         XCTAssertTrue(app.buttons["training-home"].waitForExistence(timeout: 5))
         app.buttons["training-home"].tap()
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["home-history"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-resume-' OR identifier BEGINSWITH 'home-preparation-' ")).count, 0)
         XCTAssertEqual(app.webViews.count, 0)
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "native-home-portrait"; screenshot.lifetime = .keepAlways; add(screenshot)
@@ -63,7 +64,7 @@ final class FoxHomeUITests: XCTestCase {
 
     func testActiveTrainingPausesWhenReturningHomeAndCanBeReopened() {
         let app = launch()
-        app.buttons["home-training"].tap()
+        app.openManualTrainingPlan()
         let start = app.buttons["start-training"]
         XCTAssertTrue(start.waitForExistence(timeout: 5))
         for _ in 0..<8 {
@@ -74,10 +75,10 @@ final class FoxHomeUITests: XCTestCase {
         app.buttons["begin-set"].tap()
         XCTAssertTrue(app.buttons["pause-set"].waitForExistence(timeout: 5))
         app.buttons["training-home"].tap()
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 5))
-        app.buttons["home-training"].tap()
+        XCTAssertTrue(app.buttons["home-history"].waitForExistence(timeout: 5))
+        let resumed = app.resumeOnlyStartedTraining()
         XCTAssertTrue(app.staticTexts["已暂停"].waitForExistence(timeout: 5))
         app.buttons["training-home"].tap()
-        XCTAssertTrue(app.buttons["home-training"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[resumed].waitForExistence(timeout: 5))
     }
 }
