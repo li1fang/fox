@@ -119,9 +119,11 @@ struct FoxRootView: View {
                     FoxCommand(title: "导出原文件", icon: "square.and.arrow.up") { sheet = .share(store.fileURL) }.frame(maxWidth: 320)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if tab == "training", let session = store.session {
+                // A new execution owner resets presentation. A new attempt within that
+                // owner keeps its settings sheet; callbacks still carry the full token.
                 TrainingScreen(store: store, session: session, phoneLandscapeNavigation: AnyView(headerActions)) {
                     savedSessionID = session.id; tab = "history"
-                }.id(store.executionToken)
+                }.id(store.executionGeneration)
             } else if tab == "history" {
                 history
             } else {

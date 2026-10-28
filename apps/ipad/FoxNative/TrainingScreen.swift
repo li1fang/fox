@@ -56,7 +56,11 @@ struct TrainingScreen: View {
                 var state = store.clientState; state.selectedArms[id.uuidString] = value; store.setClientState(state, token: executionToken)
             }
             .onDisappear { store.stopPresentation(token: executionToken) }
-            .onChange(of: session.currentSetAttemptId) { _ in store.workoutVision.preview(token: executionToken) }
+            .onChange(of: session.currentSetAttemptId) { _ in
+                guard store.accepts(executionToken) else { return }
+                guidance.stop(); guidance.start()
+                store.workoutVision.preview(token: executionToken)
+            }
             .onChange(of: session.stage) { stage in
                 if stage == .ready { store.workoutVision.preview(token: executionToken) }
             }
