@@ -1,6 +1,6 @@
 # Fox 生活日志：后续任务台账
 
-2026-10-28 续轮：[SYNC-3B–D](PERSONAL_SYNC_NATIVE_V1.zh-CN.md#冻结候选执行结果与当前停止点) 原生事务 outbox、保留历史的删除、冲突选择、备份 v2、Keychain 配对与前台同步已实现，候选 `17d4a8e`。Linux 原生合成双副本、fast、两端定向通过；完整 public 动画等待失败，补充 18 项 iPad UI 通过，3 组受阻、1 组主动取消，iPhone 补充未执行。负责人产品与交付；3B/C 实现完成但完整验收受阻，3D 为 `blocked-install`，两端备份已核验但未安装/配对。保留原件和全部失败回执，不自动放宽“通过后更新”的授权条件。实际安装前重查备份时效。
+2026-10-28 续轮：[SYNC-3B–D](PERSONAL_SYNC_NATIVE_V1.zh-CN.md#内部体验交付追加授权) 原生同步已实现，候选 `17d4a8e`；核心、Linux 合成闭环及定向通过，完整 public 动画等待失败保留。用户随后明确授权带欠验的内部体验交付：重查备份、覆盖更新两台设备、人工配对并验证真实图文。负责人产品与交付；3D 由 `blocked-install` 进入内部交付准备，不关闭原验收欠项，不盲跑全量，不合入其他工作线在途功能。设备结果待独立回执，原件不删除。
 
 2026-10-28：[SYNC-3A HTTPS 与原生传输基础](PERSONAL_SYNC_NATIVE_V1.zh-CN.md) 限定验收通过，负责人产品与交付。Mac 53 Python + 6 Swift + 59 验证入口、iOS SDK 编译、真实 LAN 双副本/照片和 Swift 探针通过；Linux 服务经明确授权启用 linger，脱离 SSH 常驻。正式同步库为空，试验凭据已撤销。SYNC-3B Journal/outbox/Keychain、3C 配对 UI、3D 双设备验收未完成；不更新设备、不自动迁移/删除。
 
