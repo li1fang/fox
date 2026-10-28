@@ -4,7 +4,7 @@
 
 ## 本独立工作树的后续授权
 
-`codex/fox-client-foundation` 当前执行 **CLIENT-FOUNDATION-01 第三阶段**。用户授权 Sol 软件验收、保留失败、推送及保全后更新；需要解锁时通知，并授权迁移熟悉缓存使内盘达到 5 GiB 以上。实现／测试候选 `35640b56e62e14a3436297852e5c2d51b124abfd` 已审查并推送，fast／同提交官方回执及 Duo 12/12 通过。旧完整 public 的输入 idle 失败保留；手机 `7cf38d0` 的 38 项为 35 通过、3 失败，两项测试路线已修正，Kegel 历史按钮原失败仍 unknown，一次带观测通过不关闭它。**完整 public 尚未取得通过回执，设备未安装更新。** 已兼容现有 Journal v2／配对同步基线；内盘 0.6.14/build 33 包签名与原 Keychain 身份核验通过，iPad 备份完整性通过，iPhone 仍待连接／解锁。安装阻止标记保持；后续文档 HEAD 与运行候选分开。见[第三阶段记录](CLIENT_FOUNDATION_STAGE3_20261028.zh-CN.md)。本树、共享维护树和已安装 build 32 身份分开；CAPTURE-01 仍是独立只读采集任务。
+`codex/fox-client-foundation` 当前执行 **CLIENT-FOUNDATION-01 第三阶段**。用户授权 Sol 软件验收、保留失败、推送及保全后更新；需要解锁时通知，并授权迁移熟悉缓存使内盘达到 5 GiB 以上。当前实现／测试候选 `bb7189f276ad91c0939ced9daec38704f0ebdf70` 已审查并推送，fast／同提交官方回执通过。Kegel 后续在原失败判定后取证，复现 enabled 历史按钮仍在窗口下方；仅修正 Home 测试滚动路线，保留原旋转、保存、重启及只读断言后 1/1 通过。原复现失败、首版修复失败和旧完整 public 输入 idle 均保留；旧候选 `35640b5` 的 Duo 12/12 不转作新候选回执。**完整 public 尚未取得通过回执，设备未安装更新。** 已兼容现有 Journal v2／配对同步基线；内盘 0.6.14/build 34 包签名与原 Keychain 身份核验通过。用户解锁后两台实时版本仍为 build 32，iPad 完整备份重新核验、iPhone 新完整备份及内容完整性通过，连接不再是当前阻碍。安装阻止标记保持，需明确完整 public 欠验下的交付质量边界；等待期间无需保持解锁。后续文档 HEAD 与运行候选分开。见[第三阶段记录](CLIENT_FOUNDATION_STAGE3_20261028.zh-CN.md)。本树、共享维护树和已安装 build 32 身份分开；CAPTURE-01 仍是独立只读采集任务。
 
 ## 三种身份
 
