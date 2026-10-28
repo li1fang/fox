@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Run a bounded LAN HTTPS vault gateway independently of SSH and validate a native TLS transport foundation with synthetic data",
+  "nonGoals": ["Native Journal integration or pairing UI", "Device installation", "Real-record migration", "Full accounts or public Internet service", "CI trigger changes"],
+  "invariants": ["Preserve original records and local changes", "No plaintext or unconditional TLS trust", "Keep credentials and private receipts outside Git", "Archive, transport and device synchronization are separate evidence boundaries"],
+  "modules": ["scripts/sync_https.py", "apps/ipad/FoxSyncCore", "scripts/trial-suite.mjs", "tests/verification/catalogue.json"],
+  "acceptance": ["test:sync", "test:archive", "test:sync:native", "verify:repository"],
+  "stopConditions": ["Identity validation failure", "Unexpected listener exposure", "Changed source digests", "Record preservation failure", "Conflicting concurrent changes"],
+  "evidence": ["Failing regression tests followed by focused verification", "Synthetic HTTPS two-peer and photo roundtrip", "Actual Swift TLS probe", "SSH-disconnected service check", "Fresh-context review"],
+  "humanUnknowns": ["No native device execution or pairing acceptance", "Certificate renewal and trust-anchor replacement are not automated", "Journal migration, deletion and outbox integration remain unimplemented"]
+}

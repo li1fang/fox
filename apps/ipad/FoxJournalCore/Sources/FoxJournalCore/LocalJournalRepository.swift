@@ -4,10 +4,10 @@ public final class LocalJournalRepository: @unchecked Sendable {
     public let deviceID: UUID
     private let root: URL
     private let limits: JournalLimits
-    private let db: JournalDatabase
+    let db: JournalDatabase
     // Serialize the connection and file operations together; SQLite coordinates other instances.
     private let lock = NSRecursiveLock()
-    private let checkpoint: ((JournalCheckpoint) throws -> Void)?
+    let checkpoint: ((JournalCheckpoint) throws -> Void)?
     private static let applicationID = 0x464F584A
     private static let manifestBytes = 16_777_216
 
@@ -46,7 +46,8 @@ public final class LocalJournalRepository: @unchecked Sendable {
                     timeZoneIdentifier: draft.timeZoneIdentifier, note: draft.note, photos: photos,
                     occurred: try JournalValidation.occurrence(draft.occurred), labels: draft.labels, source: source)
                 try JournalValidation.record(proposed, limits: limits)
-                if let existing = try getUnlocked(draft.id) {
+                if let existing = try getUnlocked(draft.id, includeDeleted: true) {
+                    guard try !isTombstone(draft.id) else { throw JournalError.captureConflict }
                     let original = try historyUnlocked(draft.id)[0]
                     guard original.recordedAt == proposed.recordedAt, original.source == proposed.source,
                           original.note == proposed.note, original.occurred == proposed.occurred,
@@ -60,6 +61,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
                 }
                 for (photo, input) in zip(photos, draft.photos) { try writePhoto(input.data, descriptor: photo) }
                 try insertRecord(proposed); try insertRevision(proposed)
+                try enqueueSync(proposed.id, payload: proposed)
                 try checkpoint?(.beforeCommit)
                 return proposed
             }
@@ -74,7 +76,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
             if let from = query.from { try JournalValidation.date(from) }
             if let before = query.before { try JournalValidation.date(before) }
             if let from = query.from, let before = query.before, from >= before { throw JournalError.invalidInput("range") }
-            var predicates: [String] = [], bindings: [SQLValue] = []
+            var predicates = ["NOT EXISTS (SELECT 1 FROM journal_tombstones t WHERE t.id=r.id)"], bindings: [SQLValue] = []
             if let text = query.text {
                 guard text.utf8.count <= limits.noteBytes else { throw JournalError.invalidInput("search") }
                 predicates.append("instr(coalesce(r.note, ''), ?) > 0"); bindings.append(.text(text))
@@ -115,6 +117,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
                     [.integer(Int64(revised.revision)), .number(revised.timelineAt.timeIntervalSince1970 * 1000),
                      revised.note.map(SQLValue.text) ?? .null, .text(key(id)), .integer(Int64(expectedRevision))])
                 try insertRevision(revised)
+                try enqueueSync(revised.id, payload: revised)
                 try checkpoint?(.beforeCommit)
                 return revised
             }
@@ -127,7 +130,10 @@ public final class LocalJournalRepository: @unchecked Sendable {
                 guard let record = try getUnlocked(id) else { throw JournalError.notFound }
                 guard record.revision == expectedRevision else { throw JournalError.revisionConflict }
                 let photos = Set(try historyUnlocked(id).flatMap { $0.photos.map(\.id) })
-                try db.execute("DELETE FROM records WHERE id=?", [.text(key(id))])
+                if try syncVault() != nil {
+                    try enqueueSync(id, payload: nil)
+                    try db.execute("INSERT INTO journal_tombstones VALUES(?)", [.text(key(id))])
+                } else { try db.execute("DELETE FROM records WHERE id=?", [.text(key(id))]) }
                 try checkpoint?(.beforeCommit)
                 return Array(photos)
             }
@@ -153,7 +159,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
             try db.transaction {
                 try checkDirectories()
                 var pending: [UUID] = [], unrecognized: [String] = []
-                let garbage = try db.rows("SELECT payload FROM photos WHERE NOT EXISTS (SELECT 1 FROM revision_photos p WHERE p.photo_id=photos.id)")
+                let garbage = try db.rows("SELECT payload FROM photos WHERE NOT EXISTS (SELECT 1 FROM revision_photos p WHERE p.photo_id=photos.id) AND NOT EXISTS (SELECT 1 FROM sync_photo_refs s WHERE s.photo_id=photos.id) AND NOT EXISTS (SELECT 1 FROM sync_downloads d WHERE d.photo_id=photos.id)")
                 for row in garbage {
                     let photo = try decodePhoto(row[0])
                     do {
@@ -198,9 +204,19 @@ public final class LocalJournalRepository: @unchecked Sendable {
                         guard let text = row[0].text, let id = UUID(uuidString: text) else { throw JournalError.corruptStore }
                         return JournalBackup.History(id: id, revisions: try historyUnlocked(id))
                     }
-                    let inventory = try JournalValidation.histories(histories, limits: limits)
-                    let manifest = JournalBackup(format: "fox.journal.backup.v1", createdAt: JournalValidation.canonical(at),
-                        records: histories, photos: inventory.values.sorted { key($0.id) < key($1.id) })
+                    var inventory = try JournalValidation.histories(histories, limits: limits)
+                    let evidence = try syncEvidence()
+                    for op in evidence { for photo in op.payload?.photos ?? [] {
+                        if let existing = inventory[photo.id], existing != photo { throw JournalError.attachmentIntegrity }
+                        inventory[photo.id] = photo
+                    } }
+                    let deleted = try db.rows("SELECT id FROM journal_tombstones ORDER BY id").map { row -> UUID in
+                        guard let text = row[0].text, let id = UUID(uuidString: text) else { throw JournalError.corruptStore }; return id
+                    }
+                    let extended = !deleted.isEmpty || !evidence.isEmpty
+                    let manifest = JournalBackup(format: extended ? "fox.journal.backup.v2" : "fox.journal.backup.v1", createdAt: JournalValidation.canonical(at),
+                        records: histories, photos: inventory.values.sorted { key($0.id) < key($1.id) },
+                        deletedRecordIDs: extended ? deleted : nil, syncEvidence: extended ? evidence : nil)
                     let json = try JournalJSON.encoder().encode(manifest)
                     guard json.count <= Self.manifestBytes, json.count <= limits.backupBytes else { throw JournalError.invalidBackup }
                     var total = json.count
@@ -242,9 +258,23 @@ public final class LocalJournalRepository: @unchecked Sendable {
             let manifest: JournalBackup
             do { manifest = try JournalJSON.decodeBackup(Data(contentsOf: manifestURL)) }
             catch { throw JournalError.invalidBackup }
-            guard manifest.format == "fox.journal.backup.v1" else { throw JournalError.unsupportedVersion }
+            guard ["fox.journal.backup.v1", "fox.journal.backup.v2"].contains(manifest.format) else { throw JournalError.unsupportedVersion }
+            let extended = manifest.format == "fox.journal.backup.v2"
+            guard extended || (manifest.deletedRecordIDs == nil && manifest.syncEvidence == nil) else { throw JournalError.invalidBackup }
+            guard !extended || (manifest.deletedRecordIDs != nil && manifest.syncEvidence != nil) else { throw JournalError.invalidBackup }
             try JournalValidation.date(manifest.createdAt)
-            let expected = try JournalValidation.histories(manifest.records, limits: limits)
+            var expected = try JournalValidation.histories(manifest.records, limits: limits)
+            let evidence = manifest.syncEvidence ?? [], deleted = manifest.deletedRecordIDs ?? []
+            guard Set(evidence.map(\.op_id)).count == evidence.count, Set(deleted).count == deleted.count else { throw JournalError.invalidBackup }
+            let knownIDs = Set(manifest.records.map(\.id)).union(evidence.filter(\.deleted).compactMap { UUID(uuidString: $0.record_id) })
+            guard Set(deleted).isSubset(of: knownIDs) else { throw JournalError.invalidBackup }
+            for op in evidence {
+                try op.validate()
+                for photo in op.payload?.photos ?? [] {
+                    if let existing = expected[photo.id], existing != photo { throw JournalError.invalidBackup }
+                    expected[photo.id] = photo
+                }
+            }
             guard Set(manifest.photos.map(\.id)).count == manifest.photos.count,
                   expected.count == manifest.photos.count else { throw JournalError.invalidBackup }
             var total = jsonBytes
@@ -257,6 +287,12 @@ public final class LocalJournalRepository: @unchecked Sendable {
                 try JournalFiles.verify(source.appendingPathComponent(photo.relativePath), photo: photo, limits: limits)
             }
             return try transaction {
+                // V2 is a portable history/evidence backup, never a clone of pairing credentials
+                // or cursor. Restore it only into an empty unpaired store to avoid resurrecting data.
+                if extended {
+                    guard try syncVault() == nil, try db.rows("SELECT id FROM records").isEmpty,
+                          try db.rows("SELECT id FROM sync_archive").isEmpty else { throw JournalError.backupConflict }
+                }
                 var inserted = 0, unchanged = 0
                 for history in manifest.records {
                     if try getUnlocked(history.id) != nil {
@@ -279,6 +315,12 @@ public final class LocalJournalRepository: @unchecked Sendable {
                     try insertRecord(latest)
                     for record in history.revisions { try insertRevision(record) }
                     try replaceLabels(latest)
+                    for record in history.revisions { try enqueueSync(record.id, payload: record) }
+                }
+                for id in deleted { try db.execute("INSERT INTO journal_tombstones VALUES(?)", [.text(key(id))]) }
+                for op in evidence {
+                    try db.execute("INSERT INTO sync_archive VALUES(?,?)", [.text(op.op_id), .text(try encoded(op))])
+                    try retainSyncPhotos(op)
                 }
                 try checkpoint?(.beforeCommit)
                 return RestoreReceipt(inserted: inserted, unchanged: unchanged)
@@ -286,14 +328,14 @@ public final class LocalJournalRepository: @unchecked Sendable {
         }
     }
 
-    private func locked<T>(_ body: () throws -> T) rethrows -> T {
+    func locked<T>(_ body: () throws -> T) rethrows -> T {
         lock.lock(); defer { lock.unlock() }; return try body()
     }
-    private func transaction<T>(_ body: () throws -> T) throws -> T {
+    func transaction<T>(_ body: () throws -> T) throws -> T {
         do { try checkDirectories(); return try db.transaction(body) }
         catch { _ = try? cleanup(); throw error }
     }
-    private func key(_ id: UUID) -> String { id.uuidString.lowercased() }
+    func key(_ id: UUID) -> String { id.uuidString.lowercased() }
     private func checkDirectories() throws {
         for url in [root, root.appendingPathComponent("attachments"), root.appendingPathComponent("staging")] { try JournalFiles.directory(url) }
     }
@@ -307,7 +349,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
                 sha256: JournalFiles.digest(input.data), relativePath: "attachments/\(key(id)).\(ext)")
         }
     }
-    private func writePhoto(_ data: Data, descriptor: PhotoAttachment) throws {
+    func writePhoto(_ data: Data, descriptor: PhotoAttachment) throws {
         try JournalValidation.attachment(descriptor, limits: limits)
         guard data.count == descriptor.byteCount, JournalFiles.digest(data) == descriptor.sha256 else { throw JournalError.attachmentIntegrity }
         let final = root.appendingPathComponent(descriptor.relativePath)
@@ -319,32 +361,33 @@ public final class LocalJournalRepository: @unchecked Sendable {
         try checkpoint?(.photoWritten)
         try db.execute("INSERT INTO photos(id,payload) VALUES(?,?)", [.text(key(descriptor.id)), .text(try encoded(descriptor))])
     }
-    private func verifyPhoto(_ photo: PhotoAttachment) throws {
+    func verifyPhoto(_ photo: PhotoAttachment) throws {
         try checkDirectories(); try JournalFiles.verify(root.appendingPathComponent(photo.relativePath), photo: photo, limits: JournalValidation.storedLimits)
     }
-    private func photoDescriptor(_ id: UUID) throws -> PhotoAttachment? {
+    func photoDescriptor(_ id: UUID) throws -> PhotoAttachment? {
         try db.rows("SELECT payload FROM photos WHERE id=?", [.text(key(id))]).first.map { try decodePhoto($0[0]) }
     }
     private func isReferenced(_ id: UUID) throws -> Bool {
-        !(try db.rows("SELECT 1 FROM revision_photos WHERE photo_id=? LIMIT 1", [.text(key(id))])).isEmpty
+        !(try db.rows("SELECT 1 FROM revision_photos WHERE photo_id=? UNION ALL SELECT 1 FROM sync_photo_refs WHERE photo_id=? UNION ALL SELECT 1 FROM sync_downloads WHERE photo_id=? LIMIT 1", [.text(key(id)), .text(key(id)), .text(key(id))])).isEmpty
     }
-    private func getUnlocked(_ id: UUID) throws -> CaptureRecord? {
+    func getUnlocked(_ id: UUID, includeDeleted: Bool = false) throws -> CaptureRecord? {
+        if !includeDeleted, try isTombstone(id) { return nil }
         guard let row = try db.rows("SELECT v.payload FROM records r LEFT JOIN revisions v ON v.record_id=r.id AND v.revision=r.current_revision WHERE r.id=?", [.text(key(id))]).first else { return nil }
         return try decodeRecord(row[0])
     }
-    private func historyUnlocked(_ id: UUID) throws -> [CaptureRecord] {
+    func historyUnlocked(_ id: UUID) throws -> [CaptureRecord] {
         let history = try db.rows("SELECT payload FROM revisions WHERE record_id=? ORDER BY revision", [.text(key(id))]).map { try decodeRecord($0[0]) }
         guard !history.isEmpty else { throw JournalError.notFound }
         _ = try JournalValidation.histories([.init(id: id, revisions: history)], limits: JournalValidation.storedLimits, enforceBackupLimits: false)
         return history
     }
-    private func insertRecord(_ record: CaptureRecord) throws {
+    func insertRecord(_ record: CaptureRecord) throws {
         try db.execute("INSERT INTO records(id,current_revision,recorded_ms,timeline_ms,note,provider,source_record_id) VALUES(?,?,?,?,?,?,?)",
             [.text(key(record.id)), .integer(Int64(record.revision)), .number(record.recordedAt.timeIntervalSince1970 * 1000),
              .number(record.timelineAt.timeIntervalSince1970 * 1000), record.note.map(SQLValue.text) ?? .null,
              record.source.provider.map(SQLValue.text) ?? .null, record.source.sourceRecordID.map(SQLValue.text) ?? .null])
     }
-    private func insertRevision(_ record: CaptureRecord) throws {
+    func insertRevision(_ record: CaptureRecord) throws {
         try db.execute("INSERT INTO revisions(record_id,revision,payload) VALUES(?,?,?)",
             [.text(key(record.id)), .integer(Int64(record.revision)), .text(try encoded(record))])
         for photo in record.photos {
@@ -371,7 +414,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
             try JournalValidation.attachment(photo, limits: JournalValidation.storedLimits); return photo
         } catch { throw JournalError.corruptStore }
     }
-    private func encoded<T: Encodable>(_ value: T) throws -> String { String(decoding: try JournalJSON.encoder().encode(value), as: UTF8.self) }
+    func encoded<T: Encodable>(_ value: T) throws -> String { String(decoding: try JournalJSON.encoder().encode(value), as: UTF8.self) }
     private func isInside(_ url: URL, parent: URL) -> Bool { url.path == parent.path || url.path.hasPrefix(parent.path + "/") }
     private func validateDestination(_ destination: URL) throws {
         guard destination.isFileURL else { throw JournalError.unsafePath }
@@ -388,7 +431,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
         let id: UUID = try db.transaction {
             let version = try db.rows("PRAGMA user_version").first?.first?.integer ?? -1
             let app = try db.rows("PRAGMA application_id").first?.first?.integer ?? -1
-            guard version == 0 || version == 1 else { throw JournalError.unsupportedVersion }
+            guard (0...2).contains(version) else { throw JournalError.unsupportedVersion }
             if version == 0 {
                 guard app == 0, try db.rows("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").isEmpty else { throw JournalError.corruptStore }
                 for sql in [
@@ -404,6 +447,7 @@ public final class LocalJournalRepository: @unchecked Sendable {
                 ] { try db.execute(sql) }
                 try db.execute("INSERT INTO metadata(key,value) VALUES('deviceID',?)", [.text(UUID().uuidString.lowercased())])
             } else if app != applicationID { throw JournalError.corruptStore }
+            if version < 2 { try initializeSync(db) }
             guard try db.rows("PRAGMA quick_check").first?.first?.text == "ok", try db.rows("PRAGMA foreign_key_check").isEmpty,
                   let value = try db.rows("SELECT value FROM metadata WHERE key='deviceID'").first?.first?.text,
                   let id = UUID(uuidString: value) else { throw JournalError.corruptStore }
@@ -426,7 +470,7 @@ public enum JournalJSON {
         return try decoder().decode(CaptureRecord.self, from: data)
     }
     static func decodeBackup(_ data: Data) throws -> JournalBackup {
-        let root = try object(JSONSerialization.jsonObject(with: data), keys: ["format", "createdAt", "records", "photos"])
+        let root = try object(JSONSerialization.jsonObject(with: data), keys: ["format", "createdAt", "records", "photos", "deletedRecordIDs", "syncEvidence"])
         guard let records = root["records"] as? [Any], let photos = root["photos"] as? [Any] else { throw JournalError.invalidBackup }
         for value in records {
             let history = try object(value, keys: ["id", "revisions"])
@@ -434,14 +478,24 @@ public enum JournalJSON {
             for record in revisions { try checkRecord(record) }
         }
         for photo in photos { try checkPhoto(photo) }
+        if let evidence = root["syncEvidence"] {
+            guard let operations = evidence as? [Any] else { throw JournalError.invalidBackup }
+            for op in operations { try checkSync(op) }
+        }
         return try decoder().decode(JournalBackup.self, from: data)
     }
-    private static func object(_ value: Any, keys: Set<String>) throws -> [String: Any] {
+    static func object(_ value: Any, keys: Set<String>) throws -> [String: Any] {
         guard let object = value as? [String: Any], Set(object.keys).isSubset(of: keys) else { throw JournalError.invalidBackup }
         return object
     }
     private static func checkPhoto(_ value: Any) throws {
         _ = try object(value, keys: ["id", "mimeType", "byteCount", "sha256", "relativePath"])
+    }
+    static func checkSync(_ value: Any) throws {
+        let keys: Set<String> = ["op_id", "record_id", "base", "deleted", "payload"]
+        let op = try object(value, keys: keys)
+        guard Set(op.keys) == keys else { throw JournalError.invalidBackup }
+        if let payload = op["payload"], !(payload is NSNull) { try checkRecord(payload) }
     }
     private static func checkRecord(_ value: Any) throws {
         let record = try object(value, keys: ["schemaVersion", "id", "revision", "recordedAt", "updatedAt", "timeZoneIdentifier", "note", "photos", "occurred", "labels", "source"])

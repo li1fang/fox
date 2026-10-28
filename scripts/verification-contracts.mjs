@@ -21,7 +21,7 @@ export function auditInventory(found, catalogue) {
 export function auditNativeSelection(catalogue, steps, {scope, component}) {
   const wanted = new Set(catalogue.filter(row => component !== 'web' && row.id.startsWith('Fox')
     && (row.scope === 'public' || scope === 'private' && ['private', 'real-speech'].includes(row.scope))
-    && (scope !== 'fast' || /^(FoxTrainingCoreTests|FoxJournalCoreTests)\//.test(row.id))).map(row => row.id));
+    && (scope !== 'fast' || /^(FoxTrainingCoreTests|FoxJournalCoreTests|FoxSyncCoreTests)\//.test(row.id))).map(row => row.id));
   const selected = new Set(steps.flatMap(step => step.expectedNative ?? []));
   const missing = [...wanted].filter(id => !selected.has(id));
   const unexpected = [...selected].filter(id => !wanted.has(id));

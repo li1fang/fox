@@ -15,6 +15,8 @@ packages:
     path: FoxTrainingCore
   FoxJournalCore:
     path: FoxJournalCore
+  FoxSyncCore:
+    path: FoxSyncCore
 
 targets:
   Fox:
@@ -28,6 +30,7 @@ targets:
       - package: FoxTrainingCore
         product: FoxPoseExperimentKit
       - package: FoxJournalCore
+      - package: FoxSyncCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.whipa.fox
@@ -89,6 +92,7 @@ targets:
     dependencies:
       - target: Fox
       - package: FoxJournalCore
+      - package: FoxSyncCore
       - package: FoxTrainingCore
         product: FoxTestSupport
     settings:

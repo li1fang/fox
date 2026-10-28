@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fox.local/schemas/journal-backup.schema.json",
-  "title": "Fox Journal Local Backup v1",
+  "title": "Fox Journal Local Backup v1/v2",
   "type": "object", "additionalProperties": false,
   "required": ["format", "createdAt", "records", "photos"],
   "properties": {
-    "format": {"const": "fox.journal.backup.v1"},
+    "format": {"enum": ["fox.journal.backup.v1", "fox.journal.backup.v2"]},
     "createdAt": {"$ref": "capture-record.schema.json#/$defs/timestamp"},
     "records": {
       "type": "array",
@@ -17,6 +17,24 @@
         }
       }
     },
-    "photos": {"type": "array", "items": {"$ref": "capture-record.schema.json#/$defs/photo"}, "uniqueItems": true}
-  }
+    "photos": {"type": "array", "items": {"$ref": "capture-record.schema.json#/$defs/photo"}, "uniqueItems": true},
+    "deletedRecordIDs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "format": "uuid"}},
+    "syncEvidence": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["op_id", "record_id", "base", "deleted", "payload"],
+      "properties": {
+        "op_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "record_id": {"type": "string", "format": "uuid"},
+        "base": {"type": ["string", "null"], "maxLength": 256},
+        "deleted": {"type": "boolean"},
+        "payload": {"anyOf": [{"type": "null"}, {"$ref": "capture-record.schema.json"}]}
+      },
+      "if": {"properties": {"deleted": {"const": true}}},
+      "then": {"properties": {"payload": {"type": "null"}}},
+      "else": {"properties": {"payload": {"$ref": "capture-record.schema.json"}}}
+    }}
+  },
+  "if": {"properties": {"format": {"const": "fox.journal.backup.v2"}}},
+  "then": {"required": ["deletedRecordIDs", "syncEvidence"]},
+  "else": {"not": {"anyOf": [{"required": ["deletedRecordIDs"]}, {"required": ["syncEvidence"]}]}}
 }

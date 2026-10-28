@@ -138,6 +138,8 @@ public struct JournalBackup: Codable, Equatable, Sendable {
     public var createdAt: Date
     public var records: [History]
     public var photos: [PhotoAttachment]
+    public var deletedRecordIDs: [UUID]? = nil
+    public var syncEvidence: [JournalSyncOperation]? = nil
 }
 
 package enum JournalCheckpoint { case photoWritten, beforeCommit, beforePhotoRemoval, backupPhotoCopied }

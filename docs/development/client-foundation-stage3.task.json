@@ -1,0 +1,52 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Accept and push a reviewed client foundation candidate that includes the currently installed Journal v2 and native sync baseline; preserve records and pairing before device update",
+  "nonGoals": [
+    "Changing sync protocol or server deployment",
+    "Private media accuracy or actual audibility acceptance",
+    "Automatic remote merge",
+    "Downgrading Journal or resetting pairing, outbox or records"
+  ],
+  "invariants": [
+    "One writer and serialized heavy native work under the existing lease",
+    "Retain original failed and cancelled attempts; no cross-commit acceptance reuse",
+    "Old session and attempt callbacks remain rejected",
+    "Journal v2, Keychain identity, pairing and outbox remain compatible",
+    "Only complete and integrity-checked backups permit in-place installation"
+  ],
+  "modules": [
+    "apps/ipad/FoxNative",
+    "apps/ipad/FoxJournalCore",
+    "apps/ipad/FoxSyncCore",
+    "apps/ipad/FoxAppTests",
+    "apps/ipad/FoxUITests",
+    "docs/development",
+    "tests/verification/catalogue.json"
+  ],
+  "acceptance": [
+    "test:journal",
+    "test:sync:native",
+    "verify:repository",
+    "verify:candidate",
+    "verify:receipt",
+    "verify:history"
+  ],
+  "stopConditions": [
+    "Conflicting writer or changed candidate",
+    "Unknown disclosure rights or input drift",
+    "Incomplete backup or record mismatch",
+    "Missing signing or device unlock",
+    "Internal disk exhaustion or conflicting resource lease"
+  ],
+  "evidence": [
+    "Original settings UI failure and controlled capacity cancellation",
+    "Unchanged failing UI passes after presentation identity repair",
+    "Installed sync baseline ancestry and paired Journal v2 synthetic checks",
+    "Fresh-context integration review and exact frozen candidate receipts",
+    "Remote SHA and separate package, installation and preservation receipts"
+  ],
+  "humanUnknowns": [
+    "Actual VoiceOver, audibility and exercise accuracy",
+    "User unlock or trust prompts may require coordination"
+  ]
+}

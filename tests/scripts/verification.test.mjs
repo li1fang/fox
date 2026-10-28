@@ -141,14 +141,14 @@ test('missing or incompatible execution surfaces cannot silently exclude classif
 test('native selection must cover the declared tier and component, with exclusions explicit', () => {
   const catalogue = [
     ['FoxTrainingCoreTests/A/testOne', 'public'], ['FoxTrainingCoreTests/A/testPrivate', 'private'],
-    ['FoxJournalCoreTests/A/testOne', 'public'], ['FoxAppTests/A/testOne', 'public'],
+    ['FoxJournalCoreTests/A/testOne', 'public'], ['FoxSyncCoreTests/A/testOne', 'public'], ['FoxAppTests/A/testOne', 'public'],
     ['FoxAppTests/A/testPrivate', 'private'], ['FoxUITests/A/testOne', 'public'],
     ['FoxAppTests/A/testSpeech', 'real-speech'], ['FoxAppTests/A/testDevice', 'physical']
   ].map(([id, scope]) => ({id, scope}));
   for (const scope of ['fast', 'public', 'private']) for (const component of ['all', 'web', 'native']) {
     const expected = component === 'web' ? [] : catalogue.filter(x => x.scope === 'public'
       || scope === 'private' && ['private', 'real-speech'].includes(x.scope))
-      .filter(x => scope !== 'fast' || /^(FoxTrainingCoreTests|FoxJournalCoreTests)\//.test(x.id)).map(x => x.id);
+      .filter(x => scope !== 'fast' || /^(FoxTrainingCoreTests|FoxJournalCoreTests|FoxSyncCoreTests)\//.test(x.id)).map(x => x.id);
     const steps = [{expectedNative: expected}];
     const audit = rows => verificationContracts.auditNativeSelection(catalogue, rows, {scope, component});
     assert.doesNotThrow(() => audit(steps));
@@ -306,15 +306,17 @@ test('nested tests are discovered across native, Python and browser directories'
   const dir = await mkdtemp(path.join(tmpdir(), 'fox-discovery-test-'));
   t.after(() => rm(dir, {recursive: true, force: true}));
   const folders = ['apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests', 'apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests',
+    'apps/ipad/FoxSyncCore/Tests/FoxSyncCoreTests',
     'apps/ipad/FoxAppTests', 'apps/ipad/FoxUITests', 'tests/scripts', 'tests/e2e', 'packages/core/test', 'apps/api/test'];
   for (const folder of folders) await mkdir(path.join(dir, folder, 'nested'), {recursive: true});
   await writeFile(path.join(dir, folders[0], 'nested/Example.swift'), 'final class Example: XCTestCase {\nfunc testNested() {}\n@MainActor func testActor() {}\npublic func testPublic() {}\n}');
   await writeFile(path.join(dir, 'tests/scripts/nested/test_extra.py'), '');
+  await writeFile(path.join(dir, 'apps/ipad/FoxSyncCore/Tests/FoxSyncCoreTests/nested/Sync.swift'), 'final class Sync: XCTestCase { func testTransport() {} }');
   await writeFile(path.join(dir, 'tests/e2e/nested/extra.spec.ts'), '');
   const found = await discoverTests(dir);
-  assert.equal(found.length, 5);
+  assert.equal(found.length, 6);
   for (const id of ['FoxTrainingCoreTests/Example/testNested', 'FoxTrainingCoreTests/Example/testActor', 'FoxTrainingCoreTests/Example/testPublic',
-    'tests/scripts/nested/test_extra.py', 'tests/e2e/nested/extra.spec.ts']) {
+    'FoxSyncCoreTests/Sync/testTransport', 'tests/scripts/nested/test_extra.py', 'tests/e2e/nested/extra.spec.ts']) {
     assert.ok(found.some(row => row.id === id), id);
   }
   assert.throws(() => auditInventory(found, []), /Unclassified/);
@@ -579,6 +581,9 @@ test('native UI command preserves cases and result bundles without the unaccepte
   const args = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse).find(x => x.name === 'xcodebuild').args;
   assert.equal(args[args.indexOf('-resultBundlePath') + 1], output);
   assert.equal(args[args.indexOf('-test-timeouts-enabled') + 1], 'NO');
+  assert.ok(args.includes('CODE_SIGNING_ALLOWED=YES'));
+  assert.ok(args.includes('CODE_SIGN_IDENTITY=-'));
+  assert.ok(args.includes('DEVELOPMENT_TEAM='));
   assert.equal(args.includes('-default-test-execution-time-allowance'), false);
   assert.equal(args.includes('-maximum-test-execution-time-allowance'), false);
   assert.deepEqual(args.filter(x => x.startsWith('-only-testing:')), ids.map(x => `-only-testing:${x}`));
