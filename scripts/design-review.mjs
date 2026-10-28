@@ -38,7 +38,7 @@ export function observe(report) {
   if (!valid(report.viewport)) throw Error('Invalid viewport');
   const v = report.viewport;
   return report.elements.map(e => {
-    if (!valid(e.frame)) return { id: e.id, observation: 'unmeasurable', conclusion: 'unknown' };
+    if (!valid(e.frame)) return { ...e, observation: 'unmeasurable', conclusion: 'unknown' };
     const r = e.frame;
     const overlap = Math.max(0, Math.min(v.x + v.width, r.x + r.width) - Math.max(v.x, r.x))
       * Math.max(0, Math.min(v.y + v.height, r.y + r.height) - Math.max(v.y, r.y));
@@ -48,10 +48,10 @@ export function observe(report) {
   });
 }
 
-export function collect(resultPath, output, source = null) {
+export function collect(resultPath, output, source = null, execute = spawnSync) {
   mkdirSync(output, { recursive: true });
   const run = args => {
-    const p = spawnSync('xcrun', ['xcresulttool', ...args], { env, encoding: 'utf8', timeout: 120000, maxBuffer: 12 * 1024 * 1024 });
+    const p = execute('xcrun', ['xcresulttool', ...args], { env, encoding: 'utf8', timeout: 120000, maxBuffer: 12 * 1024 * 1024 });
     if (p.error || p.status !== 0) throw Error(p.stderr || p.error?.message || 'xcresult export failed');
     return p.stdout;
   };
@@ -68,14 +68,23 @@ export function collect(resultPath, output, source = null) {
       const bytes = readFileSync(path.join(attachments, image.exportedFileName));
       if (!bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw Error(`Invalid screenshot: ${raw.scenario}`);
     }
-    observations.push({ ...raw, test: item.test, elements: observe(raw), screenshot: image ? `attachments/${image.exportedFileName}` : null });
+    // Match both the method and complete scenario name: another scene's tree is not evidence for this one.
+    const treeName = `design-${raw.scenario}-accessibility`;
+    const trees = exported.filter(a => a.test === item.test &&
+      (a.suggestedHumanReadableName === treeName || a.suggestedHumanReadableName.startsWith(`${treeName}_`)));
+    if (trees.length > 1) throw Error(`Duplicate accessibility text: ${raw.scenario}`);
+    const tree = trees[0];
+    if (tree) readFileSync(path.join(attachments, tree.exportedFileName));
+    observations.push({ ...raw, test: item.test, elements: observe(raw),
+      screenshot: image ? `attachments/${image.exportedFileName}` : null,
+      accessibilityTree: tree ? `attachments/${tree.exportedFileName}` : null });
   }
   if (!observations.length) throw Error('No design observations exported; the result is not a design review');
   const report = { schema: 'fox.design_review.v1', generatedAt: new Date().toISOString(), source,
     resultPath, devices: summary.devicesAndConfigurations, testResult: summary.result,
     note: 'Render and geometry evidence only. No AI score, human usability or business correctness claim.', observations };
   writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
-  const panels = observations.map(s => `<section><h2>${escape(s.scenario)}</h2>${s.screenshot ? `<a href="${escape(s.screenshot)}"><img src="${escape(s.screenshot)}" alt="${escape(s.scenario)}"></a>` : '<p>Missing screenshot</p>'}<details><summary>Geometry observations</summary><pre>${escape(JSON.stringify(s.elements, null, 2))}</pre></details></section>`).join('\n');
+  const panels = observations.map(s => `<section><h2>${escape(s.scenario)}</h2>${s.screenshot ? `<a href="${escape(s.screenshot)}"><img src="${escape(s.screenshot)}" alt="${escape(s.scenario)}"></a>` : '<p>Missing screenshot</p>'}<p>${s.accessibilityTree ? `<a href="${escape(s.accessibilityTree)}">Accessibility tree text</a> (not VoiceOver acceptance)` : 'Missing accessibility text'}</p><details><summary>Geometry observations (requested target order; axQueryIndex is query enumeration only)</summary><pre>${escape(JSON.stringify(s.elements, null, 2))}</pre></details></section>`).join('\n');
   writeFileSync(path.join(output, 'index.html'), `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Fox design evidence</title><style>body{font:16px system-ui;max-width:1200px;margin:auto;padding:24px;color:#19241e;background:#f5f7f6}section{border-top:1px solid #bbc8c0;padding:24px 0}img{max-width:100%;max-height:850px;object-fit:contain}pre{white-space:pre-wrap;overflow-wrap:anywhere}h1,h2{letter-spacing:0}</style><h1>Fox design evidence</h1><p>Isolated design samples. Layout observations are not functional or usability acceptance.</p><p>Source: ${escape(source?.sha256 ?? 'unverified / collect only')}</p>${panels}</html>`);
   return report;
 }

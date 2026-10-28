@@ -5,6 +5,8 @@ import SwiftUI
 private struct HomeCardIdentity: LayoutValueKey { static let defaultValue = "" }
 
 private enum HomeTrainingRoute: Identifiable {
+    // Legacy routes: resume currently reuses trial(.curl); plan can be redirected by FoxRootView.
+    // Neither case targets a session ID. Stage-2 routing must change this explicitly, not just rename it.
     case plan, trial(TrainingActivity)
     var id: String { switch self { case .plan: return "plan"; case .trial(let exercise): return "trial-\(exercise.rawValue)" } }
     var exercise: TrainingActivity? { if case .trial(let exercise) = self { return exercise }; return nil }
@@ -21,6 +23,8 @@ private struct HomeMasonry: Layout {
     }
 
     private func positions(width: CGFloat, subviews: Subviews, cache: inout Cache) -> (points: [CGPoint], height: CGFloat) {
+        // Column affinity prevents composer growth from moving cards sideways. It does not
+        // guarantee that a reordered source array has the same visual or VoiceOver reading order.
         if cache.columns != columns { cache.columns = columns; cache.assignments = [:] }
         let keys = subviews.indices.map { subviews[$0][HomeCardIdentity.self].isEmpty ? "item-\($0)" : subviews[$0][HomeCardIdentity.self] }
         let visibleKeys = Set(keys)
@@ -112,6 +116,7 @@ struct FoxHomeView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 Label(error, systemImage: "exclamationmark.triangle")
                                 Button { Task { await trainingArchive.load() } } label: { Label("重试训练档案", systemImage: "arrow.clockwise") }
+                                    .accessibilityIdentifier("home-training-retry")
                             }.modifier(HomeCard()).layoutValue(key: HomeCardIdentity.self, value: "training-error")
                         }
                         if let notice = journal.notice {
@@ -119,6 +124,7 @@ struct FoxHomeView: View {
                                 Text(notice).font(.callout)
                                 Spacer()
                                 Button { journal.notice = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("关闭提示")
+                                    .accessibilityIdentifier("journal-dismiss-notice")
                             }.modifier(HomeCard()).layoutValue(key: HomeCardIdentity.self, value: "notice")
                         }
                         ForEach(journal.records) { record in
@@ -132,6 +138,7 @@ struct FoxHomeView: View {
                             VStack(alignment: .leading, spacing: 16) {
                                 Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
                                 Button { Task { await journal.load() } } label: { Label("重试读取", systemImage: "arrow.clockwise") }
+                                    .accessibilityIdentifier("journal-retry-load")
                             }.modifier(HomeCard())
                         } else if journal.loading {
                             ProgressView("正在读取本机记录").frame(maxWidth: .infinity, minHeight: 80)
@@ -144,6 +151,7 @@ struct FoxHomeView: View {
                         }
                         if journal.canLoadMore {
                             Button("较早记录") { Task { await journal.load(more: true) } }
+                                .accessibilityIdentifier("journal-load-more")
                                 .disabled(journal.loading).modifier(HomeCard())
                         }
                     }
@@ -233,6 +241,8 @@ struct FoxHomeView: View {
     }
 
     private var training: some View {
+        // snapshot.current means unfinished, including a never-started preparation. Keep this
+        // legacy condition until explicit preparation/start evidence and ID-based routes exist.
         VStack(alignment: .leading, spacing: 14) {
         if trainingArchive.snapshot.current != nil {
         Button { editing = false; trainingRoute = .trial(.curl) } label: {

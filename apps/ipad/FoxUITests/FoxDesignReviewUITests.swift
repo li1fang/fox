@@ -192,30 +192,37 @@ final class FoxDesignReviewUITests: XCTestCase {
     private func capture(_ id: String, app: XCUIApplication) {
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "design-\(id)"; screenshot.lifetime = .keepAlways; add(screenshot)
-        let targets = ["journal-note", "journal-save", "journal-camera", "home-training", "journal-save-error",
+        let targets = ["journal-note", "journal-save", "journal-camera", "home-training", "home-try-training", "journal-save-error",
+                       "home-training-retry", "journal-retry-load", "journal-dismiss-notice", "journal-load-more",
                        "journal-edit", "journal-edit-note", "journal-edit-save", "journal-edit-error", "journal-reload-latest", "journal-export-backup",
                        "begin-set", "manual-count", "complete-set", "pause-set", "rest-ready",
                        "submit-feedback", "confirm-summary", "actual-reps", "actual-left-reps", "actual-right-reps", "set-elapsed", "tempo-phase", "training-stage-surface", "phone-target-reps", "phone-target-weight", "phone-training-details", "workout-automatic-count", "workout-tracking-status", "diagnostic-keep", "diagnostic-discard"]
         let recordIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'journal-record-' ")).allElementsBoundByIndex.prefix(8).map(\.identifier)
         let projectionIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-training-projection-' ")).allElementsBoundByIndex.map(\.identifier)
-        let identifiers = targets + recordIDs + projectionIDs + ["journal-detail-note", "photo-zoom-level"]
+        let entryIDs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-try-' AND identifier != 'home-try-training' ")).allElementsBoundByIndex.map(\.identifier)
+        let identifiers = targets + entryIDs + recordIDs + projectionIDs + ["journal-detail-note", "photo-zoom-level"]
         // Resolve present targets together; absent IDs must not each trigger a fresh AX tree search.
         let matches = app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", identifiers)).allElementsBoundByIndex
         var firstByID: [String: XCUIElement] = [:]
-        for element in matches where firstByID[element.identifier] == nil { firstByID[element.identifier] = element }
+        var queryIndexByID: [String: Int] = [:]
+        for (index, element) in matches.enumerated() where firstByID[element.identifier] == nil {
+            firstByID[element.identifier] = element
+            queryIndexByID[element.identifier] = index
+        }
         let values: [[String: Any]] = identifiers.compactMap { identifier in
             guard let element = firstByID[identifier] else { return nil }
             return ["id": identifier, "frame": frame(element.frame), "hittable": element.isHittable,
-                    "label": element.label, "enabled": element.isEnabled]
+                    "label": element.label, "enabled": element.isEnabled, "axQueryIndex": queryIndexByID[identifier]!]
         }
         let scenario = DesignScenario(rawValue: app.launchEnvironment["FOX_DESIGN_SCENARIO"] ?? "")
         let report: [String: Any] = ["schema": "fox.design_observation.v1", "scenario": id,
             "source": "isolated-design-fixture", "viewport": frame(app.frame),
+            "elementOrder": "requested-target-order", "axQueryScope": "matched-diagnostic-targets-not-voiceover-order",
             "hostRequestedTypography": scenario?.usesLargeType == true ? "accessibility2" : "large",
             "hostRequestedAppearance": scenario?.usesDarkAppearance == true ? "dark" : "light",
             "keyboard": app.keyboards.firstMatch.exists ? frame(app.keyboards.firstMatch.frame) : NSNull(),
             "orientation": XCUIDevice.shared.orientation.rawValue, "elements": values,
-            "unknown": ["glyph-level truncation", "occlusion beyond AX visibility", "full safe-area mapping", "actual camera", "physical readability", "business correctness"]]
+            "unknown": ["glyph-level truncation", "occlusion beyond AX visibility", "full safe-area mapping", "actual camera", "physical readability", "business correctness", "actual VoiceOver reading order"]]
         let json = XCTAttachment(data: try! JSONSerialization.data(withJSONObject: report, options: [.sortedKeys, .prettyPrinted]), uniformTypeIdentifier: "public.json")
         json.name = "design-\(id)-geometry"; json.lifetime = .keepAlways; add(json)
         let tree = XCTAttachment(string: app.debugDescription)

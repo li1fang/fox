@@ -122,6 +122,8 @@ struct FoxRootView: View {
         .foregroundStyle(FoxStyle.ink)
         .preferredColorScheme(.light)
         .onAppear {
+            // Legacy single-session entry can override the requested plan/history tab. Read-only
+            // history uses HomeTrainingDetail; an explicit route must replace this in stage 2.
             if !entryConsumed, let trialExercise { store.startTrial(trialExercise) }
             entryConsumed = true
             if store.session != nil && tab != "vision" { tab = "training" }

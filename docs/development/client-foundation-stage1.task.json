@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Stage 1: document current home and training behavior, improve existing synthetic text observations, and specify session routing and service-card consumer contracts before implementation",
+  "nonGoals": ["Stage 2 multi-session or route behavior changes", "A production decision engine or voice processing", "Full CAPTURE-01 implementation", "Private records, devices, synchronization changes, deployment or CI changes"],
+  "invariants": ["The shared maintenance checkout remains untouched by this task", "One writer in the isolated worktree; subagents are read-only", "Existing routes, counts, timing, saved records and selector meanings remain unchanged", "Synthetic observations do not prove runtime behavior or human usability", "Silence is unknown; a recommendation is not a user fact"],
+  "modules": ["apps/ipad/FoxUITests/FoxDesignReviewUITests.swift", "apps/ipad/FoxNative/FoxHomeView.swift", "apps/ipad/FoxNative/FoxRootView.swift", "scripts/design-review.mjs", "tests/scripts/design-review.test.mjs", "docs/development"],
+  "acceptance": ["test:scripts", "verify:repository"],
+  "stopConditions": ["Conflicting writer or unexpected baseline change in the isolated worktree", "Uncertain disclosure rights or record preservation", "Missing toolchain or lease for a required native run", "A change requires new product semantics beyond the supplied decisions"],
+  "evidence": ["Before/after targeted design-review script tests with first failure retained", "Repository task/link/public-file/catalogue checks", "Swift syntax check, explicitly not type checking or UI execution", "Fresh-context read-only review before the local commit", "Final isolated branch identity and clean status"],
+  "humanUnknowns": ["Reported home interactions have not been reproduced on a physical device in this task", "Real VoiceOver reading order, usability and actual camera timing require separate trials", "Requested Astra Ultra settings and default speed are distinct from settings verifiable in this runtime"]
+}
