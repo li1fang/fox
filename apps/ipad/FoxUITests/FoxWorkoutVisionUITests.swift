@@ -73,7 +73,7 @@ final class FoxWorkoutVisionUITests: XCTestCase {
         app.buttons["confirm-summary"].tap()
         XCTAssertTrue(app.buttons["record-confirmed"].waitForExistence(timeout: 5))
         app.terminate(); app.launchArguments = []; app.launch()
-        app.buttons["记录"].tap(); app.buttons["record-confirmed"].tap()
+        app.openOnlyConfirmedTrainingHistory()
         XCTAssertTrue(app.staticTexts["左 3 / 右 2 次"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(app.webViews.count, 0)
     }
@@ -132,7 +132,7 @@ final class FoxWorkoutVisionUITests: XCTestCase {
         app.buttons["confirm-summary"].tap()
         XCTAssertTrue(app.buttons["record-confirmed"].waitForExistence(timeout: 5))
         app.terminate(); app.launchArguments = []; app.launchEnvironment["FOX_UI_FAIL_EARLY_END_ONCE"] = nil; app.launch()
-        app.buttons["记录"].tap(); app.buttons["record-confirmed"].tap()
+        app.openOnlyConfirmedTrainingHistory()
         XCTAssertTrue(app.staticTexts["视觉观测：左臂 2 次"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["次数未确认"].firstMatch.exists)
     }

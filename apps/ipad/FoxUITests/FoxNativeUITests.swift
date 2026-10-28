@@ -155,13 +155,10 @@ final class FoxNativeUITests: XCTestCase {
         app.terminate()
         app.launchArguments = []
         app.launch()
-        app.buttons["记录"].tap()
-        XCTAssertTrue(app.buttons["record-confirmed"].waitForExistence(timeout: 5))
-        app.buttons["record-confirmed"].tap()
-        XCTAssertTrue(app.scrollViews["record-detail"].waitForExistence(timeout: 5))
+        let detail = app.openOnlyConfirmedTrainingHistory()
         XCTAssertTrue(app.staticTexts["左 12 / 右 未确认 次"].firstMatch.exists)
         let review = app.staticTexts["软件问题：语音反馈测试"]
-        for _ in 0..<8 { if review.exists { break }; app.scrollViews["record-detail"].swipeUp() }
+        for _ in 0..<8 { if review.exists { break }; detail.swipeUp() }
         XCTAssertTrue(review.exists)
         XCTAssertEqual(app.webViews.count, 0)
     }
@@ -203,6 +200,25 @@ final class FoxNativeUITests: XCTestCase {
 }
 
 extension XCUIApplication {
+    @discardableResult
+    func openOnlyConfirmedTrainingHistory(file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let history = segmentedControls.buttons["记录"].firstMatch
+        XCTAssertTrue(history.waitForExistence(timeout: 5), file: file, line: line)
+        history.tap()
+        XCTAssertTrue(descendants(matching: .any).matching(identifier: "home-history-list").firstMatch.waitForExistence(timeout: 5), file: file, line: line)
+        let rows = buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "home-history-"))
+        XCTAssertEqual(rows.count, 1, file: file, line: line)
+        let row = rows.firstMatch, id = row.identifier
+        XCTAssertNotNil(UUID(uuidString: String(id.dropFirst("home-history-".count))), file: file, line: line)
+        XCTAssertTrue(row.label.contains("已确认训练回顾"), file: file, line: line)
+        buttons[id].tap()
+        let detail = scrollViews["home-training-detail"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(staticTexts["本机档案 · 只读"].exists, file: file, line: line)
+        XCTAssertFalse(buttons["begin-set"].exists, file: file, line: line)
+        return detail
+    }
+
     func dismissNumericKeyboardPopover(file: StaticString = #filePath, line: UInt = #line) {
         // iPad's Chinese numeric popover blocks other fields and commands.
         // Close only that overlay; keep the keyboard and input/layout assertions.

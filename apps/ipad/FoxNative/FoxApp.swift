@@ -28,7 +28,7 @@ struct FoxApp: App {
             } else if ProcessInfo.processInfo.environment["FOX_START_SCREEN"] == "vision" ||
                 ProcessInfo.processInfo.environment["FOX_START_SCREEN"] == "training" ||
                 ProcessInfo.processInfo.environment["FOX_PREPARE_DAY1_DRAFT"] == "1" {
-                FoxRootView()
+                FoxRootView(initialTab: ProcessInfo.processInfo.environment["FOX_START_SCREEN"] == "training" ? "training" : nil)
             } else {
                 FoxHomeView()
             }
