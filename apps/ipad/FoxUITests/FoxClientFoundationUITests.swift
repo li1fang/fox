@@ -31,6 +31,35 @@ final class FoxClientFoundationUITests: XCTestCase {
         reveal(element, in: app, file: file, line: line)
         element.tap()
     }
+    private func tapHomeCard(_ id: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let element = app.buttons[id], scroll = app.scrollViews.firstMatch, bar = app.navigationBars["Fox"]
+        XCTAssertTrue(element.waitForExistence(timeout: 5), id, file: file, line: line)
+        XCTAssertTrue(scroll.exists && bar.exists, "Home content required", file: file, line: line)
+        func viewport() -> CGRect {
+            let bounds = app.windows.firstMatch.frame.intersection(scroll.frame)
+            let top = max(bounds.minY, bar.frame.maxY)
+            return CGRect(x: bounds.minX, y: top, width: bounds.width, height: max(0, bounds.maxY - top))
+        }
+        func visible() -> Bool {
+            element.exists && element.isEnabled && element.isHittable && !element.frame.isEmpty && viewport().contains(element.frame)
+        }
+        // Home scrolls beneath its navigation bar. A window intersection can
+        // accept a covered label, so reveal it inside the actual content area.
+        for _ in 0..<18 {
+            if visible() { break }
+            let bounds = viewport(), distance = min(100, bounds.height * 0.25)
+            let down = element.frame.midY < bounds.midY
+            let startY = bounds.midY + (down ? -distance / 2 : distance / 2)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: bounds.minX + min(40, bounds.width * 0.15), dy: startY))
+            let end = origin.withOffset(CGVector(dx: bounds.minX + min(40, bounds.width * 0.15), dy: startY + (down ? distance : -distance)))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        let ready = visible()
+        if !ready { print("FOX_HOME_CARD_TARGET_NOT_READY \(id)\n\(app.debugDescription)") }
+        XCTAssertTrue(ready, id, file: file, line: line)
+        element.tap()
+    }
     private func ids(_ prefix: String, in app: XCUIApplication) -> [String] {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).allElementsBoundByIndex.map(\.identifier)
     }
@@ -163,18 +192,18 @@ final class FoxClientFoundationUITests: XCTestCase {
         let accepted = app.staticTexts.matching(NSPredicate(format: "label == %@", "已接收"))
         XCTAssertEqual(accepted.count, 0, "Silence is not an answer")
         XCTAssertFalse(app.buttons["home-try-kegel"].exists, "The capability chooser has not been opened")
-        tap("home-card-foundation-skip-action-skip", in: app)
+        tapHomeCard("home-card-foundation-skip-action-skip", in: app)
         let skipped = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in accepted.count == 1 }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [skipped], timeout: 5), .completed)
-        tap("home-card-foundation-answer-choice-begin", in: app)
-        tap("只看文字", in: app)
-        tap("home-card-foundation-answer-choice-done", in: app)
-        tap("home-card-foundation-answer-action-answer", in: app)
+        tapHomeCard("home-card-foundation-answer-choice-begin", in: app)
+        tapHomeCard("只看文字", in: app)
+        tapHomeCard("home-card-foundation-answer-choice-done", in: app)
+        tapHomeCard("home-card-foundation-answer-action-answer", in: app)
         let answered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in accepted.count == 2 }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [answered], timeout: 5), .completed)
         let expired = app.buttons["home-card-foundation-expired-action-prepare"]
         reveal(expired, in: app); XCTAssertFalse(expired.isEnabled)
-        tap("home-card-foundation-kegel-action-prepare", in: app)
+        tapHomeCard("home-card-foundation-kegel-action-prepare", in: app)
         assertPreparation(app, activity: "凯格尔")
         XCTAssertFalse(app.buttons["training-vision-toggle"].isEnabled)
         XCTAssertFalse(app.buttons["rebind-vision-set"].isEnabled)
@@ -184,7 +213,7 @@ final class FoxClientFoundationUITests: XCTestCase {
         let original = ids("home-preparation-", in: app)[0]
         tap("home-prepare-curl", in: app); assertPreparation(app, activity: "弯举"); home(app)
         waitCount("home-preparation-", 2, in: app)
-        tap("home-card-foundation-kegel-action-prepare", in: app)
+        tapHomeCard("home-card-foundation-kegel-action-prepare", in: app)
         assertPreparation(app, activity: "凯格尔"); home(app)
         waitCount("home-preparation-", 2, in: app)
         XCTAssertTrue(app.buttons[original].exists, "Reusing the same suggestion must select its original preparation")

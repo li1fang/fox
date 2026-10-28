@@ -79,8 +79,8 @@ final class FoxAdaptiveUITests: XCTestCase {
         tap(app.buttons["confirm-summary"], in: app)
         XCTAssertTrue(app.buttons["record-confirmed"].waitForExistence(timeout: 5))
         app.terminate(); app.launchArguments = []; app.launch()
-        XCTAssertTrue(app.buttons["记录"].waitForExistence(timeout: 5)); app.buttons["记录"].tap()
-        XCTAssertTrue(app.buttons["record-confirmed"].waitForExistence(timeout: 5))
+        app.openOnlyConfirmedTrainingHistory()
+        XCTAssertTrue(app.staticTexts["左 8 / 右 未确认 次"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testVisualCounterAndReportSurviveAdaptiveRotation() {
