@@ -2,13 +2,14 @@ import Foundation
 import XCTest
 
 final class FoxClientFoundationUITests: XCTestCase {
-    private func launch(serviceCards: Bool = false) -> XCUIApplication {
+    private func launch(serviceCards: Bool = false, failSwitch: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         // The existing denied fixture bypasses the real camera and exercises the manual path.
         app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_POSE_FIXTURE": "denied"]
         if serviceCards { app.launchEnvironment["FOX_UI_SERVICE_CARDS"] = "foundation" }
+        if failSwitch { app.launchEnvironment["FOX_UI_FAIL_SWITCH_ONCE"] = "1" }
         app.launchArguments = ["--ui-testing-reset"]
         app.launch()
         XCTAssertTrue(app.buttons["home-prepare-curl"].waitForExistence(timeout: 10))
@@ -62,6 +63,20 @@ final class FoxClientFoundationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["pause-set"].exists)
     }
 
+    func testDismissedSwitchErrorKeepsVisibleRetryAndCreatesOnlyOnePreparation() {
+        let app = launch(failSwitch: true)
+        tap("home-prepare-curl", in: app)
+        XCTAssertTrue(app.alerts["操作未完成"].waitForExistence(timeout: 5))
+        app.alerts["操作未完成"].buttons["知道了"].tap()
+        XCTAssertTrue(app.buttons["training-retry-switch"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["begin-set"].exists)
+        tap("training-retry-switch", in: app)
+        assertPreparation(app, activity: "弯举")
+        home(app)
+        waitCount("home-preparation-", 1, in: app)
+        XCTAssertTrue(ids("home-resume-", in: app).isEmpty)
+    }
+
     func testPreparationsSurviveRelaunchRemainDistinctAndHistoryIsReadOnly() {
         let app = launch()
         tap("home-prepare-curl", in: app); assertPreparation(app, activity: "弯举"); home(app)
@@ -80,6 +95,11 @@ final class FoxClientFoundationUITests: XCTestCase {
         guard let b = both.subtracting([a]).first else { XCTFail("The second preparation is missing"); return }
         let bID = sessionID(b, prefix: "home-preparation-")
         XCTAssertNotEqual(aID, bID)
+        app.terminate(); app.launchArguments = []; app.launch()
+        XCTAssertTrue(app.buttons[a].waitForExistence(timeout: 10))
+        waitCount("home-preparation-", 2, in: app)
+        XCTAssertEqual(Set(ids("home-preparation-", in: app)), both)
+        XCTAssertTrue(ids("home-resume-", in: app).isEmpty)
         tap(a, in: app); assertPreparation(app, activity: "弯举"); home(app)
         waitCount("home-preparation-", 2, in: app)
         XCTAssertEqual(Set(ids("home-preparation-", in: app)), both)
@@ -126,6 +146,9 @@ final class FoxClientFoundationUITests: XCTestCase {
         let review = "home-review-\(aID)"
         XCTAssertTrue(app.buttons[review].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons[a].exists)
+        app.terminate(); app.launchArguments = []; app.launch()
+        XCTAssertTrue(app.buttons[review].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons[b].exists)
         tap(b, in: app); assertPreparation(app, activity: "凯格尔"); home(app); tap(review, in: app)
         XCTAssertTrue(app.textFields["actual-left-reps"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["actual-left-reps"].value as? String, "2")

@@ -13,9 +13,9 @@ final class GuidanceOutputTests: XCTestCase {
         func stop() { stops += 1 }
     }
     private func input(_ t: Double, count: Int = 0, stage: GuidanceStage = .active,
-                       phase: CurlPhase = .lowered, quality: PoseQuality = .valid, attempt: String = "1") -> GuidanceInput {
+                       phase: CurlPhase = .lowered, quality: PoseQuality = .valid, attempt: String = "1", generation: String? = nil) -> GuidanceInput {
         var snapshot = CurlSnapshot(); snapshot.phase = phase; snapshot.quality = quality; snapshot.trackingState = .tracking
-        return .init(context: .init(sessionID: "test", attemptID: attempt, observationID: "1"), time: t,
+        return .init(context: .init(sessionID: "test", attemptID: attempt, observationID: "1", executionGeneration: generation), time: t,
             stage: stage, exercise: .curl, mode: .observed, count: count, targetReps: 5,
             motion: .init(observedAt: t, snapshot: snapshot), tempo: [], elapsed: t)
     }
@@ -107,5 +107,27 @@ final class GuidanceOutputTests: XCTestCase {
         XCTAssertTrue(driver.submitted.isEmpty)
         now = 0.3; output.update(input(now, count: 2))
         XCTAssertEqual(driver.submitted.count, 1)
+    }
+
+    func testReturningToSameAttemptWithNewGenerationRejectsOldSpeechEvents() throws {
+        let driver = Driver(); var now = 0.0
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        let output = GuidanceOutputController(driver: driver, now: { now })
+        output.update(input(now, generation: "A1"))
+        now = 0.1; output.update(input(now, count: 1, generation: "A1"))
+        let old = try XCTUnwrap(driver.submitted.last)
+        for generation in ["B", "A2"] {
+            now += 1; output.update(input(now, generation: generation))
+            now += 0.1; output.update(input(now, count: 1, generation: generation))
+            let current = try XCTUnwrap(driver.submitted.last)
+            XCTAssertEqual(current.context.executionGeneration, generation)
+            XCTAssertNotEqual(current.id, old.id)
+            let events = try encoder.encode(output.events), submitted = driver.submitted.count
+            driver.onEvent?(old.id, .started); driver.onEvent?(old.id, .finished); driver.onEvent?(old.id, .cancelled)
+            XCTAssertEqual(try encoder.encode(output.events), events)
+            XCTAssertEqual(driver.submitted.count, submitted)
+            driver.onEvent?(current.id, .started)
+            XCTAssertTrue(output.events.contains { $0.cueID == current.id && $0.state == "started" })
+        }
     }
 }

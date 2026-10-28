@@ -78,7 +78,7 @@ final class HomeTrainingDispatcher: ObservableObject {
             if store.executionBlocked {
                 pendingRequest = request
                 pendingRequestID = requestID
-            }
+            } else { retainedStore = nil }
             throw Failure.entryRejected(store.errorMessage ?? "操作未完成，原有训练仍保留。")
         }
         return try presentation(store: store, requestID: requestID)

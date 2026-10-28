@@ -123,10 +123,13 @@ final class HomeServiceCardStore: ObservableObject {
                 if receipt.outcome != .retryableFailure { error = nil; return }
             }
             try consumer.receive(await provider.submit(submission)); error = nil
-        } catch { error = "暂未取得接收回执，原提交仍保留，可重试核对。" }
+        } catch { self.error = "暂未取得接收回执，原提交仍保留，可重试核对。" }
     }
     func localKey(card: ServiceCard, action: ServiceCardAction) -> String {
         "\(consumer.providerID)/\(card.id)/\(card.revision)/\(action.id)"
+    }
+    func acknowledgeLocal(requestID: UUID) {
+        for (key, id) in localRequests where id == requestID { localErrors[key] = nil }
     }
     func performLocal(card: ServiceCard, action: ServiceCardAction,
                       execute: (ServiceCard, ServiceCardAction, UUID) async throws -> Void) async {
@@ -196,6 +199,7 @@ struct HomeServiceCardsView: View {
             // Unresolved submissions remain reachable even when a withdrawn card had no text draft.
             ForEach(orphanSubmissions, id: \.submission.id) { state in submissionRow(state) }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home-service-cards")
         .accessibilityValue("applied:\(store.consumer.appliedFeed?.revision ?? 0);pending:\(store.consumer.pendingFeed?.revision ?? 0);reading-held:\(store.consumer.reading)")
         .task { await store.refresh() }
@@ -228,7 +232,8 @@ struct HomeServiceCardsView: View {
                             }
                             Button("完成选择") { store.endChoiceEditing(card) }
                                 .frame(minHeight: 44).accessibilityIdentifier("home-card-\(card.id)-choice-done")
-                        }.accessibilityIdentifier("home-card-\(card.id)-choice-editor")
+                        }.accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("home-card-\(card.id)-choice-editor")
                     } else {
                         if !store.draft(card).isEmpty { Text("已选择：\(store.draft(card))") }
                         Button(store.draft(card).isEmpty ? "选择回答" : "修改选择") {
@@ -256,6 +261,7 @@ struct HomeServiceCardsView: View {
             submissionRows(key: key)
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home-card-\(card.id)")
     }
     private func actionButton(_ card: ServiceCard, action: ServiceCardAction) -> some View {
@@ -290,7 +296,8 @@ struct HomeServiceCardsView: View {
                     Button("重试核对") { Task { await store.retry(state.submission.id) } }.frame(minHeight: 44)
                 }
             }
-        }.font(.caption).accessibilityIdentifier("home-submission-\(state.submission.id)")
+        }.font(.caption).accessibilityElement(children: .contain)
+            .accessibilityIdentifier("home-submission-\(state.submission.id)")
     }
     private func availabilityText(_ availability: ServiceCardAvailability) -> String {
         switch availability {

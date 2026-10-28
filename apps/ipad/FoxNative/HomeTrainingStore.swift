@@ -6,6 +6,8 @@ struct HomeTrainingSnapshot: Equatable {
     var plan: TrainingPlan?
     var current: TrainingSession?
     var confirmed: [TrainingSession] = []
+    var sessions: [TrainingSession] = []
+    var unfinished: [TrainingSession] { sessions.filter { !$0.isFinished } }
 
     // Do not construct LocalTrainingRepository here: its recovery path can persist a paused session.
     static func read(from url: URL) throws -> Self {
@@ -17,7 +19,7 @@ struct HomeTrainingSnapshot: Equatable {
         return Self(plan: archive.plan, current: archive.currentSession,
             confirmed: Array(archive.sessions.filter(\.isFinished).sorted {
                 ($0.confirmedAt ?? $0.startedAt) > ($1.confirmedAt ?? $1.startedAt)
-            }.prefix(2)))
+            }.prefix(2)), sessions: archive.sessions)
     }
 }
 
@@ -102,6 +104,31 @@ struct TrainingPlanOverview: View {
             }
             Text(plan.cooldown).foregroundStyle(.secondary)
             Text(plan.safetyNotes).font(.callout).foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct HomeTrainingHistory: View {
+    let snapshot: HomeTrainingSnapshot
+    let close: () -> Void
+    @State private var selected: HomeTrainingSelection?
+    var body: some View {
+        NavigationStack {
+            List {
+                if snapshot.sessions.isEmpty { Text("还没有训练记录") }
+                ForEach(snapshot.sessions.reversed()) { session in
+                    Button { selected = .session(session) } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(session.plan.focus).font(.headline)
+                            Text(session.isFinished ? "已确认训练回顾" : session.entryTitle)
+                            Text(session.startedAt, format: .dateTime.year().month().day().hour().minute()).font(.caption)
+                        }
+                    }.accessibilityIdentifier("home-history-\(session.id)")
+                }
+            }.navigationTitle("训练记录")
+                .accessibilityIdentifier("home-history-list")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成", action: close) } }
+                .sheet(item: $selected) { value in HomeTrainingDetail(selection: value) { selected = nil } }
         }
     }
 }

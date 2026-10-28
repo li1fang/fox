@@ -185,6 +185,9 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
     public private(set) var currentWeightConfirmation: WeightConfirmation? = nil
     public private(set) var endedEarly = false
     public var summaryNote = ""
+    public private(set) var actualStartedAt: Date?
+    public private(set) var executionStartKnown: Bool? = true
+    public var clientState: TrainingClientState?
     public private(set) var currentSetAttemptId: UUID? = UUID()
     public private(set) var currentObservationId: UUID? = nil
     public private(set) var currentVisualEvidence: WorkoutVisualEvidence? = nil
@@ -256,6 +259,8 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
             accumulatedSeconds = 0
             setStartedAt = now
         }
+        if actualStartedAt == nil { actualStartedAt = now }
+        executionStartKnown = true
         stage = .active
         segmentStartedAt = now
         lastCheckpointAt = now
@@ -511,14 +516,40 @@ public struct TrainingArchive: Codable, Equatable {
     public var schemaVersion = 1
     public var plan = TrainingPlan.starter
     public var sessions: [TrainingSession] = []
+    public var foregroundSessionID: UUID?
+    public var revision: Int? = 0
+    public var commandReceipts: [TrainingSessionReceipt]? = []
     public init() {}
-    public var currentSession: TrainingSession? { sessions.last(where: { !$0.isFinished }) }
+    public var currentSession: TrainingSession? {
+        schemaVersion == 1 ? sessions.last(where: { !$0.isFinished }) : sessions.first { $0.id == foregroundSessionID && !$0.isFinished }
+    }
+    mutating func promote() {
+        if schemaVersion == 1 { foregroundSessionID = currentSession?.id; schemaVersion = 2 }
+        revision = revision ?? 0; commandReceipts = commandReceipts ?? []
+    }
 
     public func validate() throws {
-        guard schemaVersion == 1 else { throw TrainingError.unsupportedVersion }
+        guard [1, 2].contains(schemaVersion) else { throw TrainingError.unsupportedVersion }
         try plan.validate()
-        guard sessions.filter({ !$0.isFinished }).count <= 1,
+        guard (schemaVersion == 2 || sessions.filter({ !$0.isFinished }).count <= 1),
               Set(sessions.map(\.id)).count == sessions.count else { throw TrainingError.corruptArchive }
+        if schemaVersion == 2 {
+            guard (revision ?? -1) >= 0,
+                  foregroundSessionID == nil || currentSession != nil,
+                  sessions.allSatisfy({ $0.id == foregroundSessionID || ($0.stage != .active && $0.currentObservationId == nil && $0.segmentStartedAt == nil) }),
+                  Set((commandReceipts ?? []).map(\.command.id)).count == (commandReceipts ?? []).count else { throw TrainingError.corruptArchive }
+            for receipt in commandReceipts ?? [] {
+                guard sessions.contains(where: { $0.id == receipt.sessionID }) else { throw TrainingError.corruptArchive }
+                if case .existing(let id) = receipt.command.target, id != receipt.sessionID { throw TrainingError.corruptArchive }
+            }
+            var owners: [UUID: UUID] = [:]
+            for session in sessions {
+                for attempt in Set(session.records.map(\.id) + [session.currentSetAttemptId].compactMap { $0 }) {
+                    guard owners[attempt] == nil || owners[attempt] == session.id else { throw TrainingError.corruptArchive }
+                    owners[attempt] = session.id
+                }
+            }
+        }
         for session in sessions {
             try session.plan.validate()
             guard session.plan.exercises.indices.contains(session.exerciseIndex),
@@ -575,9 +606,16 @@ public struct TrainingArchive: Codable, Equatable {
 }
 
 public final class LocalTrainingRepository {
+    // The app owns one writer. Serialize cached repositories in this process so the
+    // byte comparison and atomic publication cannot race each other. This is not
+    // a shared-file protocol for independent processes or devices.
+    private static let persistenceLock = NSLock()
     public let fileURL: URL
     public private(set) var archive: TrainingArchive
     private let writer: (Data, URL) throws -> Void
+    private var loadedBytes: Data?
+    public var revision: Int { archive.revision ?? 0 }
+    public var legacyBackupURL: URL { fileURL.appendingPathExtension("v1-original") }
 
     public static func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()
@@ -613,7 +651,10 @@ public final class LocalTrainingRepository {
         self.writer = writer
         if FileManager.default.fileExists(atPath: fileURL.path) {
             do {
-                archive = try Self.decoder().decode(TrainingArchive.self, from: Data(contentsOf: fileURL))
+                let bytes = try Data(contentsOf: fileURL)
+                guard bytes.count <= 64 * 1024 * 1024 else { throw TrainingError.corruptArchive }
+                loadedBytes = bytes
+                archive = try Self.decoder().decode(TrainingArchive.self, from: bytes)
             } catch { throw TrainingError.corruptArchive }
             try archive.validate()
         } else {
@@ -626,20 +667,36 @@ public final class LocalTrainingRepository {
             if recovered.sessions[index].stage == .active {
                 try recovered.sessions[index].pause(at: recovered.sessions[index].lastCheckpointAt)
             }
-            try persist(recovered)
+            if archive.schemaVersion == 1 { archive = recovered }
+            else { recovered.revision = revision + 1; try persist(recovered) }
         }
     }
 
     public func update(_ mutate: (inout TrainingArchive) throws -> Void) throws {
         var next = archive
+        next.promote()
         try mutate(&next)
+        if next.sessions.first(where: { $0.id == next.foregroundSessionID })?.isFinished == true { next.foregroundSessionID = nil }
+        next.revision = revision + 1
         try next.validate()
         try persist(next)
     }
 
     private func persist(_ next: TrainingArchive) throws {
+        Self.persistenceLock.lock()
+        defer { Self.persistenceLock.unlock() }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try writer(Self.encoder().encode(next), fileURL)
+        let disk = FileManager.default.fileExists(atPath: fileURL.path) ? try Data(contentsOf: fileURL) : nil
+        guard disk == loadedBytes else { throw TrainingError.invalidTransition }
+        if archive.schemaVersion == 1, let original = loadedBytes {
+            if FileManager.default.fileExists(atPath: legacyBackupURL.path) {
+                guard try Data(contentsOf: legacyBackupURL) == original else { throw TrainingError.corruptArchive }
+            } else { try original.write(to: legacyBackupURL, options: .withoutOverwriting) }
+            guard try Data(contentsOf: legacyBackupURL) == original else { throw TrainingError.corruptArchive }
+        }
+        let data = try Self.encoder().encode(next)
+        try writer(data, fileURL)
+        loadedBytes = data
         archive = next
     }
 
@@ -647,14 +704,62 @@ public final class LocalTrainingRepository {
         try update { archive in
             guard archive.currentSession == nil else { throw TrainingError.activeSessionExists }
             archive.plan = plan
-            archive.sessions.append(try TrainingSession(plan: plan, now: now))
+            let session = try TrainingSession(plan: plan, now: now)
+            archive.sessions.append(session)
+            archive.foregroundSessionID = session.id
         }
     }
 
     public func updateCurrent(_ mutate: (inout TrainingSession) throws -> Void) throws {
+        guard let id = archive.currentSession?.id else { throw TrainingError.invalidTransition }
+        try updateSession(id: id, mutate)
+    }
+
+    public func updateSession(id: UUID, _ mutate: (inout TrainingSession) throws -> Void) throws {
         try update { archive in
-            guard let index = archive.sessions.lastIndex(where: { !$0.isFinished }) else { throw TrainingError.invalidTransition }
+            guard archive.foregroundSessionID == id,
+                  let index = archive.sessions.firstIndex(where: { $0.id == id && !$0.isFinished }) else { throw TrainingError.invalidTransition }
             try mutate(&archive.sessions[index])
         }
+    }
+
+    public func switchSnapshot() -> TrainingSwitchSnapshot? {
+        archive.currentSession.map { TrainingSwitchSnapshot(session: $0, original: $0, revision: revision) }
+    }
+
+    @discardableResult
+    public func switchForeground(_ command: TrainingSessionCommand, expectedRevision: Int, at now: Date,
+                                 preserving snapshot: TrainingSwitchSnapshot? = nil) throws -> UUID {
+        if let receipt = archive.commandReceipts?.first(where: { $0.command.id == command.id }) {
+            guard receipt.command == command else { throw TrainingError.invalidTransition }
+            return receipt.sessionID
+        }
+        guard expectedRevision == revision else { throw TrainingError.invalidTransition }
+        var selected: UUID?
+        try update { archive in
+            // Validate the destination before touching A. Never infer a target from list order.
+            if case .existing(let id) = command.target {
+                guard archive.sessions.contains(where: { $0.id == id && !$0.isFinished }) else { throw TrainingError.invalidTransition }
+            }
+            if let source = archive.currentSession,
+               let index = archive.sessions.firstIndex(where: { $0.id == source.id }) {
+                if let snapshot {
+                    guard snapshot.revision == expectedRevision, snapshot.original == source,
+                          snapshot.session.id == source.id, snapshot.session.currentSetAttemptId == source.currentSetAttemptId else { throw TrainingError.invalidTransition }
+                    archive.sessions[index] = snapshot.session
+                }
+                if archive.sessions[index].stage == .active { try archive.sessions[index].pause(at: now) }
+                else if archive.sessions[index].currentObservationId != nil { try archive.sessions[index].cancelVisualPreparation(at: now) }
+            }
+            switch command.target {
+            case .existing(let id): selected = id
+            case .new(let plan):
+                let session = try TrainingSession(plan: plan, now: now)
+                selected = session.id; archive.sessions.append(session)
+            }
+            archive.foregroundSessionID = selected
+            archive.commandReceipts!.append(TrainingSessionReceipt(command: command, sessionID: selected!))
+        }
+        return selected!
     }
 }

@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Explicit home routes, preserved unfinished training sessions with one execution owner, and injectable service question and suggestion consumers",
+  "nonGoals": ["Full CAPTURE-01", "Real recommendation or analysis service", "Private input or device access", "Installation, signing, push, merge, synchronization service or CI changes", "Stage 3 complete candidate acceptance"],
+  "invariants": ["Root is the sole writer in the original isolated worktree", "Viewing history does not write or migrate records", "Execution start is not an observed completed movement", "Unknown historical facts stay unknown", "Switch failure never publishes the destination; stale execution generations cannot write", "Migration preserves the original bytes before atomic publication", "Silence is not an answer and service acceptance is only receipt", "Input is retained across expiry and deferred feed ordering"],
+  "modules": ["apps/ipad/FoxTrainingCore", "apps/ipad/FoxNative", "apps/ipad/FoxAppTests", "apps/ipad/FoxUITests", "tests/verification/catalogue.json", "docs/development"],
+  "acceptance": ["test:native", "test:ipad:ui", "verify:repository"],
+  "stopConditions": ["Conflicting writer or changing baseline", "Unable to preserve legacy records", "Missing required toolchain or shared resource lease", "New product semantics beyond the accepted contract"],
+  "evidence": ["Failure regressions before implementation for S1-S10", "Core and focused App-host/UI tests with retained failures", "Actual old decoder rejects new archive", "Fresh-context review before freezing the local candidate", "Exact commit and remaining stage 3 coverage"],
+  "humanUnknowns": ["Physical camera and VoiceOver", "Production service intelligence", "No independent Ultra or speed setting receipt"]
+}

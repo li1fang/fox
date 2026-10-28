@@ -4,10 +4,11 @@ public struct GuidanceContext: Codable, Equatable {
     public var sessionID: String
     public var attemptID: String
     public var observationID: String
-    public init(sessionID: String, attemptID: String, observationID: String) {
-        self.sessionID = sessionID; self.attemptID = attemptID; self.observationID = observationID
+    public var executionGeneration: String?
+    public init(sessionID: String, attemptID: String, observationID: String, executionGeneration: String? = nil) {
+        self.sessionID = sessionID; self.attemptID = attemptID; self.observationID = observationID; self.executionGeneration = executionGeneration
     }
-    public var key: String { "\(sessionID)/\(attemptID)/\(observationID)" }
+    public var key: String { "\(sessionID)/\(attemptID)/\(observationID)" + (executionGeneration.map { "/\($0)" } ?? "") }
 }
 
 public enum GuidanceMode: String, Codable, CaseIterable { case observed, planned, off }

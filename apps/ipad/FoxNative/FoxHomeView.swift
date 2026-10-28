@@ -4,14 +4,6 @@ import SwiftUI
 
 private struct HomeCardIdentity: LayoutValueKey { static let defaultValue = "" }
 
-private enum HomeTrainingRoute: Identifiable {
-    // Legacy routes: resume currently reuses trial(.curl); plan can be redirected by FoxRootView.
-    // Neither case targets a session ID. Stage-2 routing must change this explicitly, not just rename it.
-    case plan, trial(TrainingActivity)
-    var id: String { switch self { case .plan: return "plan"; case .trial(let exercise): return "trial-\(exercise.rawValue)" } }
-    var exercise: TrainingActivity? { if case .trial(let exercise) = self { return exercise }; return nil }
-}
-
 private struct HomeMasonry: Layout {
     let columns: Int
     let spacing: CGFloat = 16
@@ -71,15 +63,22 @@ struct FoxHomeView: View {
     @StateObject private var journal: JournalStore
     @StateObject private var photos: JournalPhotoSelection
     @StateObject private var trainingArchive: HomeTrainingStore
+    @StateObject private var serviceCards: HomeServiceCardStore
+    @StateObject private var trainingDispatcher = HomeTrainingDispatcher()
+    @State private var servicePresentation: HomeTrainingDispatcher.Presentation?
+    @State private var serviceRecoveryError: String?
     private let automaticallyLoad: Bool
-    init(journal: JournalStore? = nil, photos: JournalPhotoSelection? = nil, trainingArchive: HomeTrainingStore? = nil, automaticallyLoad: Bool = true) {
+    init(journal: JournalStore? = nil, photos: JournalPhotoSelection? = nil, trainingArchive: HomeTrainingStore? = nil, automaticallyLoad: Bool = true, serviceCards: HomeServiceCardStore? = nil) {
         _journal = StateObject(wrappedValue: journal ?? JournalStore()); _photos = StateObject(wrappedValue: photos ?? JournalPhotoSelection())
         _trainingArchive = StateObject(wrappedValue: trainingArchive ?? HomeTrainingStore())
+        _serviceCards = StateObject(wrappedValue: serviceCards ?? ClientServiceFixture.makeIfEnabled() ?? HomeServiceCardStore())
         self.automaticallyLoad = automaticallyLoad
     }
     @FocusState private var editing: Bool
     @State private var selected: CaptureRecord?
-    @State private var trainingRoute: HomeTrainingRoute?
+    @State private var trainingRoute: TrainingEntry?
+    @State private var showingHistory = false
+    @State private var showingCapabilities = false
     @State private var showingBackup = false
     @State private var trainingSelection: HomeTrainingSelection?
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -156,6 +155,10 @@ struct FoxHomeView: View {
                         }
                     }
                     .padding(16)
+                    if trainingDispatcher.pendingRequestID != nil { serviceRecovery.padding(16) }
+                    if serviceCards.provider != nil {
+                        HomeServiceCardsView(store: serviceCards, onAction: serviceAction).padding(16)
+                    }
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .background(Color(uiColor: .systemGroupedBackground))
@@ -173,8 +176,30 @@ struct FoxHomeView: View {
                 }
             }
             .task { if automaticallyLoad { await journal.load() }; await trainingArchive.load() }
+            .fullScreenCover(item: $servicePresentation, onDismiss: {
+                _ = trainingDispatcher.dismiss()
+                Task { await trainingArchive.load() }
+            }) { presentation in
+                FoxRootView(store: presentation.store, initialTab: "training", onClose: { servicePresentation = nil })
+                    .foxReservedSpace().interactiveDismissDisabled()
+            }
             .fullScreenCover(item: $trainingRoute, onDismiss: { Task { await trainingArchive.load() } }) { route in
-                FoxRootView(trialExercise: route.exercise, onClose: { trainingRoute = nil }).foxReservedSpace().interactiveDismissDisabled()
+                FoxRootView(entry: route, onClose: { trainingRoute = nil }).foxReservedSpace().interactiveDismissDisabled()
+            }
+            .sheet(isPresented: $showingHistory) { HomeTrainingHistory(snapshot: trainingArchive.snapshot) { showingHistory = false } }
+            .sheet(isPresented: $showingCapabilities) {
+                NavigationStack {
+                    List {
+                        ForEach(TrainingActivity.allCases) { activity in
+                            Button { showingCapabilities = false; trainingRoute = .prepare(activity, .left, UUID()) } label: {
+                                VStack(alignment: .leading) { Text(activity.label); Text(activity.subtitle).font(.caption) }
+                            }.accessibilityIdentifier("home-try-\(activity.rawValue)")
+                        }
+                        Button("手动查看与调整计划") { showingCapabilities = false; trainingRoute = .plan }
+                            .accessibilityIdentifier("home-plan")
+                    }.navigationTitle("训练动作")
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingCapabilities = false } } }
+                }
             }
             .sheet(isPresented: $showingBackup) { JournalBackupView(journal: journal) }
             .sheet(item: $trainingSelection) { selection in HomeTrainingDetail(selection: selection) { trainingSelection = nil } }
@@ -241,51 +266,69 @@ struct FoxHomeView: View {
     }
 
     private var training: some View {
-        // snapshot.current means unfinished, including a never-started preparation. Keep this
-        // legacy condition until explicit preparation/start evidence and ID-based routes exist.
         VStack(alignment: .leading, spacing: 14) {
-        if trainingArchive.snapshot.current != nil {
-        Button { editing = false; trainingRoute = .trial(.curl) } label: {
-            HStack(spacing: 16) {
-                Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.title).foregroundStyle(FoxStyle.accent)
-                    .frame(width: 52, height: 64)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(trainingArchive.snapshot.current == nil ? "试练一组" : "继续训练").font(.title3.bold())
-                    Text(trainingArchive.snapshot.current?.exercise.name ?? "哑铃弯举 · 相机辅助")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").foregroundStyle(.secondary)
-            }.contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityIdentifier("home-try-training")
-        } else {
-            Text("试练一组").font(.title3.bold())
+            Text("训练").font(.title3.bold())
+            if !trainingArchive.loaded { ProgressView("正在读取训练档案") }
+            if trainingArchive.loaded && trainingArchive.snapshot.sessions.isEmpty && trainingArchive.snapshot.plan == nil && trainingArchive.error == nil {
+                Text("本机暂无训练档案").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(trainingArchive.snapshot.unfinished) { session in
+                Button { editing = false; trainingRoute = .open(session) } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(session.entryTitle).font(.headline)
+                        Text(session.plan.focus).font(.subheadline)
+                        Text(session.startedAt, format: .dateTime.month().day().hour().minute()).font(.caption)
+                    }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }.accessibilityIdentifier(TrainingEntry.selector(session))
+                    .disabled(trainingDispatcher.pendingRequestID != nil)
+            }
+            Button("试练一组哑铃弯举") { editing = false; trainingRoute = .prepare(.curl, .left, UUID()) }
+                .frame(minHeight: 44).accessibilityIdentifier("home-prepare-curl")
+                .disabled(trainingDispatcher.pendingRequestID != nil)
+            Button("选择训练动作") { editing = false; showingCapabilities = true }
+                .frame(minHeight: 44).accessibilityIdentifier("home-capabilities")
+                .disabled(trainingDispatcher.pendingRequestID != nil)
+            Button("训练记录") { editing = false; showingHistory = true }
+                .frame(minHeight: 44).accessibilityIdentifier("home-history")
+        }.modifier(HomeCard()).disabled(!trainingArchive.loaded || trainingArchive.error != nil)
+    }
+
+    private func serviceAction(_ card: ServiceCard, _ action: ServiceCardAction, _ request: UUID) async throws {
+        if [.prepare, .resume, .review].contains(action.kind) {
+            let presentation = try trainingDispatcher.execute(card, action: action, requestID: request)
+            serviceRecoveryError = nil
+            servicePresentation = presentation
+            return
         }
-        ForEach(TrainingActivity.allCases) { activity in
-            Button { editing = false; trainingRoute = .trial(activity) } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.title2).foregroundStyle(FoxStyle.accent).frame(width: 36)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(activity.label).font(.headline)
-                        Text(activity.subtitle).font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").foregroundStyle(.secondary)
-                }.frame(minHeight: 56).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-                .accessibilityIdentifier(activity == .curl && trainingArchive.snapshot.current == nil ? "home-try-training" : "home-try-\(activity.rawValue)")
-                .disabled(trainingArchive.snapshot.current != nil)
-            if activity != .kegel { Divider() }
+        switch card.target {
+        case .session(let id, let attempt):
+            guard action.kind == .view else { throw ServiceCardError.invalidCard }
+            await trainingArchive.load()
+            guard let session = trainingArchive.snapshot.sessions.first(where: { $0.id == id }),
+                  attempt == nil || session.currentSetAttemptId == attempt || session.records.contains(where: { $0.id == attempt }) else {
+                throw ServiceCardError.invalidCard
+            }
+            trainingSelection = .session(session)
+        case .history:
+            guard action.kind == .view else { throw ServiceCardError.invalidCard }
+            showingHistory = true
+        default: throw ServiceCardError.invalidCard
         }
-        HStack {
-            Button { editing = false; trainingRoute = .plan } label: {
-                Label("计划与记录", systemImage: "list.bullet").frame(minHeight: 44)
-            }.accessibilityIdentifier("home-training")
-            Spacer(minLength: 8)
-        }.font(.subheadline)
-        }.modifier(HomeCard()).disabled(journal.busy || photos.loading)
+    }
+
+    private var serviceRecovery: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("上次切换尚未保存").font(.headline)
+            Text("原训练与输入仍保留，采集已暂停。此处重试原操作，不受原卡片是否仍展示影响。")
+            if let serviceRecoveryError { Text(serviceRecoveryError).foregroundStyle(.red) }
+            Button("重试上次切换") {
+                do {
+                    let presentation = try trainingDispatcher.retryPending()
+                    serviceCards.acknowledgeLocal(requestID: presentation.id)
+                    serviceRecoveryError = nil; servicePresentation = presentation
+                } catch { serviceRecoveryError = error.localizedDescription }
+            }.accessibilityIdentifier("home-retry-training-switch")
+        }.modifier(HomeCard())
     }
 
     private func trainingProjection(title: String, name: String, detail: String, count: String, id: String, action: @escaping () -> Void) -> some View {

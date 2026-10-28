@@ -4,6 +4,7 @@ import SwiftUI
 struct TrainingScreen: View {
     @ObservedObject var store: TrainingStore
     let session: TrainingSession
+    private let executionToken: TrainingExecutionToken?
     let onConfirmed: () -> Void
     var phoneLandscapeNavigation: AnyView? = nil
     @ObservedObject private var visual: VisionLabController
@@ -34,23 +35,37 @@ struct TrainingScreen: View {
 
     init(store: TrainingStore, session: TrainingSession, phoneLandscapeNavigation: AnyView? = nil, onConfirmed: @escaping () -> Void) {
         self.store = store; self.session = session; self.onConfirmed = onConfirmed
+        executionToken = store.executionToken
         self.phoneLandscapeNavigation = phoneLandscapeNavigation
         visual = store.workoutVision.controller; guidance = store.guidance
     }
 
     var body: some View {
         content
-            .onAppear { guidance.start(); store.workoutVision.preview() }
-            .onDisappear { guidance.stop(); store.workoutVision.stop() }
-            .onChange(of: session.currentSetAttemptId) { _ in store.workoutVision.preview() }
+            .onAppear {
+                guard store.accepts(executionToken) else { return }
+                summaryNote = store.clientState.summary
+                if let id = session.currentSetAttemptId, let arm = store.clientState.selectedArms[id.uuidString] { armChoice = TrainingArmChoice(attemptID: id, arm: arm) }
+                guidance.stop(); guidance.start(); store.workoutVision.preview(token: executionToken)
+            }
+            .onChange(of: summaryNote) { value in
+                guard let executionToken else { return }; var state = store.clientState; state.summary = value; store.setClientState(state, token: executionToken)
+            }
+            .onChange(of: selectedArm) { value in
+                guard let executionToken, let id = session.currentSetAttemptId else { return }
+                var state = store.clientState; state.selectedArms[id.uuidString] = value; store.setClientState(state, token: executionToken)
+            }
+            .onDisappear { store.stopPresentation(token: executionToken) }
+            .onChange(of: session.currentSetAttemptId) { _ in store.workoutVision.preview(token: executionToken) }
             .onChange(of: session.stage) { stage in
-                if stage == .ready { store.workoutVision.preview() }
+                if stage == .ready { store.workoutVision.preview(token: executionToken) }
             }
             .onChange(of: scenePhase) { phase in
-                if phase == .active { guidance.start(); store.workoutVision.preview() }
+                guard store.accepts(executionToken) else { return }
+                if phase == .active { guidance.stop(); guidance.start(); store.workoutVision.preview(token: executionToken) }
                 else {
                     guidance.stop()
-                    if phase == .background { store.workoutVision.stopUnarmedPreview() }
+                    if phase == .background { store.workoutVision.stopUnarmedPreview(token: executionToken) }
                 }
             }
     }
@@ -70,31 +85,31 @@ struct TrainingScreen: View {
                     if canContinuePractice && session.plan.isQuickPractice == true && session.exercise.exerciseId == "dumbbell_curl" && nextActivity == nil {
                         let side: ArmSide = session.exercise.targetSide == .right ? .left : .right
                         Button {
-                            if store.confirmSummary(note: summaryNote, nextActivity: .curl, arm: side) { summaryNote = "" }
+                            if store.confirmSummary(token: executionToken, note: summaryNote, nextActivity: .curl, arm: side) { summaryNote = "" }
                         } label: { Label("保存并换\(side.label)", systemImage: "arrow.triangle.swap").frame(minHeight: 44) }
                             .accessibilityIdentifier("save-and-switch-arm")
                     }
                     FoxCommand(title: nextActivity.map { "保存并开始\($0.label)" } ?? "确认并保存", icon: "checkmark", prominent: true) {
-                        if store.confirmSummary(note: summaryNote, nextActivity: nextActivity) {
+                        if store.confirmSummary(token: executionToken, note: summaryNote, nextActivity: nextActivity) {
                             summaryNote = ""
                             if store.session == nil { onConfirmed() }
                         }
                     }.accessibilityIdentifier("confirm-summary")
                     if nextActivity != nil {
                         Button("仅保存并结束") {
-                            if store.confirmSummary(note: summaryNote) { onConfirmed() }
+                            if store.confirmSummary(token: executionToken, note: summaryNote) { onConfirmed() }
                         }.frame(minHeight: 44).accessibilityIdentifier("save-without-next")
                     }
                 }.padding(16).background(.bar)
             }
             .sheet(item: $editingRecord) { record in
                 RecordEditor(record: record) { reps, weight, notes, sides in
-                    store.updateSession { try $0.reviseRecord(id: record.id, reps: reps, weight: weight, notes: notes, sideRepetitions: sides) }
+                    store.updateSession(token: executionToken) { try $0.reviseRecord(id: record.id, reps: reps, weight: weight, notes: notes, sideRepetitions: sides) }
                     return store.errorMessage == nil
                 }
             }
         } else if session.stage == .feedback {
-            SetFeedbackView(store: store, session: session).padding(.horizontal, 20)
+            SetFeedbackView(store: store, session: session).id(session.currentSetAttemptId).padding(.horizontal, 20)
         } else {
             GeometryReader { geometry in
                 trainingLayout(landscape: UIDevice.current.userInterfaceIdiom == .phone
@@ -161,7 +176,7 @@ struct TrainingScreen: View {
                 if landscape && offersManualContinuation { manualContinuation(compact: true) }
                 Spacer(minLength: 0)
                 // Recovery is an additional control, never a replacement for pause or finish.
-                Button { store.workoutVision.rebindSubject() } label: {
+                Button { store.workoutVision.rebindSubject(token: executionToken) } label: {
                     Image(systemName: "arrow.clockwise").font(.title3).frame(width: 44, height: 44)
                 }.disabled(!hasCamera || !visual.needsRebind)
                     .accessibilityLabel("重新就位").accessibilityIdentifier("rebind-vision-set").help("重新就位")
@@ -174,7 +189,7 @@ struct TrainingScreen: View {
     }
 
     private func manualContinuation(compact: Bool) -> some View {
-        Button { store.workoutVision.useManual() } label: {
+        Button { store.workoutVision.useManual(token: executionToken) } label: {
             Group {
                 if compact { Text("人工记录") }
                 else { Label("人工记录", systemImage: "video.slash") }
@@ -258,28 +273,28 @@ struct TrainingScreen: View {
         if session.stage == .ready || session.stage == .paused {
             FoxCommand(title: preparing ? "取消就位" : session.stage == .paused ? "继续本组" : "开始本组",
                        icon: preparing ? "xmark" : "play.fill", prominent: true) {
-                if preparing { _ = store.workoutVision.pause() }
-                else if hasCamera { store.workoutVision.prepare(arm: selectedArm) }
+                if preparing { _ = store.workoutVision.pause(token: executionToken) }
+                else if hasCamera { store.workoutVision.prepare(arm: selectedArm, token: executionToken) }
                 else {
-                    if session.currentObservationId != nil { store.workoutVision.useManual() }
-                    else { store.updateSession { try $0.startSet(at: Date()) } }
+                    if session.currentObservationId != nil { store.workoutVision.useManual(token: executionToken) }
+                    else { store.updateSession(token: executionToken) { try $0.startSet(at: Date()) } }
                 }
             }.accessibilityIdentifier("begin-set")
             if session.stage == .ready {
                 FoxCommand(title: "跳过本组", icon: "forward.end") {
-                    if session.currentObservationId != nil && !store.workoutVision.pause() { return }
-                    store.workoutVision.stop()
-                    store.updateSession { try $0.skip(at: Date()) }
+                    if session.currentObservationId != nil && !store.workoutVision.pause(token: executionToken) { return }
+                    store.workoutVision.stop(token: executionToken)
+                    store.updateSession(token: executionToken) { try $0.skip(at: Date()) }
                 }.accessibilityIdentifier("skip-set")
             } else {
-                FoxCommand(title: "完成本组", icon: "checkmark") { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
+                FoxCommand(title: "完成本组", icon: "checkmark") { store.workoutVision.finish(token: executionToken) }.accessibilityIdentifier("complete-set")
             }
         } else if session.stage == .active {
-            FoxCommand(title: "完成本组", icon: "checkmark", prominent: true) { store.workoutVision.finish() }.accessibilityIdentifier("complete-set")
-            FoxCommand(title: "暂停", icon: "pause.fill") { _ = store.workoutVision.pause() }.accessibilityIdentifier("pause-set")
+            FoxCommand(title: "完成本组", icon: "checkmark", prominent: true) { store.workoutVision.finish(token: executionToken) }.accessibilityIdentifier("complete-set")
+            FoxCommand(title: "暂停", icon: "pause.fill") { _ = store.workoutVision.pause(token: executionToken) }.accessibilityIdentifier("pause-set")
         } else if session.stage == .rest {
-            FoxCommand(title: "准备下一组", icon: "play.fill", prominent: true) { store.updateSession { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
-            FoxCommand(title: "30 秒", icon: "plus") { store.updateSession { try $0.extendRest(by: 30, at: Date()) } }.accessibilityIdentifier("extend-rest")
+            FoxCommand(title: "准备下一组", icon: "play.fill", prominent: true) { store.updateSession(token: executionToken) { try $0.readyAfterRest(at: Date()) } }.accessibilityIdentifier("rest-ready")
+            FoxCommand(title: "30 秒", icon: "plus") { store.updateSession(token: executionToken) { try $0.extendRest(by: 30, at: Date()) } }.accessibilityIdentifier("extend-rest")
         }
     }
 
@@ -299,9 +314,9 @@ struct TrainingScreen: View {
                         Label("选择动作 · \(session.exercise.name)", systemImage: "list.bullet")
                     }.accessibilityIdentifier("details-activity-picker")
                     if session.stage == .ready && session.target.weightUnit != "bodyweight" {
-                        WeightControl(weight: Binding(get: { session.currentWeight }, set: { value in store.updateSession { try $0.setWeight(value) } }), unit: session.target.weightUnit)
+                        WeightControl(weight: Binding(get: { session.currentWeight }, set: { value in store.updateSession(token: executionToken) { try $0.setWeight(value) } }), unit: session.target.weightUnit)
                         Button {
-                            if let binding = session.currentSetBinding { store.updateSession { try $0.confirmCurrentWeight(binding: binding, at: Date()) } }
+                            if let binding = session.currentSetBinding { store.updateSession(token: executionToken) { try $0.confirmCurrentWeight(binding: binding, at: Date()) } }
                         } label: { Label(session.currentWeightConfirmation == nil ? "确认本组重量" : "本组重量已确认", systemImage: "checkmark.circle") }
                             .disabled(session.currentWeightConfirmation != nil).accessibilityIdentifier("confirm-set-weight")
                     }
@@ -309,14 +324,14 @@ struct TrainingScreen: View {
                         Text("本组\(selectedArm.label)").font(.headline)
                         Button(selectedArm == .left ? "先练右臂" : "先练左臂") {
                             let side: ArmSide = selectedArm == .left ? .right : .left
-                            if session.plan.isQuickPractice == true { _ = store.selectActivity(.curl, arm: side) }
+                            if session.plan.isQuickPractice == true { _ = store.selectActivity(.curl, arm: side, token: executionToken) }
                             else { armBinding.wrappedValue = side }
                         }.disabled(!TrainingArmChoice.canChange(session: session))
                             .accessibilityIdentifier("training-other-arm")
                     }
                     if store.visionRequested && session.exercise.visualObservation != nil {
                         Button {
-                            store.setVisionEnabled(false); showingDetails = false
+                            store.setVisionEnabled(false, token: executionToken); showingDetails = false
                         } label: { Label("关闭视觉 · 人工记录", systemImage: "video.slash") }.accessibilityIdentifier("manual-count")
                     }
                     GuidanceControls(session: guidance, allowsPlannedMode: true)
@@ -328,7 +343,7 @@ struct TrainingScreen: View {
                                     let side: ArmSide = selectedArm == .left ? .right : .left
                                     if session.plan.isQuickPractice == true,
                                        let activity = TrainingActivity(exerciseID: session.exercise.exerciseId) {
-                                        _ = store.selectActivity(activity, arm: side)
+                                        _ = store.selectActivity(activity, arm: side, token: executionToken)
                                     } else { armBinding.wrappedValue = side }
                                 }.disabled(!TrainingArmChoice.canChange(session: session))
                                     .accessibilityIdentifier("diagnostic-other-arm")
@@ -349,7 +364,7 @@ struct TrainingScreen: View {
     private var activityPicker: some View {
         TrainingActivityPicker(current: TrainingActivity(exerciseID: session.exercise.exerciseId),
             next: store.nextPractice, canReplace: session.canReplaceQuickPractice) { activity in
-                if store.selectActivity(activity) { showingActivityPicker = false; showingDetails = false }
+                if store.selectActivity(activity, token: executionToken) { showingActivityPicker = false; showingDetails = false }
             }
     }
 }
@@ -433,6 +448,17 @@ struct SetFeedbackView: View {
     @ScaledMetric(relativeTo: .body) private var labelSize = 18
     @ScaledMetric(relativeTo: .largeTitle) private var durationSize = 36
 
+    private let executionToken: TrainingExecutionToken?
+    init(store: TrainingStore, session: TrainingSession) {
+        self.store = store; self.session = session; executionToken = store.executionToken
+    }
+    private var draft: TrainingFeedbackDraft {
+        var value = TrainingFeedbackDraft()
+        value.reps = reps; value.leftReps = leftReps; value.rightReps = rightReps; value.weight = weight
+        value.selected = selected; value.note = note; value.information = information; value.softwareIssue = softwareIssue
+        return value
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -484,7 +510,7 @@ struct SetFeedbackView: View {
                     .help("收起键盘")
                 FoxCommand(title: selected.contains(.pain) ? "保存并结束训练" : "保存本组", icon: "checkmark", prominent: true) {
                     editing = false
-                    store.updateSession {
+                    store.updateSession(token: executionToken) {
                         try $0.setWeight(weight)
                         let sides = session.exercise.repetitionBasis == .perSide ? SideRepetitions(left: Int(leftReps), right: Int(rightReps)) : nil
                         let now = Date()
@@ -495,7 +521,15 @@ struct SetFeedbackView: View {
                     session.exercise.repetitionBasis == .perSide ? [leftReps, rightReps] : [reps]))
                     .accessibilityIdentifier("submit-feedback")
             }.padding(.vertical, verticalSizeClass == .compact ? 4 : 12).background(.bar)
+        }.onChange(of: draft) { value in
+            guard let executionToken, let id = session.currentSetAttemptId else { return }
+            var state = store.clientState; state.feedback[id.uuidString] = value; store.setClientState(state, token: executionToken)
         }.onAppear {
+            if let id = session.currentSetAttemptId, let saved = store.clientState.feedback[id.uuidString] {
+                reps = saved.reps; leftReps = saved.leftReps; rightReps = saved.rightReps; weight = saved.weight
+                selected = saved.selected; note = saved.note; information = saved.information; softwareIssue = saved.softwareIssue
+                return
+            }
             weight = session.currentWeight
             if let evidence = session.currentVisualEvidence, evidence.hasObservedFrames {
                 if session.exercise.repetitionBasis == .perSide {

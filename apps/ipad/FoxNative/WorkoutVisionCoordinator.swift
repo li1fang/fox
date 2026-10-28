@@ -15,27 +15,34 @@ final class WorkoutVisionCoordinator {
         controller = VisionLabController(diagnosticRoot: diagnosticRoot ?? VisionDiagnosticArchive.root,
             storageDirectory: diagnosticRoot?.deletingLastPathComponent().appendingPathComponent("WorkoutVision"))
         self.store = store
+        installCallbacks(token: nil, observation: nil, target: nil)
+    }
+
+    private func installCallbacks(token: TrainingExecutionToken?, observation: UUID?, target: WorkoutSetBinding?) {
         controller.onCameraStateChanged = { [weak self] state in
-            guard let self, state == .running, self.observationId != nil else { return }
+            guard let self, self.store?.accepts(token) == true, self.observationId == observation,
+                  observation != nil, state == .running else { return }
             self.controller.startCounting()
         }
         controller.onCountingBegan = { [weak self] in
-            guard let self, let store = self.store, let id = self.observationId,
-                  store.session?.currentSetBinding == self.binding else { return false }
-            return store.updateSession { try $0.beginVisual(observationId: id, at: self.controller.wallTime) }
+            guard let self, let store = self.store, store.accepts(token), let observation,
+                  self.observationId == observation, store.session?.currentSetBinding == target else { return false }
+            return store.updateSession(token: token) { try $0.beginVisual(observationId: observation, at: self.controller.wallTime) }
         }
         controller.onCountingUpdated = { [weak self] in
-            guard let self else { return }
+            guard let self, self.store?.accepts(token) == true, self.observationId == observation else { return }
             let now = self.controller.uptime
-            if now - self.lastPersistedAt >= 2 || self.lastCount != self.controller.automaticCount { _ = self.flush() }
+            if now - self.lastPersistedAt >= 2 || self.lastCount != self.controller.automaticCount { _ = self.flush(token: token) }
         }
         controller.onCountingPaused = { [weak self] in
-            guard let self, !self.stopping else { return }
-            _ = self.pause()
+            guard let self, !self.stopping, self.store?.accepts(token) == true,
+                  self.observationId == observation else { return }
+            _ = self.pause(token: token)
         }
     }
 
-    func prepare(arm: ArmSide) {
+    func prepare(arm: ArmSide, token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         guard let store, let session = store.session, var settings = session.exercise.visualObservation else { return }
         if let evidence = session.currentVisualEvidence { settings = evidence.settings } else { settings.arm = arm }
         let configuration = session.currentVisualEvidence?.configuration ?? controller.configuration
@@ -52,6 +59,7 @@ final class WorkoutVisionCoordinator {
             return
         }
         stopping = false; binding = store.session?.currentSetBinding; observationId = id
+        installCallbacks(token: store.executionToken, observation: id, target: binding)
         controller.diagnosticWorkoutSessionID = session.id
         controller.diagnosticSetAttemptID = session.currentSetAttemptId
         lastPersistedAt = 0; lastCount = 0
@@ -60,19 +68,22 @@ final class WorkoutVisionCoordinator {
     }
 
     // Preview is not an armed start and does not create observation or recording facts.
-    func preview() {
+    func preview(token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         guard let store, store.usesVision, let session = store.session,
               [.ready, .paused].contains(session.stage), session.currentObservationId == nil else { return }
         if controller.cameraState == .stopped { controller.startCamera() }
     }
 
-    func stopUnarmedPreview() {
+    func stopUnarmedPreview(token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         guard store?.session?.currentObservationId == nil else { return }
         stop()
     }
 
     @discardableResult
-    func disableVision() -> Bool {
+    func disableVision(token: TrainingExecutionToken? = nil) -> Bool {
+        if let token, store?.accepts(token) != true { return false }
         guard let store, flush() else { return false }
         if store.session?.currentVisualEvidence != nil {
             guard store.updateSession({ try $0.useManualCounting(reason: .userChoice, at: controller.wallTime) }) else { return false }
@@ -82,7 +93,8 @@ final class WorkoutVisionCoordinator {
     }
 
     @discardableResult
-    func flush() -> Bool {
+    func flush(token: TrainingExecutionToken? = nil) -> Bool {
+        if let token, store?.accepts(token) != true { return false }
         guard let store, let binding, let id = observationId,
               store.session?.stage == .active, store.session?.currentObservationId == id,
               store.session?.currentSetBinding == binding else { return true }
@@ -97,7 +109,8 @@ final class WorkoutVisionCoordinator {
     }
 
     @discardableResult
-    func pause() -> Bool {
+    func pause(token: TrainingExecutionToken? = nil) -> Bool {
+        if let token, store?.accepts(token) != true { return false }
         stopping = true; controller.pauseCounting(); stopping = false
         guard let store, flush() else { return false }
         let saved = store.updateSession {
@@ -108,20 +121,23 @@ final class WorkoutVisionCoordinator {
         return saved
     }
 
-    func rebindSubject() {
+    func rebindSubject(token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         guard controller.needsRebind else { return }
         let side = controller.arm
         guard pause() else { return }
         prepare(arm: side)
     }
 
-    func finish() {
+    func finish(token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         stopping = true; controller.pauseCounting(); stopping = false
         guard let store, flush() else { return }
         if store.updateSession({ try $0.finishSet(at: controller.wallTime) }) { controller.finishDiagnostic(reason: "exerciseFinished"); stop() }
     }
 
-    func useManual() {
+    func useManual(token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         stopping = true; controller.pauseCounting(); stopping = false
         guard let store, flush() else { return }
         let reason: WorkoutManualReason = controller.cameraState == .denied ? .cameraDenied :
@@ -133,7 +149,22 @@ final class WorkoutVisionCoordinator {
         }) { stop() }
     }
 
-    func stop() {
+    // Capture one last accepted snapshot without committing. The repository publishes A and B together.
+    func quiesce(_ session: inout TrainingSession, at cutoff: Date) throws {
+        stopping = true; controller.pauseCounting(); stopping = false
+        defer { stop() }
+        if session.stage == .active, let binding, let observationId,
+           session.currentSetBinding == binding, session.currentObservationId == observationId {
+            try session.updateVisual(binding: binding, observationId: observationId, repetitions: controller.repetitions,
+                attempts: controller.attempts, droppedAttempts: controller.droppedAttempts, metrics: controller.metrics,
+                resetCounts: controller.diagnostics.resetCounts, captureContext: controller.captureContext, at: cutoff)
+        }
+        if session.stage == .active { try session.pause(at: cutoff) }
+        else if session.currentObservationId != nil { try session.cancelVisualPreparation(at: cutoff) }
+    }
+
+    func stop(token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         stopping = true; controller.stopCamera(); stopping = false
         binding = nil; observationId = nil
     }

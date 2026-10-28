@@ -30,7 +30,13 @@ final class GuidanceSession: ObservableObject {
         output = GuidanceOutputController(driver: selectedDriver, now: { [weak vision] in vision?.uptime ?? ProcessInfo.processInfo.systemUptime })
         output.setSpeechEnabled(defaults?.object(forKey: "FoxGuidance.speech") as? Bool ?? true)
         output.overlayEnabled = defaults?.object(forKey: "FoxGuidance.overlay") as? Bool ?? true
-        output.onEvent = { [weak vision] event in
+        output.onEvent = { [weak vision, weak store] event in
+            if let store {
+                guard let token = store.executionToken,
+                      event.context.sessionID == token.sessionID.uuidString,
+                      event.context.attemptID == token.attemptID?.uuidString,
+                      event.context.executionGeneration == token.generation.uuidString else { return }
+            }
             guard let vision, vision.diagnosticCapture.isActive,
                   let data = try? JSONEncoder().encode(event), let detail = String(data: data, encoding: .utf8) else { return }
             vision.camera.diagnosticEvent(VisionDiagnosticEvent(kind: "guidance", hostUptime: event.time,
@@ -40,16 +46,20 @@ final class GuidanceSession: ObservableObject {
 
     func start() {
         guard timer == nil else { return }
-        sample()
+        let execution = store?.executionToken
+        sample(token: execution)
         let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.sample() }
+            Task { @MainActor [weak self] in
+                guard let self, self.store == nil || self.store?.accepts(execution) == true else { return }
+                self.sample(token: execution)
+            }
         }
         self.timer = timer; RunLoop.main.add(timer, forMode: .common)
         for name in [AVAudioSession.interruptionNotification, AVAudioSession.routeChangeNotification,
                      UIApplication.willResignActiveNotification] {
             notifications.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
                 Task { @MainActor [weak self] in
-                    guard let self else { return }
+                    guard let self, self.store == nil || self.store?.accepts(execution) == true else { return }
                     if note.name == AVAudioSession.interruptionNotification {
                         let ended = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.ended.rawValue
                         self.output.suspendSpeech(!ended)
@@ -87,7 +97,8 @@ final class GuidanceSession: ObservableObject {
         if reason == .oldDeviceUnavailable { setSpeech(false) }
     }
 
-    func sample() {
+    func sample(token: TrainingExecutionToken? = nil) {
+        if let token, store?.accepts(token) != true { return }
         guard let vision else { return }
         let time = vision.uptime
         var snapshot = vision.snapshot
@@ -96,13 +107,14 @@ final class GuidanceSession: ObservableObject {
         let countdown: Int?
         if case .countdown(let n) = vision.startState { countdown = n } else { countdown = nil }
         if let store {
-            guard let session = store.session else { output.interrupt(reason: "session_ended"); return }
+            guard !store.executionBlocked, let session = store.session else { output.interrupt(reason: "session_ended"); return }
             let visual = store.usesVision
             let stage: GuidanceStage = vision.isPreparing ? (countdown == nil ? .preparing : .countdown) :
                 GuidanceStage(rawValue: session.stage.rawValue) ?? .idle
             let context = GuidanceContext(sessionID: session.id.uuidString,
                 attemptID: session.currentSetAttemptId?.uuidString ?? "summary",
-                observationID: session.currentObservationId?.uuidString ?? session.currentVisualEvidence?.segments.last?.id.uuidString ?? "manual")
+                observationID: session.currentObservationId?.uuidString ?? session.currentVisualEvidence?.segments.last?.id.uuidString ?? "manual",
+                executionGeneration: store.executionGeneration.uuidString)
             output.update(.init(context: context, time: time, stage: stage, exercise: session.exercise.visualObservation?.exercise,
                 mode: visual || mode == .off ? mode : .planned, count: session.currentVisualEvidence?.automaticCount ?? 0,
                 targetReps: session.target.targetReps, motion: visual ? motion : nil,

@@ -58,13 +58,16 @@ struct FoxRootView: View {
     @StateObject private var vision: VisionLabController
     @State private var tab: String
     private let trialExercise: TrainingActivity?
+    private let entry: TrainingEntry?
+    @State private var showingHistory = false
     @State private var entryConsumed = false
-    init(store: TrainingStore? = nil, vision: VisionLabController? = nil, initialTab: String? = nil, trialExercise: TrainingActivity? = nil, onClose: (() -> Void)? = nil) {
+    init(store: TrainingStore? = nil, vision: VisionLabController? = nil, initialTab: String? = nil, trialExercise: TrainingActivity? = nil, entry: TrainingEntry? = nil, onClose: (() -> Void)? = nil) {
         _store = StateObject(wrappedValue: store ?? TrainingStore())
         _vision = StateObject(wrappedValue: vision ?? VisionLabController())
         _tab = State(initialValue: initialTab ?? (ProcessInfo.processInfo.environment["FOX_START_SCREEN"] == "vision" ? "vision" : "plan"))
         self.onClose = onClose
         self.trialExercise = trialExercise
+        self.entry = entry
     }
     @State private var importing = false
     @State private var ending = false
@@ -81,7 +84,8 @@ struct FoxRootView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let owner = store.executionToken
+        return VStack(spacing: 0) {
             if !phoneLandscapeFocus { Group {
                 if trainingFocus { headerActions }
                 else if isPhone || sizeClass == .compact {
@@ -98,7 +102,15 @@ struct FoxRootView: View {
             }.padding(.horizontal, isPhone ? 16 : 20).padding(.vertical, phoneFocus || (tab == "training" && store.session?.stage == .feedback && verticalSizeClass == .compact) ? 0 : 10)
             Divider()
             }
-            if tab == "vision" {
+            if store.executionBlocked {
+                VStack(spacing: 20) {
+                    Text("切换尚未保存").font(.title2.bold()).accessibilityIdentifier("training-switch-blocked")
+                    Text("原训练和输入仍保留，采集与计时已暂停。请重试完成原切换。")
+                    FoxCommand(title: "重试切换", icon: "arrow.clockwise", prominent: true) {
+                        if store.retrySwitch() { tab = "training" }
+                    }.accessibilityIdentifier("training-retry-switch")
+                }.padding().frame(maxWidth: 560, maxHeight: .infinity)
+            } else if tab == "vision" {
                 VisionLabView(controller: vision, phoneLandscapeNavigation: AnyView(headerActions))
             } else if store.storageUnavailable {
                 VStack(spacing: 20) {
@@ -109,7 +121,7 @@ struct FoxRootView: View {
             } else if tab == "training", let session = store.session {
                 TrainingScreen(store: store, session: session, phoneLandscapeNavigation: AnyView(headerActions)) {
                     savedSessionID = session.id; tab = "history"
-                }
+                }.id(store.executionToken)
             } else if tab == "history" {
                 history
             } else {
@@ -122,17 +134,19 @@ struct FoxRootView: View {
         .foregroundStyle(FoxStyle.ink)
         .preferredColorScheme(.light)
         .onAppear {
-            // Legacy single-session entry can override the requested plan/history tab. Read-only
-            // history uses HomeTrainingDetail; an explicit route must replace this in stage 2.
-            if !entryConsumed, let trialExercise { store.startTrial(trialExercise) }
-            entryConsumed = true
-            if store.session != nil && tab != "vision" { tab = "training" }
-            else if store.session == nil && tab == "training" { tab = "plan" }
+            if !entryConsumed {
+                if let entry {
+                    if store.enter(entry), case .plan = entry { tab = "plan" }
+                    else if store.errorMessage == nil { tab = "training" }
+                } else if let trialExercise { store.startTrial(trialExercise); tab = "training" }
+                entryConsumed = true
+            }
+            if store.session == nil && tab == "training" { tab = "plan" }
             updateIdleTimer()
         }
         .onChange(of: tab) { value in
-            if value != "training" && store.session?.currentObservationId != nil { _ = store.workoutVision.pause() }
-            if value == "vision" { store.pauseIfActive() }
+            if value != "training" && store.session?.currentObservationId != nil { _ = store.workoutVision.pause(token: owner) }
+            if value == "vision" { store.pauseIfActive(token: owner) }
             updateIdleTimer()
         }
         .onChange(of: store.session?.stage) { value in
@@ -144,32 +158,34 @@ struct FoxRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             vision.finishDiagnostic(reason: "background")
             store.workoutVision.controller.finishDiagnostic(reason: "background")
-            if store.session?.currentObservationId != nil { _ = store.workoutVision.pause() }
-            store.pauseIfActive()
+            if store.session?.currentObservationId != nil { _ = store.workoutVision.pause(token: owner) }
+            store.pauseIfActive(token: owner)
         }
         .onChange(of: scenePhase) { phase in
             if phase != .active {
-                if store.session?.currentObservationId != nil { _ = store.workoutVision.pause() }
-                store.pauseIfActive()
+                _ = store.saveClientState()
+                if store.session?.currentObservationId != nil { _ = store.workoutVision.pause(token: owner) }
+                store.pauseIfActive(token: owner)
             }
             updateIdleTimer()
         }
-        .onReceive(heartbeat) { _ in store.checkpoint() }
+        .onReceive(heartbeat) { _ in store.checkpoint(token: owner) }
         .alert("操作未完成", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
+            if store.executionBlocked { Button("重试切换") { if store.retrySwitch() { tab = "training" } } }
             Button("知道了") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
         .confirmationDialog("结束这次训练？已完成的组会保留。", isPresented: $ending, titleVisibility: .visible) {
             Button("结束并核对记录", role: .destructive) {
-                if !store.workoutVision.flush() { return }
-                guard store.updateSession({ try $0.endEarly(at: Date()) }) else { return }
-                store.workoutVision.stop()
+                if !store.workoutVision.flush(token: owner) { return }
+                guard store.updateSession(token: owner, { try $0.endEarly(at: Date()) }) else { return }
+                store.workoutVision.stop(token: owner)
                 tab = "training"
             }
         }
         .confirmationDialog("训练页面", isPresented: $choosingPhonePage, titleVisibility: .visible) {
             Button("计划") { tab = "plan" }
             Button("训练") { tab = store.session == nil ? "plan" : "training" }
-            Button("记录") { tab = "history" }
+            Button("记录") { showingHistory = true }
             Button("视觉实验") { tab = "vision" }
             Button("取消", role: .cancel) {}
         }
@@ -178,6 +194,9 @@ struct FoxRootView: View {
             case .success(let url): store.importPlan(from: url)
             case .failure(let error): store.errorMessage = error.localizedDescription
             }
+        }
+        .sheet(isPresented: $showingHistory) {
+            HomeTrainingHistory(snapshot: HomeTrainingSnapshot(plan: store.archive.plan, current: store.archive.currentSession, sessions: store.archive.sessions)) { showingHistory = false }
         }
         .sheet(item: $sheet) { presented in
             switch presented {
@@ -205,7 +224,7 @@ struct FoxRootView: View {
     }
 
     private var pagePicker: some View {
-        Picker("页面", selection: $tab) {
+        Picker("页面", selection: Binding(get: { tab }, set: { if $0 == "history" { showingHistory = true } else { tab = $0 } })) {
             Text("计划").tag("plan")
             if store.session != nil { Text("训练").tag("training") }
             Text("记录").tag("history")
@@ -247,6 +266,7 @@ struct FoxRootView: View {
     }
 
     private func closeTraining() {
+        guard store.saveClientState() else { return }
         if store.session?.currentObservationId != nil, !store.workoutVision.pause() { return }
         if store.session?.stage == .active,
            !store.updateSession({ try $0.pause(at: Date()) }) { return }
@@ -315,7 +335,7 @@ struct FoxRootView: View {
                 }
                 ForEach(store.archive.sessions.reversed()) { session in
                     Button {
-                        if session.isFinished { sheet = .record(session) } else { tab = "training" }
+                        sheet = .record(session)
                     } label: {
                         HStack(spacing: 16) {
                             Image(systemName: session.isFinished ? "checkmark.circle.fill" : "pause.circle").font(.system(size: 30)).foregroundStyle(session.isFinished ? FoxStyle.green : FoxStyle.coral)

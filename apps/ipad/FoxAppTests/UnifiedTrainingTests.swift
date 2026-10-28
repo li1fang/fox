@@ -64,7 +64,10 @@ final class UnifiedTrainingTests: XCTestCase {
         store.setVisionEnabled(false)
         XCTAssertFalse(store.usesVision)
         XCTAssertEqual(controller.cameraState, .stopped)
-        XCTAssertEqual(store.session, session)
+        var expected = session
+        var inputs = session.clientState ?? TrainingClientState(); inputs.manual = true
+        expected.clientState = inputs
+        XCTAssertEqual(store.session, expected, "Only the explicit per-session presentation choice changes; all training facts remain equal")
         let reopened = TrainingStore(archiveURL: file, diagnosticRoot: root.appendingPathComponent("Diagnostics"), preferences: defaults)
         XCTAssertFalse(reopened.usesVision)
         reopened.workoutVision.preview()

@@ -186,7 +186,7 @@ final class TrainingTests: XCTestCase {
         XCTAssertThrowsError(try LocalTrainingRepository(fileURL: url))
         XCTAssertEqual(try Data(contentsOf: url), invalid)
         var archive = TrainingArchive()
-        archive.schemaVersion = 2
+        archive.schemaVersion = 3
         try LocalTrainingRepository.encoder().encode(archive).write(to: url)
         XCTAssertThrowsError(try LocalTrainingRepository(fileURL: url))
     }
