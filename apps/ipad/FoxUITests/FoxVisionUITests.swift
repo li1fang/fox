@@ -513,6 +513,7 @@ final class FoxVisionUITests: XCTestCase {
         finish(app)
         XCTAssertTrue(app.buttons["vision-save-report"].waitForExistence(timeout: 5))
         let samples = app.descendants(matching: .any)["vision-context-samples"]
+        reveal("vision-context-samples", app: app)
         XCTAssertTrue(samples.waitForExistence(timeout: 5))
         XCTAssertGreaterThan(Int(samples.value as? String ?? "") ?? 0, 0)
         saveReport(app)
