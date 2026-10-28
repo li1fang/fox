@@ -37,7 +37,35 @@ extension XCUIApplication {
     func openReadOnlyTrainingHistory() -> XCUIElementQuery {
         let history = buttons["home-history"]
         XCTAssertTrue(history.waitForExistence(timeout: 5))
-        revealTrainingEntry(history); history.tap()
+        let scroll = scrollViews.firstMatch, bar = navigationBars["Fox"]
+        XCTAssertTrue(scroll.exists && bar.exists, "Home history requires its scrolling page")
+        func viewport() -> CGRect {
+            let bounds = windows.firstMatch.frame.intersection(scroll.frame)
+            let top = max(bounds.minY, bar.frame.maxY)
+            return CGRect(x: bounds.minX, y: top, width: bounds.width, height: max(0, bounds.maxY - top))
+        }
+        func ready() -> Bool {
+            history.exists && history.isEnabled && history.isHittable && !history.frame.isEmpty && viewport().contains(history.frame)
+        }
+        XCTAssertGreaterThan(viewport().height, 0)
+        // A full-screen fling can pass over this short row in a landscape phone.
+        // Use its current position to make bounded drags inside the Home viewport.
+        for _ in 0..<18 {
+            if ready() { break }
+            let bounds = viewport(), distance = min(100, bounds.height * 0.25)
+            let down = history.frame.midY < bounds.midY
+            let startY = bounds.midY + (down ? -distance / 2 : distance / 2)
+            let origin = coordinate(withNormalizedOffset: .zero)
+            let x = bounds.midX
+            let start = origin.withOffset(CGVector(dx: x, dy: startY))
+            let end = origin.withOffset(CGVector(dx: x, dy: startY + (down ? distance : -distance)))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(history.isHittable)
+        XCTAssertTrue(history.isEnabled)
+        XCTAssertFalse(history.frame.isEmpty)
+        XCTAssertTrue(viewport().contains(history.frame), "History must be fully below the navigation bar")
+        history.tap()
         XCTAssertTrue(descendants(matching: .any).matching(identifier: "home-history-list").firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(buttons["begin-set"].exists, "History must not open an executing training view")
         return buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home-history-' AND identifier != 'home-history-list'"))
