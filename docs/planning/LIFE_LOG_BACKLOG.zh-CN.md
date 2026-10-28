@@ -1,6 +1,8 @@
 # Fox 生活日志：后续任务台账
 
-2026-10-28：[个人资料库同步 SYNC-0–2](PERSONAL_SYNC_V1.zh-CN.md) 已完成限定验收，负责人产品与交付。同步契约、持久化 Python 核心及 Linux 双参考副本闭环通过，Mac/Linux 各 46 项测试、真实 SSH 合成闭环及独立审查通过；连接入口 `~/.config/fox/sync.json`。真实资料库为空，原有归档/记录保留；不建设完整账号、不更新设备、不自动删除。SYNC-3 原生存储适配、安全网络入口与人工配对尚未实施，不声称手机已可同步。
+2026-10-28：[SYNC-3A HTTPS 与原生传输基础](PERSONAL_SYNC_NATIVE_V1.zh-CN.md) 限定验收通过，负责人产品与交付。Mac 53 Python + 6 Swift + 59 验证入口、iOS SDK 编译、真实 LAN 双副本/照片和 Swift 探针通过；Linux 服务经明确授权启用 linger，脱离 SSH 常驻。正式同步库为空，试验凭据已撤销。SYNC-3B Journal/outbox/Keychain、3C 配对 UI、3D 双设备验收未完成；不更新设备、不自动迁移/删除。
+
+2026-10-28：[个人资料库同步 SYNC-0–2](PERSONAL_SYNC_V1.zh-CN.md) 已完成限定验收，负责人产品与交付。同步契约、持久化 Python 核心及 Linux 双参考副本闭环通过，Mac/Linux 各 46 项测试、真实 SSH 合成闭环及独立审查通过；连接入口 `~/.config/fox/sync.json`。真实资料库为空，原有归档/记录保留；不建设完整账号、不更新设备、不自动删除。其后 SYNC-3A 进展见上条，不声称手机已可同步。
 
 2026-10-28：[iPhone 当前 Journal 接收](IPHONE_JOURNAL_INTAKE_20261028.zh-CN.md) 已完成，负责人产品与交付，数据与服务消费共享指针。8 条记录、9 个修订、5 张照片，两次复制及完整关联校验通过，Linux 索引与全部照片回读通过；9 项定向合成测试。仅本次采集窗口，不是持续同步；未重装、未删原件、未做 AI 分析。iPad 新增、系统相册和 Windows 6DoF 仍未取得。
 

@@ -8,6 +8,7 @@
 | 引导策略 | `FoxTrainingCore/Guidance` | 已提交事实/目标节奏 -> 有效期受限的提示 | 不控制计数、数据库或相机；不补缺失测量 |
 | 平台适配 | `FoxNative` | Apple Vision/相机/屏幕/音频 -> 核心输入；核心状态 -> UI/语音 | 不用 UI 操作重写运动事实；平台能力不能冒充核心准确性 |
 | 记录与附件 | `FoxJournalCore` | 本地记录、照片、完整备份 -> SQLite/私有文件 | 不依赖训练或远端服务；不静默迁移现有训练 JSON |
+| 同步传输 | `FoxSyncCore`、`scripts/sync_https.py` | 受限协议帧/可信配对证书 -> HTTPS 资料库接口 | 不拥有 Journal 事务或 UI；传输通过不等于记录已同步，不放宽 TLS 信任 |
 | Web 与语音实验 | `apps/api`, `apps/web-runtime`, `packages` | API、人工确认草稿、持久化 | 不依赖真实 Linux 才能测试；不自动更改 workout state |
 | Fox Say 原生壳 | `apps/ipad/FoxPad` | 独立 App 的 Web 入口、原生麦克风桥、录音上传 | 不代替 FoxNative；录音/上传/识别/入库是不同的成功条件 |
 | 实验与开发证据 | `scripts`, `experiments`, 测试专用 `FoxTestSupport` | 固定输入 -> 可追溯报告/索引 | 不进产品依赖；SQLite 索引可重建，不能替代原始证据 |
@@ -39,6 +40,7 @@
 ## 接手与资源规则
 
 - [个人资料库同步](../planning/PERSONAL_SYNC_V1.zh-CN.md)：数据与服务维护同步契约与服务核心，客户端后续接入本地 Journal/outbox 和配对 UI。现有 SSH 归档、Python 双副本验证、原生双设备同步分别验收，不相互冒充。
+- [SYNC-3A 传输基础](../planning/PERSONAL_SYNC_NATIVE_V1.zh-CN.md)：LAN 服务与 Swift 传输已限定验收，当前尚未接入 Journal 或 App；私有连接 `~/.config/fox/sync-https.json`，不直接访问/编辑远端 SQLite。服务运行与原始资料归档分开管理。
 
 - 共享资料查询/取回见 [Linux 资料库契约与入口](../planning/SHARED_ARCHIVE_V1.zh-CN.md)。同一 Mac 三条工作线共用私有连接配置；先按标签查询，再按稳定 ID 取回，不直接编辑服务器数据库或原件。并非自动授权处理所有私人数据，也不代表全量设备资料已归档。
 - [批量资料目录](../planning/ARCHIVE_BULK_20261028.zh-CN.md)：私有 `~/.config/fox/archive-current.json` 指向有效总清单、视觉索引与 iPhone 备份图文索引。视觉先读索引，按组取录像/报告；数据线先区分备份时间与真实读取时间，不把旧快照称为手机当前状态。
