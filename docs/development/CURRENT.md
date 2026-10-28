@@ -4,7 +4,7 @@
 
 ## 本独立工作树的后续授权
 
-`codex/fox-client-foundation` 当前执行 **CLIENT-FOUNDATION-01 第三阶段**。用户授权 Sol 软件验收、保留失败、推送及保全后更新；需要解锁时通知，并授权迁移熟悉缓存使内盘达到 5 GiB 以上。已集成已安装的同步／Journal v2 基线，`5976559` 经审查推送。其完整 public 因既有输入 idle 超时失败：App-host 132、iPad 前 24 项及主机／Web 通过，原失败不改写。后续又修正明确 training 启动意图与只读历史测试路线，原恢复断言保留，定向 138/138 通过；本记录随替代候选冻结，完整软件结论、推送与设备状态仍分别按新回执判断。输入受阻组保持开放，独立剩余覆盖继续；不能以旧客户端降级现有已配对 Journal v2。见[第三阶段记录](CLIENT_FOUNDATION_STAGE3_20261028.zh-CN.md)。本树、共享维护树和设备候选身份分开；CAPTURE-01 仍是独立只读采集任务。
+`codex/fox-client-foundation` 当前执行 **CLIENT-FOUNDATION-01 第三阶段**。用户授权 Sol 软件验收、保留失败、推送及保全后更新；需要解锁时通知，并授权迁移熟悉缓存使内盘达到 5 GiB 以上。实现／测试候选 `35640b56e62e14a3436297852e5c2d51b124abfd` 已审查并推送，fast／同提交官方回执及 Duo 12/12 通过。旧完整 public 的输入 idle 失败保留；手机 `7cf38d0` 的 38 项为 35 通过、3 失败，两项测试路线已修正，Kegel 历史按钮原失败仍 unknown，一次带观测通过不关闭它。**完整 public 尚未取得通过回执，设备未安装更新。** 已兼容现有 Journal v2／配对同步基线；内盘 0.6.14/build 33 包签名与原 Keychain 身份核验通过，iPad 备份完整性通过，iPhone 仍待连接／解锁。安装阻止标记保持；后续文档 HEAD 与运行候选分开。见[第三阶段记录](CLIENT_FOUNDATION_STAGE3_20261028.zh-CN.md)。本树、共享维护树和已安装 build 32 身份分开；CAPTURE-01 仍是独立只读采集任务。
 
 ## 三种身份
 
