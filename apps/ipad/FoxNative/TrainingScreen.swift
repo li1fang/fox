@@ -482,6 +482,11 @@ struct SetFeedbackView: View {
                 if let evidence = session.currentVisualEvidence, evidence.hasObservedFrames {
                     Text("观测 \(evidence.settings.arm.label) \(evidence.automaticCount) 次，待你确认").font(.system(size: observationSize)).foregroundStyle(FoxStyle.green)
                     ReturnIntervalView(rows: ReturnIntervalSummary.make(evidence: evidence))
+                    if evidence.suggestedCount == nil {
+                        Text("视觉次数待核对，请填写实际次数。")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("feedback-visual-count-unconfirmed")
+                    }
                 }
                 Text("这一组感觉如何").font(.headline)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
@@ -529,18 +534,10 @@ struct SetFeedbackView: View {
             guard let executionToken, let id = session.currentSetAttemptId else { return }
             var state = store.clientState; state.feedback[id.uuidString] = value; store.setClientState(state, token: executionToken)
         }.onAppear {
-            if let id = session.currentSetAttemptId, let saved = store.clientState.feedback[id.uuidString] {
-                reps = saved.reps; leftReps = saved.leftReps; rightReps = saved.rightReps; weight = saved.weight
-                selected = saved.selected; note = saved.note; information = saved.information; softwareIssue = saved.softwareIssue
-                return
-            }
-            weight = session.currentWeight
-            if let evidence = session.currentVisualEvidence, evidence.hasObservedFrames {
-                if session.exercise.repetitionBasis == .perSide {
-                    if evidence.settings.arm == .left { leftReps = String(evidence.automaticCount) }
-                    else { rightReps = String(evidence.automaticCount) }
-                } else { reps = String(evidence.automaticCount) }
-            }
+            let saved = session.currentSetAttemptId.flatMap { store.clientState.feedback[$0.uuidString] }
+            let initial = TrainingFeedbackInput.initialDraft(session: session, saved: saved)
+            reps = initial.reps; leftReps = initial.leftReps; rightReps = initial.rightReps; weight = initial.weight
+            selected = initial.selected; note = initial.note; information = initial.information; softwareIssue = initial.softwareIssue
         }
     }
 

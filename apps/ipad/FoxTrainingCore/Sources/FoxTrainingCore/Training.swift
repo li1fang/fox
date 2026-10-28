@@ -577,7 +577,8 @@ public struct TrainingArchive: Codable, Equatable {
                 try confirmation.validate(attemptID: attemptID, weight: session.currentWeight, unit: session.target.weightUnit)
             }
             for record in session.records {
-                guard ["completed", "partial", "skipped"].contains(record.status),
+                guard (record.countingEvidenceVersion == nil || record.countingEvidenceVersion == 1),
+                      ["completed", "partial", "skipped"].contains(record.status),
                       record.durationSeconds.isFinite, record.durationSeconds >= 0,
                       record.reps.map({ (0...1000).contains($0) }) ?? true,
                       record.weight.map({ $0.isFinite && (0...1000).contains($0) }) ?? true else { throw TrainingError.corruptArchive }
@@ -600,7 +601,6 @@ public struct TrainingArchive: Codable, Equatable {
                           evidence.segments.allSatisfy({ $0.endedAt != nil }),
                           record.rhythmAssessment == WorkoutRhythmAssessment.assess(repetitions: evidence.repetitions, tempo: exercise.tempo),
                           record.formAssessment == WorkoutFormAssessment(),
-                          (record.countingEvidenceVersion == nil || record.countingEvidenceVersion == 1),
                           record.countingMethod == record.resolvedCountingMethod else {
                         throw TrainingError.corruptArchive
                     }

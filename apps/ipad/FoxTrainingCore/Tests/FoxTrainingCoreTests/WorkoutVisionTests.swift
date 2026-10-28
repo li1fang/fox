@@ -494,6 +494,27 @@ final class WorkoutVisionTests: XCTestCase {
         }
     }
 
+    func testD1ManualRecordRejectsUnknownPolicyWithoutVisualEvidence() throws {
+        var session = try TrainingSession(plan: plan(sets: 1), now: start)
+        try session.startSet(at: start)
+        try session.finishSet(at: start.addingTimeInterval(5))
+        try session.submit(reps: nil, sideRepetitions: .init(left: 0), feedback: [], notes: "人工零", at: start.addingTimeInterval(6))
+        var archive = TrainingArchive(); archive.plan = session.plan; archive.sessions = [session]
+        let encoded = try LocalTrainingRepository.encoder().encode(archive)
+        for version in [nil, 1, 2] as [Int?] {
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            var sessions = try XCTUnwrap(json["sessions"] as? [[String: Any]])
+            var records = try XCTUnwrap(sessions[0]["records"] as? [[String: Any]])
+            records[0]["countingEvidenceVersion"] = version
+            sessions[0]["records"] = records; json["sessions"] = sessions
+            let restored = try LocalTrainingRepository.decoder().decode(TrainingArchive.self,
+                from: JSONSerialization.data(withJSONObject: json))
+            XCTAssertNil(restored.sessions[0].records[0].visualEvidence)
+            if version == 2 { XCTAssertThrowsError(try restored.validate()) }
+            else { try restored.validate(); XCTAssertEqual(restored.sessions[0].records[0].countingMethod, "manual") }
+        }
+    }
+
     func testD1UnknownCountAcceptsManualNonzeroWithoutPromotingItToVisualCorrection() throws {
         var session = try TrainingSession(plan: plan(sets: 1), now: start)
         let id = try begin(&session)
