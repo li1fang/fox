@@ -27,6 +27,7 @@
     "typecheck": "npm run typecheck -w @fox/core && npm run typecheck -w @fox/schemas && npm run typecheck -w @fox/api && npm run typecheck -w @fox/web-runtime",
     "test": "npm run test --workspaces --if-present && npm run test:scripts",
     "test:scripts": "node scripts/test-scripts.mjs public",
+    "test:archive": "python3.12 scripts/run-python-tests.py tests/scripts/test_archive.py",
     "test:e2e": "playwright test",
     "verify": "npm run typecheck && npm run build && npm run test",
     "bootstrap": "node scripts/development-environment.mjs bootstrap",

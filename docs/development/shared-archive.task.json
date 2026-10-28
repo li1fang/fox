@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Make verified copies of existing Fox evidence discoverable and retrievable through one Linux archive entry",
+  "nonGoals": ["Device changes", "Automatic recording or upload", "Source deletion", "AI analysis", "Independent backup", "CI trigger changes"],
+  "invariants": ["Preserve originals and local changes", "Immutable item identity", "No successful receipt for partial bytes", "No private data in Git"],
+  "modules": ["scripts/archive.py", "tests/scripts/test_archive.py", "docs/planning/SHARED_ARCHIVE_V1.zh-CN.md"],
+  "acceptance": ["test:archive", "verify:repository"],
+  "stopConditions": ["Untrusted SSH identity", "Insufficient space", "Conflicting item ID", "Unclear source provenance", "Concurrent source edits"],
+  "evidence": ["Failing tests before implementation", "Same synthetic suite on Mac and Linux", "Real source and retrieved byte hashes", "Fresh-context review"],
+  "humanUnknowns": ["No independent backup configured", "Bulk inventory is incomplete", "Future source-cache retention days undecided", "Workstream access tested via common account, not independent user adoption"]
+}
