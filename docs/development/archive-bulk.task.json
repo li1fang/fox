@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Archive explicit existing local Fox media and reports with source-preserving deduplication and discoverable relationship indexes",
+  "nonGoals": ["Live device reads", "Windows data intake", "Source deletion", "Algorithm changes", "CI trigger changes", "Independent backup"],
+  "invariants": ["Retain every source association", "Preserve all original bytes", "Time-based report joins are candidates only", "Never write receipts over inputs", "Publish the verified frozen inventory"],
+  "modules": ["scripts/archive_batch.py", "tests/scripts/test_archive_batch.py", "docs/planning"],
+  "acceptance": ["test:archive", "verify:repository"],
+  "stopConditions": ["Source digest drift", "Unknown source", "Conflicting output path", "SSH identity failure", "Insufficient storage"],
+  "evidence": ["Red regressions before fixes", "Mac and Linux tests", "Source digest comparison", "Per-object remote verification", "Retrieved indexes", "Independent review"],
+  "humanUnknowns": ["Unfetched device and Photos content", "Windows 6DoF source paths", "Fresh iPhone snapshot not yet acquired"]
+}
