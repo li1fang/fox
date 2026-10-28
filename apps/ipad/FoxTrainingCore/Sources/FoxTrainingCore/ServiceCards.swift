@@ -177,6 +177,7 @@ public struct ServiceCardConsumer: Sendable {
     public private(set) var drafts: [ServiceCardKey: String] = [:]
     public private(set) var submissions: [UUID: ServiceCardSubmissionState] = [:]
     public private(set) var editing: Set<ServiceCardKey> = []
+    public private(set) var reading = false
     private var seen: [ServiceCardKey: ServiceCard] = [:]
     private var greatestRevision: [String: Int] = [:]
 
@@ -203,7 +204,7 @@ public struct ServiceCardConsumer: Sendable {
             greatestRevision[card.id] = card.revision
         }
         latestFeed = feed
-        if editing.isEmpty { appliedFeed = feed; pendingFeed = nil }
+        if appliedFeed == nil || (editing.isEmpty && !reading) { appliedFeed = feed; pendingFeed = nil }
         else { pendingFeed = feed }
     }
 
@@ -213,7 +214,14 @@ public struct ServiceCardConsumer: Sendable {
     }
     public mutating func setEditing(_ active: Bool, key: ServiceCardKey) {
         if active, seen[key] != nil { editing.insert(key) } else { editing.remove(key) }
-        if editing.isEmpty, let pendingFeed { appliedFeed = pendingFeed; self.pendingFeed = nil }
+        applyPendingIfSafe()
+    }
+    public mutating func setReading(_ active: Bool) {
+        reading = active
+        applyPendingIfSafe()
+    }
+    private mutating func applyPendingIfSafe() {
+        if editing.isEmpty, !reading, let pendingFeed { appliedFeed = pendingFeed; self.pendingFeed = nil }
     }
     public func card(for key: ServiceCardKey) -> ServiceCard? { seen[key] }
     public func availability(of key: ServiceCardKey, at now: Date) -> ServiceCardAvailability {

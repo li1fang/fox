@@ -139,4 +139,34 @@ final class ServiceCardTests: XCTestCase {
         XCTAssertThrowsError(try model.receive(bad))
         XCTAssertThrowsError(try JSONDecoder().decode(ServiceCardActionKind.self, from: Data("\"script\"".utf8)))
     }
+
+    func testReadingHoldDefersReplacementUntilExplicitBoundaryWithoutExtendingValidity() throws {
+        var model = ServiceCardConsumer(providerID: "synthetic")
+        model.setReading(true)
+        let a = question("a"), b = question("b"), key = a.key(providerID: "synthetic")
+        try model.receive(feed([a, b]))
+        XCTAssertEqual(model.appliedFeed?.revision, 1, "The first snapshot has nothing to displace")
+        try model.receive(feed([b], revision: 2))
+        XCTAssertEqual(model.appliedFeed?.cards.map(\.id), ["a", "b"])
+        XCTAssertEqual(model.pendingFeed?.revision, 2)
+        XCTAssertEqual(model.availability(of: key, at: now), .withdrawn)
+        XCTAssertEqual(model.availability(of: b.key(providerID: "synthetic"), at: now.addingTimeInterval(101)), .expired)
+        model.setReading(false)
+        XCTAssertEqual(model.appliedFeed?.cards.map(\.id), ["b"])
+        XCTAssertNil(model.pendingFeed)
+    }
+
+    func testReadingBoundaryCannotApplyFeedWhileExplicitChoiceEditingRemainsActive() throws {
+        var model = ServiceCardConsumer(providerID: "synthetic")
+        var a = question("a"); a.answerSpec = .choice(options: ["是", "否"])
+        let b = question("b"), key = a.key(providerID: "synthetic")
+        try model.receive(feed([a, b])); model.setReading(true); model.setEditing(true, key: key)
+        model.setDraft("否", for: key)
+        try model.receive(feed([b, a], revision: 2)); model.setReading(false)
+        XCTAssertEqual(model.appliedFeed?.cards.map(\.id), ["a", "b"])
+        XCTAssertEqual(model.drafts[key], "否")
+        model.setEditing(false, key: key)
+        XCTAssertEqual(model.appliedFeed?.cards.map(\.id), ["b", "a"])
+        XCTAssertEqual(model.drafts[key], "否")
+    }
 }

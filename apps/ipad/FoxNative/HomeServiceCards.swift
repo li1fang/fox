@@ -10,6 +10,8 @@ final class HomeServiceCardStore: ObservableObject {
     @Published private(set) var sending: Set<UUID> = []
     @Published private(set) var localBusy: Set<String> = []
     @Published private(set) var localErrors: [String: String] = [:]
+    @Published private(set) var choiceEditing: Set<ServiceCardKey> = []
+    @Published private(set) var presentationTime: Date
     let provider: (any ServiceCardProvider)?
     private let clock: () -> Date
     private var focused: ServiceCardKey?
@@ -17,12 +19,23 @@ final class HomeServiceCardStore: ObservableObject {
 
     // No production provider is installed implicitly. Synthetic data must be explicitly injected.
     init(provider: (any ServiceCardProvider)? = nil, now: @escaping () -> Date = { Date() }) {
-        self.provider = provider; self.clock = now; self.now = now()
-        consumer = ServiceCardConsumer(providerID: provider?.providerID ?? "unconfigured")
+        let initialTime = now()
+        self.provider = provider; self.clock = now; self.now = initialTime
+        self.presentationTime = initialTime
+        var consumer = ServiceCardConsumer(providerID: provider?.providerID ?? "unconfigured")
+        // Reading has no reliable focus callback. Hold after the initial snapshot until the
+        // user explicitly applies updates; expiry/withdrawal still use the latest snapshot.
+        consumer.setReading(true)
+        self.consumer = consumer
     }
     var isSynthetic: Bool { provider?.isSynthetic == true }
     var cards: [ServiceCard] {
-        (consumer.appliedFeed?.cards ?? []).filter { $0.visible && now >= $0.visibleFrom }
+        (consumer.appliedFeed?.cards ?? []).filter { $0.visible && presentationTime >= $0.visibleFrom }
+    }
+    var hasPendingUpdates: Bool {
+        consumer.pendingFeed != nil || (consumer.appliedFeed?.cards.contains {
+            $0.visible && $0.visibleFrom > presentationTime && $0.visibleFrom <= now
+        } ?? false)
     }
     var retainedDraftKeys: [ServiceCardKey] {
         let visible = Set(cards.map { key($0) })
@@ -37,14 +50,35 @@ final class HomeServiceCardStore: ObservableObject {
         // Insert the next focus before removing the previous one so a field-to-field move
         // cannot momentarily apply a pending reorder under the keyboard.
         if let key { consumer.setEditing(true, key: key) }
-        if let old = focused, old != key { consumer.setEditing(false, key: old) }
+        if let old = focused, old != key { consumer.setEditing(choiceEditing.contains(old), key: old) }
         focused = key
+    }
+    func isChoiceEditing(_ card: ServiceCard) -> Bool { choiceEditing.contains(key(card)) }
+    func beginChoiceEditing(_ card: ServiceCard) {
+        guard case .choice = card.answerSpec, consumer.card(for: key(card)) != nil else { return }
+        choiceEditing.insert(key(card)); consumer.setEditing(true, key: key(card))
+    }
+    func endChoiceEditing(_ card: ServiceCard) {
+        choiceEditing.remove(key(card)); consumer.setEditing(focused == key(card), key: key(card))
+    }
+    @discardableResult
+    func applyPendingUpdates() -> Bool {
+        guard consumer.editing.isEmpty else { return false }
+        // This synchronous boundary applies only content already received. A later fetch
+        // remains pending instead of borrowing permission from an earlier button press.
+        consumer.setReading(false); consumer.setReading(true)
+        tick(); presentationTime = now
+        return true
     }
     func tick() { now = clock() }
     func refresh() async {
         guard !loading, let provider else { return }
         loading = true; defer { loading = false }
-        do { try consumer.receive(await provider.fetchFeed()); error = nil; tick() }
+        do {
+            let firstSnapshot = consumer.appliedFeed == nil
+            try consumer.receive(await provider.fetchFeed()); error = nil; tick()
+            if firstSnapshot { presentationTime = now }
+        }
         catch { self.error = "暂时无法更新卡片，已输入内容仍保留。" }
     }
     func input(card: ServiceCard, action: ServiceCardAction) -> ServiceCardInput {
@@ -127,7 +161,7 @@ struct HomeServiceCardsView: View {
                 HStack {
                     Text("问题与建议").font(.headline)
                     Spacer()
-                    Button("刷新") { Task { await store.refresh() } }
+                    Button("检查更新") { Task { await store.refresh() } }
                         .frame(minHeight: 44).disabled(store.loading)
                         .accessibilityIdentifier("home-service-refresh")
                 }
@@ -137,9 +171,15 @@ struct HomeServiceCardsView: View {
                     .accessibilityIdentifier("home-service-synthetic")
             }
             if let error = store.error { Text(error).font(.callout).foregroundStyle(.red).accessibilityIdentifier("home-service-error") }
-            if store.consumer.pendingFeed != nil {
-                Text("有新的卡片，完成输入后更新顺序。").font(.caption).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("home-service-pending")
+            if store.provider != nil {
+                Text("阅读期间保持卡片顺序。").font(.caption).foregroundStyle(.secondary)
+                if store.hasPendingUpdates {
+                    Text("有新的卡片，完成输入和查看后可更新。").font(.caption).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("home-service-pending")
+                    Button("完成查看并更新") { store.applyPendingUpdates() }
+                        .frame(minHeight: 44).disabled(!store.consumer.editing.isEmpty)
+                        .accessibilityIdentifier("home-service-apply-updates")
+                }
             }
             if store.loading { ProgressView("正在读取卡片") }
             if store.cards.isEmpty && !store.loading { Text("当前暂无服务卡片").foregroundStyle(.secondary).accessibilityIdentifier("home-service-empty") }
@@ -157,7 +197,7 @@ struct HomeServiceCardsView: View {
             ForEach(orphanSubmissions, id: \.submission.id) { state in submissionRow(state) }
         }
         .accessibilityIdentifier("home-service-cards")
-        .accessibilityValue("applied:\(store.consumer.appliedFeed?.revision ?? 0);pending:\(store.consumer.pendingFeed?.revision ?? 0)")
+        .accessibilityValue("applied:\(store.consumer.appliedFeed?.revision ?? 0);pending:\(store.consumer.pendingFeed?.revision ?? 0);reading-held:\(store.consumer.reading)")
         .task { await store.refresh() }
         .onReceive(timer) { _ in store.tick() }
         .onChange(of: focused) { store.focus($0) }
@@ -179,10 +219,22 @@ struct HomeServiceCardsView: View {
             if !card.body.isEmpty { Text(card.body).font(.body) }
             if card.kind == .question {
                 if case .choice(let options) = card.answerSpec {
-                    Picker("回答", selection: binding(card)) {
-                        Text("请选择").tag("")
-                        ForEach(options, id: \.self) { Text($0).tag($0) }
-                    }.pickerStyle(.menu)
+                    if store.isChoiceEditing(card) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(options, id: \.self) { option in
+                                Button { store.setDraft(option, card: card) } label: {
+                                    Label(option, systemImage: store.draft(card) == option ? "largecircle.fill.circle" : "circle")
+                                }.frame(minHeight: 44)
+                            }
+                            Button("完成选择") { store.endChoiceEditing(card) }
+                                .frame(minHeight: 44).accessibilityIdentifier("home-card-\(card.id)-choice-done")
+                        }.accessibilityIdentifier("home-card-\(card.id)-choice-editor")
+                    } else {
+                        if !store.draft(card).isEmpty { Text("已选择：\(store.draft(card))") }
+                        Button(store.draft(card).isEmpty ? "选择回答" : "修改选择") {
+                            focused = nil; store.beginChoiceEditing(card)
+                        }.frame(minHeight: 44).accessibilityIdentifier("home-card-\(card.id)-choice-begin")
+                    }
                 } else {
                     TextField("写下回答（可跳过）", text: binding(card), axis: .vertical)
                         .lineLimit(2...6).focused($focused, equals: key)
