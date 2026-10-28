@@ -20,8 +20,16 @@ final class HomeTrainingDispatcher: ObservableObject {
         }
     }
 
+    private struct Request: Equatable {
+        let card: ServiceCard
+        let action: ServiceCardAction
+        let id: UUID
+    }
+
+    @Published private(set) var pendingRequestID: UUID?
     private let factory: @MainActor () -> TrainingStore
     private var retainedStore: TrainingStore?
+    private var pendingRequest: Request?
 
     init(factory: @escaping @MainActor () -> TrainingStore = { TrainingStore() }) {
         self.factory = factory
@@ -48,16 +56,50 @@ final class HomeTrainingDispatcher: ObservableObject {
             throw ServiceCardError.invalidCard
         }
 
+        let request = Request(card: card, action: action, id: requestID)
+        if let pendingRequest {
+            guard pendingRequest == request else {
+                throw Failure.entryRejected("上次切换尚未保存，请先重试上次切换。")
+            }
+            return try retryPending()
+        }
+
         let store: TrainingStore
         if let retainedStore { store = retainedStore }
         else {
             store = factory()
             retainedStore = store
         }
+        guard !store.executionBlocked else {
+            throw Failure.entryRejected("上次切换尚未保存，请在原训练页面重试。")
+        }
         // A failure deliberately retains this store, including its transaction cutoff and drafts.
         guard store.enter(entry) else {
+            if store.executionBlocked {
+                pendingRequest = request
+                pendingRequestID = requestID
+            }
             throw Failure.entryRejected(store.errorMessage ?? "操作未完成，原有训练仍保留。")
         }
+        return try presentation(store: store, requestID: requestID)
+    }
+
+    /// Completes the original frozen transaction even if its source card has expired or withdrawn.
+    /// It never consults a newer card, calls enter again, or creates another request ID.
+    func retryPending() throws -> Presentation {
+        guard let pendingRequest, let store = retainedStore else {
+            throw Failure.entryRejected("没有待恢复的切换。")
+        }
+        guard store.retrySwitch() else {
+            throw Failure.entryRejected(store.errorMessage ?? "上次切换尚未保存，请重试。")
+        }
+        let result = try presentation(store: store, requestID: pendingRequest.id)
+        self.pendingRequest = nil
+        pendingRequestID = nil
+        return result
+    }
+
+    private func presentation(store: TrainingStore, requestID: UUID) throws -> Presentation {
         guard !store.executionBlocked,
               let session = store.archive.currentSession,
               let receipt = store.archive.commandReceipts?.first(where: { $0.command.id == requestID }),
@@ -72,6 +114,8 @@ final class HomeTrainingDispatcher: ObservableObject {
     @discardableResult
     func dismiss() -> Bool {
         guard retainedStore?.executionBlocked != true else { return false }
+        pendingRequest = nil
+        pendingRequestID = nil
         retainedStore = nil
         return true
     }
