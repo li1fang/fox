@@ -1,6 +1,17 @@
 import XCTest
 
 final class FoxHomeUITests: XCTestCase {
+    func testSyncEntryCanCloseWithoutPairingOrChangingTraining() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["journal-sync"].waitForExistence(timeout: 10))
+        app.buttons["journal-sync"].tap()
+        XCTAssertTrue(app.buttons["sync-import"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["尚未配对"].exists)
+        XCTAssertFalse(app.buttons["sync-now"].exists)
+        app.buttons["sync-close"].tap()
+        XCTAssertTrue(app.buttons["home-try-training"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "journal-note").firstMatch.exists)
+    }
     private func launch(failSave: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait

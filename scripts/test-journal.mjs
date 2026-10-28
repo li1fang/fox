@@ -18,12 +18,14 @@ function run(command, args, env = process.env) {
 run(python, ["-c", "import jsonschema, referencing"]);
 mkdirSync(join(root, ".tmp"), { recursive: true });
 const fixture = join(mkdtempSync(join(root, ".tmp", "journal-wire-")), "backup.json");
-const environment = { ...process.env, FOX_JOURNAL_SCHEMA_FIXTURE: fixture };
+const syncFixture = join(mkdtempSync(join(root, ".tmp", "journal-sync-wire-")), "backup.json");
+const environment = { ...process.env, FOX_JOURNAL_SCHEMA_FIXTURE: fixture, FOX_JOURNAL_SYNC_SCHEMA_FIXTURE: syncFixture };
 if (!environment.DEVELOPER_DIR && existsSync("/Applications/Xcode.app/Contents/Developer")) {
   environment.DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
 }
 run("xcrun", ["swift", "test", "--package-path", "apps/ipad/FoxJournalCore", "--scratch-path", ".tmp/journal-core-build"], environment);
 run(python, ["scripts/validate-journal-schema.py", fixture]);
+run(python, ["scripts/validate-journal-schema.py", syncFixture]);
 const sdk = spawnSync("xcrun", ["--sdk", "iphoneos", "--show-sdk-path"], { env: environment, encoding: "utf8" });
 if (sdk.error || sdk.status !== 0 || !sdk.stdout.trim()) {
   console.error("An iPhoneOS SDK is required for the journal compatibility check.");

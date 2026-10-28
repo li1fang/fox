@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Connect native Journal records and photos to the personal vault with durable pairing, atomic offline edits and explicit foreground synchronization",
+  "nonGoals": ["Full accounts", "Automatic original deletion", "Training or video synchronization", "Algorithm changes", "Background realtime guarantees", "CI trigger changes"],
+  "invariants": ["Retain original revisions and photo bytes", "Never overwrite pending local edits with remote data", "Persist local edit and outbox in one transaction", "TLS identity failures stay failures", "No credentials in backups or Git", "Do not install devices before preservation and notification"],
+  "modules": ["FoxJournalCore", "FoxSyncCore", "FoxNative/JournalStore.swift", "FoxNative/JournalSyncView.swift", "apps/ipad/project.yml", "scripts/ipad.mjs simulator signing only", "verification-contracts fast native coverage"],
+  "acceptance": ["test:journal", "test:sync:native", "test:sync", "verify:repository", "verify:fast", "Focused phone/pad sync and local journal regressions", "Keychain runtime on simulator", "Frozen complete public candidate", "Real device preservation and pairing after explicit authorization"],
+  "stopConditions": ["Unverifiable migration", "Original loss", "Concurrent writer", "Missing necessary device authorization or interaction", "TLS identity mismatch"],
+  "evidence": ["Failing storage and transport regressions before implementation", "Two native synthetic peers through Linux HTTPS", "Focused native build and UI checks", "Fresh-context review"],
+  "humanUnknowns": ["Device pairing and actual LAN permissions require later physical-device validation", "Existing training algorithms are not re-evaluated"]
+}

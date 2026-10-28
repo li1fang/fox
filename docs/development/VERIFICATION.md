@@ -18,6 +18,8 @@
 
 `npm run doctor` 输出实际 Node、npm、Python、Swift、Xcode、SDK、XcodeGen 和可用模拟器版本。`DEVELOPER_DIR` 可指向对应 Xcode。模拟器构建 Fox 和 Fox Say 不需要 Apple 账号；实际设备构建另需本地 `FOX_DEVELOPMENT_TEAM`，不能把 Team ID 提交到仓库。
 
+2026-10-28 同步模块补记：`test-ui` 对显式 iOS Simulator 使用 ad-hoc 签名（`CODE_SIGNING_ALLOWED=YES`、`CODE_SIGN_IDENTITY=-`、空 `DEVELOPMENT_TEAM`），让 App-host 的 Keychain 具有真实应用身份；不需要 Apple 账号，不改变真机签名。禁止以 fake Keychain 或跳过测试掩盖运行时权限失败。fast 的主机覆盖包含 `FoxSyncCoreTests`，仍必须登记和精确核对实际执行方法。
+
 本地默认 profile 为 `xcode-27.1`，只接受 27.1 / 27A9275，默认 runtime 为通用 iOS 27.0。实核 27.1 / 24A94425 只支持 Duo，不能创建普通 iPad/iPhone；它与通用 27.0 不是重复下载。Duo 诊断必须同时显式指定该 runtime 与机型，不冒充完整手机/平板覆盖。未知 profile、错误版本/build 不回退或接受“latest”。CI 在现有 YAML 中显式选择 `xcode-26.3`；仅固定兼容通道，不改触发。进程指定 `DEVELOPER_DIR`；换 profile 不会自动切换全局工具或安装 runtime。首次运行、SDK 和 runtime 可用性仍须实际核对。
 
 profile 与 runtime 在原生预检/实际使用时解析，不在导入模块时提前失败。因此未知配置不能遮蔽正式候选的错误提交/脏工作树拒绝及零步骤失败回执；单独运行原生入口仍严格拒绝未知 profile。

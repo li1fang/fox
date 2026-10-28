@@ -14,6 +14,7 @@
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSCameraUsageDescription</key><string>Fox 使用相机拍摄生活记录照片，也可在本机检测训练关键点。视觉尝试会临时缓存无声视频，核对后由你选择保留或删除；不自动上传。</string>
     <key>NSMotionUsageDescription</key><string>Fox 在本机记录设备摆放角度，便于复盘拍摄机位；不采集定位或日常活动记录。</string>
+    <key>NSLocalNetworkUsageDescription</key><string>Fox 连接你配对的局域网资料库，同步文字和照片；本机原件会保留。</string>
     <key>UIApplicationSceneManifest</key>
     <dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
     <key>UIRequiresFullScreen</key><true/>

@@ -77,6 +77,8 @@ struct FoxHomeView: View {
     @State private var selected: CaptureRecord?
     @State private var trainingRoute: HomeTrainingRoute?
     @State private var showingBackup = false
+    @State private var showingSync = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var trainingSelection: HomeTrainingSelection?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -155,6 +157,10 @@ struct FoxHomeView: View {
             .navigationTitle("Fox")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { editing = false; showingSync = true } label: { Image(systemName: "arrow.triangle.2.circlepath") }
+                        .accessibilityLabel("同步资料库").accessibilityIdentifier("journal-sync").help("同步资料库")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button { editing = false; showingBackup = true } label: { Image(systemName: "externaldrive") }
                         .accessibilityLabel("备份与恢复").accessibilityIdentifier("journal-backup").help("备份与恢复")
                         .disabled(journal.busy || photos.loading)
@@ -164,11 +170,19 @@ struct FoxHomeView: View {
                     Button("完成") { editing = false }
                 }
             }
-            .task { if automaticallyLoad { await journal.load() }; await trainingArchive.load() }
+            .task {
+                if automaticallyLoad { await journal.load() }
+                await trainingArchive.load()
+                if automaticallyLoad { await journal.synchronize(ifPairedOnly: true) }
+            }
+            .onChange(of: scenePhase) { phase in
+                if phase == .active, automaticallyLoad { Task { await journal.synchronize(ifPairedOnly: true) } }
+            }
             .fullScreenCover(item: $trainingRoute, onDismiss: { Task { await trainingArchive.load() } }) { route in
                 FoxRootView(trialExercise: route.exercise, onClose: { trainingRoute = nil }).foxReservedSpace().interactiveDismissDisabled()
             }
             .sheet(isPresented: $showingBackup) { JournalBackupView(journal: journal) }
+            .sheet(isPresented: $showingSync) { JournalSyncView(journal: journal) }
             .sheet(item: $trainingSelection) { selection in HomeTrainingDetail(selection: selection) { trainingSelection = nil } }
             .sheet(item: $selected) { record in
                 JournalRecordDetail(initial: record, journal: journal, close: { selected = nil })

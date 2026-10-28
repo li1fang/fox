@@ -7,12 +7,12 @@
 | 身份 | 当前含义 | 证据上限 |
 | --- | --- | --- |
 | 已安装试用候选 | iPhone 与 iPad 均为 Fox 0.6.12 / build 31，产品源码 5ff745d；四动作入口与无视觉凯格尔已保留记录覆盖交付 | 稳定首页、进程及记录保全通过；不是完整独立训练体验或新算法准确率验收。签名实际到期 2026-10-30 07:51:41 +07，没有自动续期 |
-| 开发基线 | 分支 `codex/fox-candidate-acceptance`；SYNC-3A 起点 c41da6e（同步核心）；本包只作本地提交，未推送 | 提交后的精确 HEAD 以 Git 与本包回执为准，不为自引用重复追加提交；服务/传输提交不等于设备新版本 |
-| 验证状态 | 按提交、源码指纹、输入哈希和对应回执判断；四动作两端各 27 项定向通过，失败也保留 | 本包不重跑产品回归，不声称旧全量、Duo、VoiceOver 或新真人验收已通过 |
+| 开发基线 | 分支 `codex/fox-candidate-acceptance`；SYNC-3B/C 起点 e778186（HTTPS/原生传输）；本包只作本地提交，未推送 | 提交后的精确 HEAD 以 Git 与本包回执为准，不为自引用重复追加提交；源码接入不等于设备已配对 |
+| 验证状态 | 按提交、源码指纹、输入哈希和对应回执判断；SYNC fast 与两端定向通过，进入冻结 public，失败保留 | 未完成的 public 不冒充通过；旧全量、Duo、VoiceOver 与新真人准确性不由本轮定向结果代替 |
 
 ## 当前工作与停止点
 
-- **当前收口：** [SYNC-3A HTTPS 与原生传输基础](../planning/PERSONAL_SYNC_NATIVE_V1.zh-CN.md) 已通过限定验收：53 项 Python、6 项 Swift、59 项验证入口测试，iOS SDK 编译、真实 LAN 合成双副本/照片与 Mac Swift 探针通过。Linux 用户服务已常驻，用户明确授权 linger，断开 SSH 后 active；私有连接 `~/.config/fox/sync-https.json`。未接入 Journal/配对 UI，未更新设备；不等于 iPhone/iPad 已同步。下一步 3B 处理事务 outbox、Keychain、迁移/删除/备份语义，然后 3C UI、3D 设备验收。
+- **当前工作：** [SYNC-3B/C 原生同步接入](../planning/PERSONAL_SYNC_NATIVE_V1.zh-CN.md) 已实现 Journal v2 事务队列、Keychain、保留历史的墓碑、冲突核对、备份 v2、配对/前台同步 UI。Linux 原生合成闭环、fast、iPad 19 项/iPhone 5 项定向回归通过，当前冻结候选进入完整 public。用户追加授权：通过后备份并覆盖更新两台设备、真实图文配对；安装前备份已核验，尚未安装或配对，不冒称真实双端已同步。
 - **同步基础保留：** [SYNC-0–2](../planning/PERSONAL_SYNC_V1.zh-CN.md) 契约、Python 参考核心及 Linux SSH 合成双副本通过，连接 `~/.config/fox/sync.json`。正式同步库仍为空，归档库独立；真实记录未迁移、原件未删除，不建设完整账号、不改 CI。90 天测试证书自动续期与换锚分发未实现，不能绕过身份失败。
 
 - **iPhone 当前图文接收已完成：** [一致性快照交接](../planning/IPHONE_JOURNAL_INTAKE_20261028.zh-CN.md)。2026-10-28 14:30（UTC+7）从解锁手机两次只读取回，8 条记录、9 个修订、5 张照片核验一致；Linux 原件/索引及照片回读通过，共享指针已更新。未安装、未删原件、未改产品；不是持续同步，早前 STORE-3 的“不是当前手机数据”只适用于其旧快照。
@@ -45,7 +45,7 @@
 
 ## 下一批候选，不自动开工
 
-按 [原任务台账](../planning/LIFE_LOG_BACKLOG.zh-CN.md)与 [采集导出路线](../planning/ENTRY_CAPTURE_EXPORT_ROADMAP_20261027.zh-CN.md)选择：CAPTURE-01 的只读梳理/交互方案已启动，代码实施未启动；CAPTURE-02 语音便笺和 EXPORT-01 自有 Agent 导出未启动。HealthKit INPUT-01 单独排期。同步已推进至 SYNC-3A，原生存储/UI/设备验收仍未完成；暂不做实时 AI/ASR、TRX 适配、深度、悬停专用设计或跨平台；不拆分 Fox。
+按 [原任务台账](../planning/LIFE_LOG_BACKLOG.zh-CN.md)与 [采集导出路线](../planning/ENTRY_CAPTURE_EXPORT_ROADMAP_20261027.zh-CN.md)选择：CAPTURE-01 的只读梳理/交互方案已启动，代码实施未启动；CAPTURE-02 语音便笺和 EXPORT-01 自有 Agent 导出未启动。HealthKit INPUT-01 单独排期。同步按本轮授权连续推进至设备门槛，不按小里程碑等待确认；暂不做实时 AI/ASR、TRX 适配、深度、悬停专用设计或跨平台；不拆分 Fox。
 
 ## 从哪里继续
 

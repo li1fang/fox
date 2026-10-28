@@ -5,7 +5,7 @@ import XCTest
 
 final class SyncTransportTests: XCTestCase {
     func testRejectsPlaintextAndCredentialURLs() throws {
-        let certificate = try syntheticCertificate()
+        let certificate = try Self.syntheticCertificate()
         for text in ["http://example.test/v1/rpc", "https://user:secret@example.test/v1/rpc", "https://example.test/v1/rpc?token=secret"] {
             XCTAssertThrowsError(try SyncHTTPSClient(endpoint: URL(string: text)!, certificate: certificate))
         }
@@ -28,8 +28,8 @@ final class SyncTransportTests: XCTestCase {
         try await boundedResponse(status: 500)
     }
     func testTrustChecksAnchorHostnameAndExpiry() throws {
-        let certificate = SecCertificateCreateWithData(nil, try syntheticCertificate() as CFData)!
-        let other = SecCertificateCreateWithData(nil, try syntheticCertificate() as CFData)!
+        let certificate = SecCertificateCreateWithData(nil, try Self.syntheticCertificate() as CFData)!
+        let other = SecCertificateCreateWithData(nil, try Self.syntheticCertificate() as CFData)!
         func trust() -> SecTrust {
             var value: SecTrust?
             XCTAssertEqual(SecTrustCreateWithCertificates([certificate] as CFArray, SecPolicyCreateSSL(true, "example.test" as CFString), &value), errSecSuccess)
@@ -46,12 +46,12 @@ final class SyncTransportTests: XCTestCase {
         ChunkProtocol.status = status; ChunkProtocol.sent = 0
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ChunkProtocol.self]
         let client = try SyncHTTPSClient(endpoint: URL(string: "https://example.test/v1/rpc")!,
-            certificate: syntheticCertificate(), configuration: config, responseLimit: 1_024)
+            certificate: Self.syntheticCertificate(), configuration: config, responseLimit: 1_024)
         do { _ = try await client.send(header: Data("{}".utf8)); XCTFail("Expected rejection") }
         catch { XCTAssertTrue(error is SyncTransportError) }
         XCTAssertLessThan(ChunkProtocol.sent, 100)
     }
-    private func syntheticCertificate() throws -> Data {
+    static func syntheticCertificate() throws -> Data {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }

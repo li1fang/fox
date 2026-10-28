@@ -521,7 +521,10 @@ async function testNativeUI() {
       ...(resultBundle ? ['-resultBundlePath', resolve(resultBundle)] : []),
       // Keep budgets and fail-closed animation diagnostics in the owning parent process.
       '-test-timeouts-enabled', 'NO',
-      "-parallel-testing-enabled", "NO", ...tests.map((value) => `-only-testing:${value}`), "CODE_SIGNING_ALLOWED=NO", "test"], 60 * 60_000);
+      // Ad-hoc simulator signing provides the application identity required by
+      // Keychain; it needs neither an Apple account nor a provisioning profile.
+      "-parallel-testing-enabled", "NO", ...tests.map((value) => `-only-testing:${value}`),
+      "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-", "DEVELOPMENT_TEAM=", "test"], 60 * 60_000);
     cancellation.signal.throwIfAborted();
   } finally {
     try {

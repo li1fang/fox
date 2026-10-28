@@ -5,6 +5,9 @@ import FoxSyncCore
 @main struct Probe {
     static func main() async throws {
         let args = CommandLine.arguments
+        if args.count == 4, args[1] == "--roundtrip" {
+            try await nativeRoundtrip(config: URL(fileURLWithPath: args[2]), output: URL(fileURLWithPath: args[3])); return
+        }
         guard args.count == 5, let endpoint = URL(string: args[1]) else { throw SyncTransportError.invalidConfiguration }
         let client = try SyncHTTPSClient(endpoint: endpoint, certificate: Data(contentsOf: URL(fileURLWithPath: args[2])))
         let result = try await client.send(header: Data(contentsOf: URL(fileURLWithPath: args[3])))

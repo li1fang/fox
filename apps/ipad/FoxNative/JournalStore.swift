@@ -1,4 +1,5 @@
 import FoxJournalCore
+import FoxSyncCore
 import Foundation
 import SwiftUI
 
@@ -17,14 +18,19 @@ private actor JournalWorker {
     var failSaveOnce: Bool
     var conflictOnce: Bool
     private var repository: LocalJournalRepository?
+    private var syncEngine: JournalSyncEngine?
+    private let credentials: any SyncCredentialStore
+    private let syncRPC: (any SyncRPC)?
     private let previews = NSCache<NSUUID, NSData>()
 
-    init(directory: URL, exportDirectory: URL, reset: Bool, failSaveOnce: Bool, conflictOnce: Bool) {
+    init(directory: URL, exportDirectory: URL, reset: Bool, failSaveOnce: Bool, conflictOnce: Bool,
+         credentials: any SyncCredentialStore, syncRPC: (any SyncRPC)?) {
         self.directory = directory
         self.exportDirectory = exportDirectory
         self.reset = reset
         self.failSaveOnce = failSaveOnce
         self.conflictOnce = conflictOnce
+        self.credentials = credentials; self.syncRPC = syncRPC
         previews.countLimit = 80
         previews.totalCostLimit = 32 * 1024 * 1024
     }
@@ -42,6 +48,32 @@ private actor JournalWorker {
     func list(offset: Int = 0) throws -> [CaptureRecord] {
         try open().list(JournalQuery(limit: 51, offset: offset))
     }
+
+    func syncState() throws -> (JournalSyncStatus, [JournalSyncConflict]) {
+        let r = try open()
+        // A claim may survive a failed local transaction in Keychain. Recover it
+        // before presenting an unpaired state; this does not contact the server.
+        if syncEngine == nil, try r.syncStatus().vault == nil {
+            syncEngine = try JournalSyncEngine.paired(repository: r, credentials: credentials, rpc: syncRPC)
+        }
+        return (try r.syncStatus(), try r.syncConflicts())
+    }
+    func synchronize() async throws {
+        if syncEngine == nil { syncEngine = try JournalSyncEngine.paired(repository: open(), credentials: credentials, rpc: syncRPC) }
+        guard let syncEngine else { throw SyncClientError.missingCredentials }
+        _ = try await syncEngine.run()
+    }
+    func invitation(_ url: URL) throws -> SyncInvitation {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let size = values.fileSize, size <= 16_384 else { throw SyncClientError.invalidPairing }
+        return try SyncInvitation.decode(Data(contentsOf: url))
+    }
+    func pair(_ invitation: SyncInvitation, name: String) async throws {
+        syncEngine = try await JournalSyncEngine.pair(repository: open(), invitation: invitation, credentials: credentials, name: name)
+    }
+    func resolve(_ id: UUID, keepLocal: Bool) throws { try open().resolveSyncConflict(id, keepLocal: keepLocal) }
 
     func save(_ draft: CaptureDraft) throws -> CaptureRecord {
         if failSaveOnce {
@@ -124,6 +156,11 @@ final class JournalStore: ObservableObject {
     @Published private(set) var operationError: String?
     @Published private(set) var revisionConflict = false
     @Published var notice: String?
+    @Published private(set) var syncState: JournalSyncStatus?
+    @Published private(set) var syncConflicts: [JournalSyncConflict] = []
+    @Published private(set) var syncing = false
+    @Published private(set) var syncError: String?
+    @Published private(set) var lastSync: Date?
     private let worker: JournalWorker
     #if DEBUG
     private let allowsDesignState: Bool
@@ -145,15 +182,56 @@ final class JournalStore: ObservableObject {
             conflictOnce: testing && environment["FOX_UI_JOURNAL_CONFLICT_ONCE"] == "1")
     }
 
-    init(directory: URL, exportDirectory: URL, reset: Bool = false, failSaveOnce: Bool = false, conflictOnce: Bool = false) {
+    init(directory: URL, exportDirectory: URL, reset: Bool = false, failSaveOnce: Bool = false, conflictOnce: Bool = false,
+         credentials: any SyncCredentialStore = SyncKeychain(), syncRPC: (any SyncRPC)? = nil) {
         #if DEBUG
         allowsDesignState = directory.standardizedFileURL.path.hasPrefix(FileManager.default.temporaryDirectory.appendingPathComponent("FoxDesign").path + "/")
         #endif
         worker = JournalWorker(directory: directory, exportDirectory: exportDirectory,
-            reset: reset, failSaveOnce: failSaveOnce, conflictOnce: conflictOnce)
+            reset: reset, failSaveOnce: failSaveOnce, conflictOnce: conflictOnce, credentials: credentials, syncRPC: syncRPC)
     }
 
     var saving: Bool { operation == .saving }
+    func refreshSyncState() async {
+        do { let value = try await worker.syncState(); syncState = value.0; syncConflicts = value.1 }
+        catch { syncError = "暂时无法读取同步状态；本机记录仍保留。" }
+    }
+    func readInvitation(_ url: URL) async throws -> SyncInvitation { try await worker.invitation(url) }
+    func pair(_ invitation: SyncInvitation) async {
+        guard !syncing, operation != .restoring else { return }
+        syncing = true; syncError = nil
+        defer { syncing = false }
+        do { try await worker.pair(invitation, name: UIDevice.current.userInterfaceIdiom == .pad ? "Fox iPad" : "Fox iPhone") }
+        catch { syncError = "配对未完成。请检查局域网权限、服务器或配对文件有效期；不要删除本机记录。" }
+        await refreshSyncState()
+        if syncError == nil { await performSync() }
+    }
+    func synchronize(ifPairedOnly: Bool = false) async {
+        guard !syncing, operation != .restoring else { return }
+        // Reserve ownership before any suspension, including the state refresh.
+        syncing = true; syncError = nil
+        defer { syncing = false }
+        if ifPairedOnly {
+            await refreshSyncState()
+            guard syncState?.vault != nil else { return }
+        }
+        await performSync()
+    }
+    private func performSync() async {
+        do { try await worker.synchronize(); lastSync = Date() }
+        catch SyncClientError.wireLimit { syncError = "部分记录或照片超过同步上限，原件仍在本机；未完成的内容会继续保留。" }
+        catch SyncClientError.missingCredentials { syncError = "配对凭据不可用。请先解锁；若仍失败，需要恢复配对，不要清除记录。" }
+        catch { syncError = "同步未完成。本机记录和待上传内容仍保留，请检查网络、局域网权限及服务器身份后重试。" }
+        await refreshSyncState(); await load()
+    }
+    func resolveSync(_ id: UUID, keepLocal: Bool) async {
+        guard !syncing, operation != .restoring else { return }
+        syncing = true; syncError = nil
+        defer { syncing = false }
+        do { try await worker.resolve(id, keepLocal: keepLocal); await performSync() }
+        catch { syncError = "冲突尚未处理。请先同步取得完整远端版本，再重试。" }
+        await refreshSyncState(); await load()
+    }
     #if DEBUG
     func presentDesignState(_ scenario: DesignScenario) {
         guard allowsDesignState else { return }
@@ -201,6 +279,7 @@ final class JournalStore: ObservableObject {
             pendingDraft = nil
             saveError = nil
             saved = true
+            Task { await synchronize(ifPairedOnly: true) }
             return true
         } catch {
             saveError = "保存未完成，输入仍保留。请重试。"
@@ -229,6 +308,7 @@ final class JournalStore: ObservableObject {
         do {
             let record = try await worker.revise(original, edit: edit)
             merge(record)
+            Task { await synchronize(ifPairedOnly: true) }
             return record
         } catch {
             revisionConflict = (error as? JournalError) == .revisionConflict
@@ -247,6 +327,7 @@ final class JournalStore: ObservableObject {
             if records.contains(where: { $0.id == record.id }) { nextOffset = max(0, nextOffset - 1) }
             records.removeAll { $0.id == record.id }
             if !cleanup.complete { notice = "记录已删除，部分照片仍待本机清理。" }
+            Task { await synchronize(ifPairedOnly: true) }
             return true
         } catch {
             operationError = "删除未完成。记录可能已更新，请重新打开核对。"
@@ -265,7 +346,7 @@ final class JournalStore: ObservableObject {
     func discardBackup(_ backup: PreparedJournalBackup) async { await worker.discardBackup(backup) }
 
     func restoreBackup(from url: URL) async -> RestoreReceipt? {
-        guard !busy else { return nil }
+        guard !busy, !syncing else { return nil }
         operation = .restoring; operationError = nil
         defer { operation = nil }
         do {
