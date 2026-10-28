@@ -2,6 +2,13 @@
 
 Read [current state](docs/development/CURRENT.md) first. This file is a routing guide, not a substitute for source or runtime evidence.
 
+## Collaboration
+
+- Use [module ownership and handoff](docs/development/MODULES.md#协作入口与职责) and the existing task ledger. One task has one owner who may finish cross-module work within its authorization; workstreams are not approval gates.
+- Keep a single writer per working tree for code, documentation, the ledger, test registration and project generation. Separate worktrees do not isolate simulators, devices or heavy build/test resources; reuse existing ownership/lease rules.
+- Initial workstream intake is read-only. Return a receipt in that chat; the coordinator reads it and records the shared state. A candidate task is not an assignment. Do not start work or message another chat without user authorization.
+- Verify project membership, actual default working directory, Git root and guidance provenance separately. Explicit workdir and manually reading this file do not prove that an existing chat changed its default context.
+
 ## Work Contract
 
 - State outcome, non-goals, invariants, affected modules, acceptance tests and stop conditions before editing. Use [the task contract](docs/development/task-contract.example.json) for substantial work.
