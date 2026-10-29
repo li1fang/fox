@@ -20,7 +20,7 @@ asset：path、bytes、sha256、stream_id。path 必须安全相对 POSIX 路径
 
 `fox.lab_frame.v1` 每行必需：schema、seq、pts、origin_pts、video_seconds、host_received_ns、state；reason 可空。pts/origin_pts 各含 value（带符号 Int64 十进制字符串）和 timescale（正 Int32），可选 epoch 为原 CMTime epoch 的带符号 Int64 字符串；保留 CMTime 原值，不先转 Double。video_seconds = pts - origin_pts，允许微秒级浮点舍入，必须非负有限。host_received_ns 不与 PTS 数值直接比较。state 为 observed/dropped，dropped 必须有 reason。丢帧也保留时间行，不能默默压紧视频时间。
 
-2D/3D 行形状由视觉线 owner 提供版本化 record_schema，本数据线不发明关节 schema。外层 manifest 记录来源/坐标/单位；离线消费者只能校验附件字节和已知 schema，不能把未知 row schema 宣布语义验证完成。封包回执列出未解析 stream，不以字节校验替代关节/时钟校验。
+2D 行形状由客户端 owner、3D 行形状由视觉线 owner 提供版本化 record_schema，本数据线不发明关节 schema。外层 manifest 记录来源/坐标/单位；离线消费者只能校验附件字节和已知 schema，不能把未知 row schema 宣布语义验证完成。封包回执列出未解析 stream，不以字节校验替代关节/时钟校验。
 
 PUMP 原始行后续使用独立 schema，原 bytes 与主机接收时间、连接段、通知序号一起保留；具体字段解析等待可复用协议。原始通知没有设备时钟则 device tick 为未知。FFE1 订阅与任何厂商写帧分类分开，默认不提供 FFE2 控制写接口。
 
@@ -67,3 +67,11 @@ LAB-2 的 `fox.pose3d_frame.v1` 行使用其原有camelCase键，完整附件按
 - FoxTrainingCore以 `arm64-apple-ios16.0` 和iphoneos SDK编译成功；随后的外部编排脚本误按旧SwiftPM路径找模块，报 `AssertionError: []`，该整批仍保留failed。实际新路径为SwiftPM的out/Products/Debug-iphoneos，修正的独立SDK步骤仅对新PumpReadOnlyAdapter作typecheck并通过，不重复已通过的Swift测试；默认最低iOS16未提高。
 - SDK typecheck使用同候选刚生成的核心模块；它不是完整App链接/运行、真实BLE、双外设、配对/后台稳定性或正式public验收。原始分批回执及状态保留，专项步骤结果不改写原批次失败。
 - 全部自有步骤结束、租约released，最终RES free；内盘最低约4.8GiB，无容量取消；未启动模拟器或访问真机。未推送/更新共享CURRENT；独立新上下文审查与客户端实际接线仍由协调者安排。
+
+## 独立审查P2修正
+
+1. 导出先拒绝输入路径的符号链接，再规范化源/目标路径并检查包含关系；`helper/../capture` 不能绕过源包内禁止。反例同时重算原包文件集合和原字节，拒绝不能留下export或临时文件。
+2. 帧reason为非null时必须是1...512字符文本，dropped还必须有reason。Python和Native共用invalid-frame-reasons.json反例；Native编解码均校验，不能以true/object/空字符串通过。缺reason的observed继续可读。
+3. PumpNotificationSubscription是无BLE纯状态边界，已通知特征拒绝接手，只有本adapter自己发出的订阅请求（包括等待应答）可在stop时取消；stop前未申请、拒绝既有订阅和重复stop均无unsubscribe。Native先拒绝缓存中的已通知特征，发现后再核对；不取消既有消费者通知。测试不访问外设。
+
+上述Python两组反例先实测失败8条断言；订阅与Native共享负例测试先写，但原生窗口属于客户端，本轮仅轻量验证，不声称Native新断言已经运行。旧5ba7eff原生结果不转作本次增量通过。

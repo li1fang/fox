@@ -102,4 +102,42 @@ final class LabCaptureTests: XCTestCase {
         try python("verify-native")
     }
 
+    func testSharedPythonFrameReasonVectorsAreRejectedByNativeCodec() throws {
+        var repo = URL(fileURLWithPath: #filePath)
+        for _ in 0..<6 { repo.deleteLastPathComponent() }
+        let source = try Data(contentsOf: repo.appendingPathComponent("tests/fixtures/lab-capture/invalid-frame-reasons.json"))
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: source) as? [String: Any])
+        let cases = try XCTUnwrap(fixture["cases"] as? [[String: Any]])
+        let valid = LabFrameRecord(seq: 0, pts: .init(value: "0", timescale: 30), originPTS: .init(value: "0", timescale: 30),
+                                   videoSeconds: 0, hostReceivedNS: 1, state: "observed", reason: nil)
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(valid)) as? [String: Any])
+        for vector in cases {
+            var row = original
+            for (key, value) in try XCTUnwrap(vector["updates"] as? [String: Any]) { row[key] = value }
+            let data = try JSONSerialization.data(withJSONObject: row)
+            XCTAssertThrowsError(try JSONDecoder().decode(LabFrameRecord.self, from: data), String(describing: vector["id"]))
+        }
+        for (state, reason) in [("dropped", Optional<String>.none), ("dropped", ""), ("observed", "")] {
+            let invalid = LabFrameRecord(seq: 0, pts: valid.pts, originPTS: valid.originPTS,
+                videoSeconds: 0, hostReceivedNS: 1, state: state, reason: reason)
+            XCTAssertThrowsError(try JSONEncoder().encode(invalid))
+        }
+    }
+
+    func testPumpSubscriptionRefusesPreexistingOwnershipAndDoesNotReleaseIt() {
+        var lease = PumpNotificationSubscription()
+        XCTAssertFalse(lease.requestNewSubscription(alreadyNotifying: true))
+        XCTAssertFalse(lease.release())
+    }
+
+    func testPumpSubscriptionOwnsOnlyItsRequestAndReleasesExactlyOnce() {
+        var lease = PumpNotificationSubscription()
+        XCTAssertFalse(lease.release(), "Stop before discovery owns no subscription")
+        XCTAssertTrue(lease.requestNewSubscription(alreadyNotifying: false))
+        XCTAssertTrue(lease.ownsSubscription)
+        XCTAssertFalse(lease.requestNewSubscription(alreadyNotifying: true))
+        XCTAssertTrue(lease.release(), "Pending or active own request can be cancelled")
+        XCTAssertFalse(lease.release(), "Repeated stop must not unsubscribe again")
+    }
+
 }

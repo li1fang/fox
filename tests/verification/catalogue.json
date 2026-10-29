@@ -2,6 +2,9 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxTrainingCoreTests/LabCaptureTests/testSharedPythonFrameReasonVectorsAreRejectedByNativeCodec","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LabCaptureTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/LabCaptureTests/testPumpSubscriptionRefusesPreexistingOwnershipAndDoesNotReleaseIt","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LabCaptureTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/LabCaptureTests/testPumpSubscriptionOwnsOnlyItsRequestAndReleasesExactlyOnce","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LabCaptureTests.swift","scope":"public","surface":"host"},
     {"id":"FoxTrainingCoreTests/AppleVision3DAdapterTests/testCompletePredictionIsExportedButPartialAndMultipleSkeletonsAreRejected","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/AppleVision3DAdapterTests.swift","scope":"public","surface":"host"},
     {"id":"FoxTrainingCoreTests/AppleVision3DAdapterTests/testEquivalentTimeCannotRewriteOriginalTimestampIntegers","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/AppleVision3DAdapterTests.swift","scope":"public","surface":"host"},
     {"id":"FoxTrainingCoreTests/AppleVision3DAdapterTests/testTimestampAndOrientationReachRunnerAndEmptyIsNotFailure","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/AppleVision3DAdapterTests.swift","scope":"public","surface":"host"},

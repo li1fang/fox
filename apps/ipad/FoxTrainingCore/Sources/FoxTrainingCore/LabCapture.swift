@@ -170,4 +170,37 @@ public struct LabFrameRecord: Codable, Equatable {
         case schema, seq, pts, state, reason
         case originPTS = "origin_pts", videoSeconds = "video_seconds", hostReceivedNS = "host_received_ns"
     }
+    private func validateReason() throws {
+        if let reason, reason.isEmpty || reason.unicodeScalars.count > 512 {
+            throw LabCaptureWireError.invalidFrameReason
+        }
+        if state == "dropped", reason == nil { throw LabCaptureWireError.invalidFrameReason }
+    }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schema = try c.decode(String.self, forKey: .schema)
+        seq = try c.decode(UInt64.self, forKey: .seq)
+        pts = try c.decode(LabRationalTime.self, forKey: .pts)
+        originPTS = try c.decode(LabRationalTime.self, forKey: .originPTS)
+        videoSeconds = try c.decode(Double.self, forKey: .videoSeconds)
+        hostReceivedNS = try c.decode(String.self, forKey: .hostReceivedNS)
+        state = try c.decode(String.self, forKey: .state)
+        reason = try c.decodeIfPresent(String.self, forKey: .reason)
+        try validateReason()
+    }
+    public func encode(to encoder: Encoder) throws {
+        try validateReason()
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(schema, forKey: .schema)
+        try c.encode(seq, forKey: .seq)
+        try c.encode(pts, forKey: .pts)
+        try c.encode(originPTS, forKey: .originPTS)
+        try c.encode(videoSeconds, forKey: .videoSeconds)
+        try c.encode(hostReceivedNS, forKey: .hostReceivedNS)
+        try c.encode(state, forKey: .state)
+        try c.encodeIfPresent(reason, forKey: .reason)
+    }
+
 }
+
+public enum LabCaptureWireError: Error { case invalidFrameReason }

@@ -1,0 +1,65 @@
+{
+  "all_synthetic": true,
+  "cases": [
+    {
+      "id": "dropped-bool",
+      "updates": {
+        "state": "dropped",
+        "reason": true
+      }
+    },
+    {
+      "id": "dropped-number",
+      "updates": {
+        "state": "dropped",
+        "reason": 7
+      }
+    },
+    {
+      "id": "dropped-object",
+      "updates": {
+        "state": "dropped",
+        "reason": {
+          "cause": "missing"
+        }
+      }
+    },
+    {
+      "id": "dropped-array",
+      "updates": {
+        "state": "dropped",
+        "reason": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "dropped-empty",
+      "updates": {
+        "state": "dropped",
+        "reason": ""
+      }
+    },
+    {
+      "id": "dropped-null",
+      "updates": {
+        "state": "dropped",
+        "reason": null
+      }
+    },
+    {
+      "id": "observed-bool",
+      "updates": {
+        "state": "observed",
+        "reason": true
+      }
+    },
+    {
+      "id": "observed-empty",
+      "updates": {
+        "state": "observed",
+        "reason": ""
+      }
+    }
+  ]
+}

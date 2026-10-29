@@ -88,3 +88,21 @@ public struct PumpConnectionEvent: Codable, Equatable {
         case hostClockID = "host_clock_id", hostReceivedNS = "host_received_ns"
     }
 }
+
+/// Tracks only a subscription requested by this consumer, including a pending request.
+/// An already-notifying characteristic belongs to another consumer and is refused.
+public struct PumpNotificationSubscription {
+    public private(set) var ownsSubscription = false
+    public init() {}
+    public mutating func requestNewSubscription(alreadyNotifying: Bool) -> Bool {
+        guard !ownsSubscription, !alreadyNotifying else { return false }
+        ownsSubscription = true
+        return true
+    }
+    /// True means the caller may cancel its own request; repeated release is inert.
+    public mutating func release() -> Bool {
+        let owned = ownsSubscription
+        ownsSubscription = false
+        return owned
+    }
+}

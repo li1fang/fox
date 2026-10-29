@@ -13,6 +13,7 @@ final class PumpReadOnlyAdapter: NSObject, CBPeripheralDelegate {
     private var peripheral: CBPeripheral?
     private var segmentID: String?
     private var sequence: UInt64 = 0
+    private var subscription = PumpNotificationSubscription()
     private var characteristic: CBCharacteristic?
     private var previousDelegate: CBPeripheralDelegate?
     var onNotification: ((PumpNotificationEvent) -> Void)?
@@ -26,6 +27,12 @@ final class PumpReadOnlyAdapter: NSObject, CBPeripheralDelegate {
     /// Only an already-connected peripheral selected by its owner may be adopted.
     func begin(_ selected: CBPeripheral) -> Bool {
         guard peripheral == nil, selected.state == .connected else { return false }
+        // Refuse cached preexisting telemetry before taking over its delegate.
+        guard selected.services?.contains(where: { service in
+            service.uuid == Self.service && (service.characteristics?.contains(where: {
+                $0.uuid == Self.notification && $0.isNotifying
+            }) ?? false)
+        }) != true else { return false }
         peripheral = selected; segmentID = UUID().uuidString; sequence = 0
         previousDelegate = selected.delegate; selected.delegate = self
         emit("discovering", nil)
@@ -38,7 +45,8 @@ final class PumpReadOnlyAdapter: NSObject, CBPeripheralDelegate {
     private func finish(reason: String, unsubscribe: Bool) {
         guard let p = peripheral else { return }
         emit("disconnected", reason)
-        if unsubscribe, p.state == .connected, let characteristic { p.setNotifyValue(false, for: characteristic) }
+        let mayUnsubscribe = subscription.release()
+        if unsubscribe, mayUnsubscribe, p.state == .connected, let characteristic { p.setNotifyValue(false, for: characteristic) }
         p.delegate = previousDelegate
         previousDelegate = nil; characteristic = nil; segmentID = nil; peripheral = nil
     }
@@ -58,6 +66,12 @@ final class PumpReadOnlyAdapter: NSObject, CBPeripheralDelegate {
         guard p === peripheral, service.uuid == Self.service else { return }
         guard error == nil, let values = service.characteristics?.filter({ $0.uuid == Self.notification }), values.count == 1,
               values[0].properties.contains(.notify) else { emit("failed", "notification_unavailable"); return }
+        if subscription.ownsSubscription { return }
+        guard subscription.requestNewSubscription(alreadyNotifying: values[0].isNotifying) else {
+            emit("failed", "existing_subscription")
+            finish(reason: "existing_subscription", unsubscribe: false)
+            return
+        }
         characteristic = values[0]
         // System notification subscription (CCCD); no FFE2 application write or identity query.
         p.setNotifyValue(true, for: values[0])

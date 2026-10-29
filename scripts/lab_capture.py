@@ -175,7 +175,9 @@ def verify_rows(open_file, names, streams, m):
                 host = decimal(row['host_received_ns'])
                 require(decimal(m['started_host_ns']) <= host <= decimal(m['ended_host_ns']) and host >= prev_host, 'Host receive time outside capture or out of order')
                 require(row['state'] in ('observed', 'dropped'), 'Invalid frame state')
-                require(row['state'] != 'dropped' or bool(row.get('reason')), 'Dropped frame requires reason')
+                if row.get('reason') is not None:
+                    text(row['reason'])
+                require(row['state'] != 'dropped' or row.get('reason') is not None, 'Dropped frame requires reason')
                 prev_seq, prev_pts, prev_host, origin = seq, pts, host, current_origin
         parsed.add(f['stream_id'])
     return sorted(s['id'] for s in streams.values() if s['id'] not in parsed and any(f['stream_id'] == s['id'] for f in names.values()))
@@ -279,11 +281,14 @@ def verify_export(filename):
 
 
 def export_package(root, destination):
+    root = Path(root).absolute(); no_symlinks(root)
+    root = root.resolve(strict=True)
     before = verify_package(root)
     target = Path(destination).absolute(); no_symlinks(target)
+    target = target.resolve(strict=False)
     require(not target.exists(), 'Export destination exists')
     require(target.parent.is_dir(), 'Export parent missing')
-    require(Path(root).absolute() not in target.parents, 'Export must be outside source package')
+    require(root not in target.parents, 'Export must be outside source package')
     fd, temp = tempfile.mkstemp(prefix='.fox-lab-export-', dir=target.parent)
     os.close(fd)
     try:

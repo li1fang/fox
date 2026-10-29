@@ -129,6 +129,33 @@ class LabCaptureTests(unittest.TestCase):
             else:other["epoch"]=epoch
             with self.assertRaises(ValueError):lab.video_seconds(a,other)
 
+    def test_lexical_parent_alias_cannot_export_into_source_or_change_it(self):
+        helper=self.root.parent/"helper"; helper.mkdir()
+        alias=helper/".."/self.root.name
+        linked=self.root.parent/"linked-capture";linked.symlink_to(self.root,target_is_directory=True)
+        exports=self.root.parent/"exports";exports.mkdir()
+        linked_exports=self.root.parent/"linked-exports";linked_exports.symlink_to(exports,target_is_directory=True)
+        before={p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        for source,target in [(alias,self.root/"out.zip"),(self.root,helper/".."/self.root.name/"out.zip"),(linked,exports/"out.zip"),(self.root,linked_exports/"out.zip")]:
+            with self.subTest(source=str(source),target=str(target)):
+                try:
+                    with self.assertRaises(ValueError):lab.export_package(source,target)
+                    self.assertEqual({p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob("*") if p.is_file()},before)
+                    self.assertFalse((exports/"out.zip").exists())
+                finally:
+                    # Preserve the failed assertion, then restore only this synthetic fixture.
+                    (self.root/"out.zip").unlink(missing_ok=True)
+
+    def test_shared_native_invalid_frame_reason_vectors_are_rejected(self):
+        fixture=Path(__file__).resolve().parents[1]/"fixtures/lab-capture/invalid-frame-reasons.json"
+        vectors=json.loads(fixture.read_text())
+        for vector in vectors["cases"]:
+            with self.subTest(case=vector["id"]):
+                row=json.loads(self.data);row.update(vector["updates"])
+                data=(json.dumps(row)+"\n").encode();(self.root/"frames.jsonl").write_bytes(data)
+                self.manifest["files"][0].update(bytes=len(data),sha256=hashlib.sha256(data).hexdigest());self.write()
+                with self.assertRaises(ValueError):lab.verify_package(self.root)
+
     def test_interrupted_export_does_not_publish_destination(self):
         target=Path(self.tmp.name).resolve()/"export.zip"
         original=lab.verify_export
