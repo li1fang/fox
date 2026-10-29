@@ -172,17 +172,28 @@ final class FreeCaptureArchive {
         }
         if let videoError { details["video_error"] = videoError }
         if recoveredEndHostNS != nil { details["end_boundary"] = "last_saved_host_timestamp_not_observed_stop" }
-        try JSONSerialization.data(withJSONObject: details, options: .sortedKeys).write(to: folder.appendingPathComponent("recording.json"), options: .atomic)
+        let recovered = recoveredEndHostNS != nil
+        if recovered { details["schema"] = "fox.lab_recovery.v1" }
+        let summaryFile = folder.appendingPathComponent(recovered ? "recovery.json" : "recording.json")
+        let summaryBytes = try JSONSerialization.data(withJSONObject: details, options: .sortedKeys)
+        if recovered, FileManager.default.fileExists(atPath: summaryFile.path) {
+            // A previous recovery may have stopped before manifest publication. Reuse
+            // identical derived metadata; never replace an existing original or summary.
+            guard try Self.metadataBytes(summaryFile) == summaryBytes else { throw VisionDiagnosticArchive.error("恢复摘要已存在且内容不同，全部原件保留。") }
+        } else { try summaryBytes.write(to: summaryFile, options: .withoutOverwriting) }
         var streams: [LabCaptureStream] = []
         let source = LabCaptureSource(producer: context.dataClass == "synthetic" ? "fox_synthetic_capture" : "fox_ios_capture", version: "1", clockID: clockID, sourceID: sourceID)
         streams.append(.init(id: "video", kind: "video", state: state, reason: state == "complete" ? nil : (videoError ?? reason), recordSchema: "video/h264", source: source))
-        let recovered = recoveredEndHostNS != nil
         streams.append(.init(id: "frames", kind: "camera_frames", state: state, reason: state == "complete" ? nil : reason,
                              recordSchema: recovered ? "fox.lab_recovered_raw.v1" : "fox.lab_frame.v1", source: source))
         streams.append(.init(id: "events", kind: "events", state: recovered ? "interrupted" : "complete", reason: recovered ? "process_ended" : nil,
                              recordSchema: recovered ? "fox.lab_recovered_raw.v1" : "fox.lab_event.v1", source: source))
         streams.append(.init(id: "context", kind: "events", state: "complete", recordSchema: "fox.lab_context.v1", source: source))
-        streams.append(.init(id: "recording", kind: "events", state: "complete", recordSchema: "fox.lab_recording.v1", source: source))
+        if FileManager.default.fileExists(atPath: folder.appendingPathComponent("recording.json").path) {
+            streams.append(.init(id: "recording", kind: "events", state: recovered ? "interrupted" : "complete", reason: recovered ? "process_ended" : nil,
+                                 recordSchema: recovered ? "fox.lab_recovered_raw.v1" : "fox.lab_recording.v1", source: source))
+        }
+        if recovered { streams.append(.init(id: "recovery", kind: "events", state: "complete", recordSchema: "fox.lab_recovery.v1", source: source)) }
         for kind in ["pose2d", "pose3d"] {
             let requested = kind == "pose2d" ? context.analysis != FreeCaptureAnalysis.none.rawValue : context.analysis == FreeCaptureAnalysis.comparison.rawValue
             let issue = analysisIssues[kind] ?? (requested && analysisRows[kind, default: 0] == 0 ? "no_analysis_frames" : nil)
@@ -203,6 +214,7 @@ final class FreeCaptureArchive {
         }
         var mapping = ["context.json": "context", "recording.json": "recording", "events.jsonl": "events", "frames.jsonl": "frames",
                        "video.mp4": "video", "video.partial.mp4": "video", "poses2d.jsonl": "pose2d", "poses3d.jsonl": "pose3d"]
+        if recovered { mapping["recovery.json"] = "recovery" }
         for alias in context.pumpAliases { mapping["\(alias).jsonl"] = alias }
         var files: [LabCaptureAsset] = []
         for name in mapping.keys.sorted() where FileManager.default.fileExists(atPath: folder.appendingPathComponent(name).path) {
@@ -211,6 +223,7 @@ final class FreeCaptureArchive {
         }
         let manifest = LabCaptureManifest(schema: "fox.lab_capture.v1", captureID: id.uuidString, hostClockID: clockID, mode: "free_capture",
             startedHostNS: context.startedHostNS, endedHostNS: recoveredEndHostNS ?? String(DispatchTime.now().uptimeNanoseconds), streams: streams, files: files)
+        try manifest.validate()
         let target = folder.appendingPathComponent("manifest.json")
         guard !FileManager.default.fileExists(atPath: target.path) else { throw VisionDiagnosticArchive.error("封包已存在，未覆盖。") }
         try Self.encode(manifest).write(to: target, options: .atomic)
@@ -239,7 +252,8 @@ final class FreeCaptureArchive {
             try verifyAssets(manifest, folder: folder)
             let context = try decoder.decode(Context.self, from: Data(contentsOf: folder.appendingPathComponent("context.json")))
             guard context.schema == "fox.lab_context.v1", context.captureID == id else { throw VisionDiagnosticArchive.error("实验上下文 ID 不匹配。") }
-            let details = try JSONSerialization.jsonObject(with: Data(contentsOf: folder.appendingPathComponent("recording.json"))) as? [String: Any]
+            let summaryName = manifest.streams.contains { $0.id == "recovery" && $0.recordSchema == "fox.lab_recovery.v1" } ? "recovery.json" : "recording.json"
+            let details = try JSONSerialization.jsonObject(with: Data(contentsOf: folder.appendingPathComponent(summaryName))) as? [String: Any]
             packages.append(FreeCapturePackageSummary(id: id, folder: folder, recordedAt: context.recordedAt,
                 videoAvailable: details?["video_available"] as? Bool ?? false, recordingState: details?["recording_state"] as? String ?? "failed",
                 encodedFrames: details?["encoded_frames"] as? Int, droppedFrames: details?["dropped_frames"] as? Int, synthetic: context.dataClass == "synthetic",
@@ -249,19 +263,11 @@ final class FreeCaptureArchive {
         return (packages, issues)
     }
     private static func verifyAssets(_ manifest: LabCaptureManifest, folder: URL) throws {
-        guard manifest.files.count <= 256 else { throw VisionDiagnosticArchive.error("实验附件数量无效。") }
-        var names = Set<String>()
-        var total: Int64 = 0
+        try manifest.validate()
+        let names = Set(manifest.files.map(\.path))
         for file in manifest.files {
             let parts = file.path.split(separator: "/", omittingEmptySubsequences: false)
-            guard !file.path.hasPrefix("/"), !file.path.contains("\\"), !file.path.contains("\0"),
-                  !parts.isEmpty, parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }), file.path != "manifest.json",
-                  names.insert(file.path).inserted, file.bytes >= 0, file.bytes <= 512 * 1024 * 1024 else {
-                throw VisionDiagnosticArchive.error("实验附件路径或大小无效，原件保留。")
-            }
-            if ["context.json", "recording.json"].contains(file.path), file.bytes > 1024 * 1024 { throw VisionDiagnosticArchive.error("实验元数据过大，原件保留。") }
-            total += file.bytes
-            guard total <= 2 * 1024 * 1024 * 1024 else { throw VisionDiagnosticArchive.error("实验封包超过完整性核对上限。") }
+            if ["context.json", "recording.json", "recovery.json"].contains(file.path), file.bytes > 1024 * 1024 { throw VisionDiagnosticArchive.error("实验元数据过大，原件保留。") }
             // Check every component before hashing; a directory link cannot escape the package.
             var cursor = folder
             for part in parts {
@@ -283,6 +289,13 @@ final class FreeCaptureArchive {
             if relative != "manifest.json" { actualNames.insert(relative) }
         }
         guard actualNames == names else { throw VisionDiagnosticArchive.error("实验文件与清单不一致，原件保留。") }
+    }
+    private static func metadataBytes(_ url: URL) throws -> Data {
+        let info = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard info.isRegularFile == true, info.isSymbolicLink != true, (info.fileSize ?? Int.max) <= 1024 * 1024 else {
+            throw VisionDiagnosticArchive.error("实验元数据不是有界普通文件，原件保留。")
+        }
+        return try Data(contentsOf: url)
     }
     private init(context: Context, folder: URL) throws {
         self.context = context; self.folder = folder; id = context.captureID; sourceID = context.sourceID
@@ -308,7 +321,7 @@ final class FreeCaptureArchive {
             if isInitializing(folder.path) { continue }
             do {
             guard try folder.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw VisionDiagnosticArchive.error("实验恢复目录无效。") }
-            let context = try decoder.decode(Context.self, from: Data(contentsOf: folder.appendingPathComponent("context.json")))
+            let context = try decoder.decode(Context.self, from: metadataBytes(folder.appendingPathComponent("context.json")))
             guard context.captureID.uuidString == folder.lastPathComponent else { throw VisionDiagnosticArchive.error("恢复采集 ID 不匹配。") }
             guard context.processID != currentProcessID else { continue }
             let archive = try FreeCaptureArchive(context: context, folder: folder)

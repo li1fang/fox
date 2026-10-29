@@ -22,6 +22,13 @@ class LabCaptureTests(unittest.TestCase):
         self.write()
     def write(self):
         (self.root / "manifest.json").write_text(json.dumps(self.manifest))
+    def test_shared_native_manifest_rejection_vectors(self):
+        base = Path(__file__).resolve().parents[1] / "fixtures/lab-capture"
+        lab.validate_manifest(json.loads((base / "synthetic-v1/manifest.json").read_text()))
+        vectors = json.loads((base / "invalid-manifests.json").read_text())
+        for vector in vectors["cases"]:
+            with self.subTest(vector=vector["id"]):
+                with self.assertRaises(ValueError): lab.validate_manifest(vector["manifest"])
     def test_unknown_action_roundtrip_and_export_never_deletes(self):
         result = lab.verify_package(self.root)
         self.assertEqual(result["capture_id"], "synthetic-1")

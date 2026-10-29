@@ -2,6 +2,13 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxAppTests/FreeCaptureAnalysisTests/testWorkerCompletionReleasesQuotaButStillReportsUndeliveredResultAtStop","file":"apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/FreeCaptureAnalysisTests/testStoppedQueuedAnalysisStartsNeitherRequestAndReleasesOnlyItsOwnSlot","file":"apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/FreeCaptureArchiveTests/testNativeSyntheticVideoPackageCanBeRetainedForIndependentConsumers","file":"apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxTrainingCoreTests/LabCaptureTests/testSharedManifestRejectionVectorsMatchTheNativeConsumerContract","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LabCaptureTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxAppTests/FreeCaptureAnalysisTests/testClosingAnOldCaptureDoesNotAdmitAnotherBackendUntilSlowAnalysisReturns","file":"apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/FreeCaptureArchiveTests/testRecoveryPreservesRecordingSummaryWrittenBeforeManifestPublication","file":"apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/FreeCaptureArchiveTests/testCrossFieldInvalidManifestsNeverBecomeIntactLibraryEntries","file":"apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift","scope":"public","surface":"ipad"},
     {"id":"tests/scripts/test_training_store.py","file":"tests/scripts/test_training_store.py","scope":"public","surface":"host"},
     {"id":"tests/scripts/storage-paths.test.mjs","file":"tests/scripts/storage-paths.test.mjs","scope":"public","surface":"host"},
     {"id":"tests/scripts/workstream-verification.test.mjs","file":"tests/scripts/workstream-verification.test.mjs","scope":"public","surface":"host"},

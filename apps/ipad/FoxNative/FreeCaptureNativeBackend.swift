@@ -232,9 +232,15 @@ private final class FreeCaptureRecording {
             }
             guard admitted == .accepted else { return }
             analysisQueue.async { [self] in
-                let result = analyze(sample, index: index, host: host)
+                var result = Analysis()
+                let deliver = gate.perform(captureID: id, frame: UInt64(index), first: {
+                    result = analyze2D(sample, index: index, host: host)
+                }, then: {
+                    append3D(sample, index: index, to: &result)
+                })
                 camera.onCaptureQueue { [self] in
-                    guard !finishing, gate.complete(captureID: id, frame: UInt64(index)) else { return }
+                    let current = gate.complete(captureID: id, frame: UInt64(index))
+                    guard !finishing, deliver, current else { return }
                     do {
                         for item in result.rows { try archive.pose(item.bytes, kind: item.kind, issue: item.issue) }
                         if let unavailable = result.unavailable3D { archive.noteAnalysisIssue("pose3d", reason: unavailable) }
@@ -306,7 +312,7 @@ private final class FreeCaptureRecording {
         var status = "未检测到人体"
         var unavailable3D: String?
     }
-    private func analyze(_ sample: CMSampleBuffer, index: Int, host: UInt64) -> Analysis {
+    private func analyze2D(_ sample: CMSampleBuffer, index: Int, host: UInt64) -> Analysis {
         var result = Analysis()
         let began = DispatchTime.now().uptimeNanoseconds
         let request = VNDetectHumanBodyPoseRequest()
@@ -342,6 +348,9 @@ private final class FreeCaptureRecording {
             let failure = poseRow(sample, index: index, host: host, state: "request_failed", reason: "invalid_output", people: [], elapsed: DispatchTime.now().uptimeNanoseconds - began)
             if let bytes = try? JSONEncoder().encode(failure) { result.rows.append(("pose2d", bytes, "invalid_output")) }
         }
+        return result
+    }
+    private func append3D(_ sample: CMSampleBuffer, index: Int, to result: inout Analysis) {
         if options.analysis == .comparison {
             #if canImport(FoxVision3D)
             let observation: Pose3DFrame
@@ -359,7 +368,6 @@ private final class FreeCaptureRecording {
             result.unavailable3D = "module_unavailable"; result.status += "；3D 模块未接入"
             #endif
         }
-        return result
     }
     private func poseRow(_ sample: CMSampleBuffer, index: Int, host: UInt64, state: String, reason: String?,
                          people: [[LabPose2DFrame.Joint]], elapsed: UInt64) -> LabPose2DFrame {

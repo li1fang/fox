@@ -124,6 +124,20 @@ final class LabCaptureTests: XCTestCase {
         }
     }
 
+    func testSharedManifestRejectionVectorsMatchTheNativeConsumerContract() throws {
+        var repo = URL(fileURLWithPath: #filePath)
+        for _ in 0..<6 { repo.deleteLastPathComponent() }
+        let base = repo.appendingPathComponent("tests/fixtures/lab-capture")
+        let valid = try JSONDecoder().decode(LabCaptureManifest.self, from: Data(contentsOf: base.appendingPathComponent("synthetic-v1/manifest.json")))
+        XCTAssertNoThrow(try valid.validate())
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: base.appendingPathComponent("invalid-manifests.json"))) as? [String: Any])
+        let cases = try XCTUnwrap(object["cases"] as? [[String: Any]])
+        for vector in cases {
+            let data = try JSONSerialization.data(withJSONObject: XCTUnwrap(vector["manifest"]))
+            XCTAssertThrowsError(try JSONDecoder().decode(LabCaptureManifest.self, from: data).validate(), String(describing: vector["id"]))
+        }
+    }
+
     func testPumpSubscriptionRefusesPreexistingOwnershipAndDoesNotReleaseIt() {
         var lease = PumpNotificationSubscription()
         XCTAssertEqual(PumpNotificationSubscription.adoptionRejection(hasExistingDelegate: false, alreadyNotifying: true), "existing_subscription")
