@@ -107,6 +107,28 @@ class LabCaptureTests(unittest.TestCase):
                     z.writestr(name,b"extra")
             with self.assertRaises(ValueError):lab.verify_export(target)
 
+    def test_opaque_vision3d_rows_keep_source_identity_without_semantic_promotion(self):
+        stream = self.manifest["streams"][0]
+        stream.update(kind="pose3d",record_schema="fox.pose3d_frame.v1")
+        stream["source"].update(source_id="camera-source-1",coordinate_system="apple_vision_root_relative",unit="meters")
+        row={"schema":"fox.pose3d_frame.v1","algorithm":"apple_vision_body_pose_3d", "context":{"streamID":"camera-source-1","segmentID":"segment-1","frameIndex":0,"pts":{"value":"9007199254740993","timescale":30,"epoch":"0"},"width":720,"height":1280,"orientation":1,"sourceMirrored":False},"requestedRevision":1,"actualRevision":1,"outcome":"noObservation","inferenceNanoseconds":4}
+        raw=(json.dumps(row)+"\n").encode();(self.root/"frames.jsonl").write_bytes(raw)
+        self.manifest["files"][0].update(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest());self.write()
+        result=lab.verify_package(self.root)
+        self.assertEqual(result["unparsed_streams"],["camera"])
+        self.assertFalse(result["formal_training_imported"])
+        self.assertEqual((self.root/"frames.jsonl").read_bytes(),raw)
+
+    def test_pts_epoch_is_preserved_and_cannot_normalize_across_epochs(self):
+        a={"value":"9007199254740993","timescale":30,"epoch":"7"}
+        b={"value":"9007199254740990","timescale":30,"epoch":"7"}
+        self.assertEqual(lab.video_seconds(a,b),0.1)
+        for epoch in ["8",None]:
+            other=dict(b)
+            if epoch is None:other.pop("epoch")
+            else:other["epoch"]=epoch
+            with self.assertRaises(ValueError):lab.video_seconds(a,other)
+
     def test_interrupted_export_does_not_publish_destination(self):
         target=Path(self.tmp.name).resolve()/"export.zip"
         original=lab.verify_export

@@ -92,13 +92,15 @@ public struct LabCaptureSource: Codable, Equatable {
     public var producer: String
     public var version: String
     public var clockID: String
+    public var sourceID: String?
     public var deviceAlias: String?
     public var coordinateSystem: String?
     public var unit: String?
-    public init(producer: String, version: String, clockID: String, deviceAlias: String? = nil, coordinateSystem: String? = nil, unit: String? = nil) {
+    public init(producer: String, version: String, clockID: String, deviceAlias: String? = nil, coordinateSystem: String? = nil, unit: String? = nil, sourceID: String? = nil) {
         self.producer = producer
         self.version = version
         self.clockID = clockID
+        self.sourceID = sourceID
         self.deviceAlias = deviceAlias
         self.coordinateSystem = coordinateSystem
         self.unit = unit
@@ -107,6 +109,7 @@ public struct LabCaptureSource: Codable, Equatable {
         case producer = "producer"
         case version = "version"
         case clockID = "clock_id"
+        case sourceID = "source_id"
         case deviceAlias = "device_alias"
         case coordinateSystem = "coordinate_system"
         case unit = "unit"
@@ -135,13 +138,16 @@ public struct LabUTCAnchor: Codable, Equatable {
 public struct LabRationalTime: Codable, Equatable {
     public var value: String
     public var timescale: Int32
-    public init(value: String, timescale: Int32) {
+    public var epoch: String?
+    public init(value: String, timescale: Int32, epoch: String? = nil) {
         self.value = value
         self.timescale = timescale
+        self.epoch = epoch
     }
     enum CodingKeys: String, CodingKey {
         case value = "value"
         case timescale = "timescale"
+        case epoch = "epoch"
     }
 }
 

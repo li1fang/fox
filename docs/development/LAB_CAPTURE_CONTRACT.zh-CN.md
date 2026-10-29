@@ -10,7 +10,7 @@
 
 manifest 必需键：schema、capture_id、mode、host_clock_id、started_host_ns、ended_host_ns、streams、files。action/side/strategy/utc_anchor 可省略或 null，unknown action 用 null；不能写假动作。mode 为 free_capture 或 exercise_evaluation；后者需要非空 action 与 strategy。side 为 left/right/both/not_applicable 或 null。
 
-stream：id、kind、state、reason、record_schema、source。kind 为 video/camera_frames/pose2d/pose3d/pump_raw/pump_parsed/events；state 为 complete/interrupted/failed/unavailable/not_requested。reason 在后三种失败/中断状态必须非空；complete/not_requested 可空。source 有 producer/version/clock_id，以及可空 device_alias/coordinate_system/unit。两台 PUMP 用不同 alias 和流，不暗指左右侧。v1每流最多一个文件（分块顺序尚未定义），complete 流必须有一个文件；not_requested/unavailable 不应有文件。manifest 只描述已封存包，不作为运行中状态存储。
+stream：id、kind、state、reason、record_schema、source。kind 为 video/camera_frames/pose2d/pose3d/pump_raw/pump_parsed/events；state 为 complete/interrupted/failed/unavailable/not_requested。reason 在后三种失败/中断状态必须非空；complete/not_requested 可空。source 有 producer/version/clock_id，以及可空 device_alias/coordinate_system/unit/source_id。两台 PUMP 用不同 alias 和流，不暗指左右侧。v1每流最多一个文件（分块顺序尚未定义），complete 流必须有一个文件；not_requested/unavailable 不应有文件。manifest 只描述已封存包，不作为运行中状态存储。
 
 asset：path、bytes、sha256、stream_id。path 必须安全相对 POSIX 路径；无符号链接、重复路径或未列出文件。字节数与 SHA 必须实际一致。files 不包含 manifest 自身；导出回执另算整个 manifest/zip 摘要。合法“完整封包”不等于每条观测成功，保留 stream_states。
 
@@ -18,7 +18,7 @@ asset：path、bytes、sha256、stream_id。path 必须安全相对 POSIX 路径
 
 ## JSONL 公共时间包络
 
-`fox.lab_frame.v1` 每行必需：schema、seq、pts、origin_pts、video_seconds、host_received_ns、state；reason 可空。pts/origin_pts 各含 value（带符号 Int64 十进制字符串）和 timescale（正 Int32）；保留 CMTime 原值，不先转 Double。video_seconds = pts - origin_pts，允许微秒级浮点舍入，必须非负有限。host_received_ns 不与 PTS 数值直接比较。state 为 observed/dropped，dropped 必须有 reason。丢帧也保留时间行，不能默默压紧视频时间。
+`fox.lab_frame.v1` 每行必需：schema、seq、pts、origin_pts、video_seconds、host_received_ns、state；reason 可空。pts/origin_pts 各含 value（带符号 Int64 十进制字符串）和 timescale（正 Int32），可选 epoch 为原 CMTime epoch 的带符号 Int64 字符串；保留 CMTime 原值，不先转 Double。video_seconds = pts - origin_pts，允许微秒级浮点舍入，必须非负有限。host_received_ns 不与 PTS 数值直接比较。state 为 observed/dropped，dropped 必须有 reason。丢帧也保留时间行，不能默默压紧视频时间。
 
 2D/3D 行形状由视觉线 owner 提供版本化 record_schema，本数据线不发明关节 schema。外层 manifest 记录来源/坐标/单位；离线消费者只能校验附件字节和已知 schema，不能把未知 row schema 宣布语义验证完成。封包回执列出未解析 stream，不以字节校验替代关节/时钟校验。
 
@@ -51,3 +51,9 @@ Python等价纯解析在 scripts/pump_telemetry.py，未调用协议源中的查
 ## 本候选执行边界
 
 Python/Node轻量检查已执行：17项LAB/PUMP合成测试及既有training-store/archive共53项通过；接手10组合成向量按保守策略核对通过；Node22仓库契约登记通过。首轮缺实现、macOS临时目录别名夹具失败、PUMP事件未解析以及未定义分块顺序的失败均保留。没有运行Swift/Xcode/模拟器、BLE、服务器写入或真实媒体分析；新值类型、Swift解析器、Native适配器、跨语言golden仍待原生窗口和独立审查。不以Python等价解析通过代替Swift执行。JSON Schema是外层结构，跨字段/时间/摘要约束由离线校验器执行；本机未安装jsonschema，未用其声称完整schema验证。
+
+## 3D接续与首轮原生失败
+
+LAB-2 的 `fox.pose3d_frame.v1` 行使用其原有camelCase键，完整附件按字节保存并在unparsed_streams列出；未复制其关节验证器，也不把完整摘要称为3D语义通过。source可选source_id标识同一相机来源，2D/3D descriptor引用同值，LAB-2 context.streamID绑定它；同PTS/同source不证明同人。LabRationalTime新增可选epoch，原value/timescale不重写；有epoch时原点和帧必须相同epoch才允许归一化，旧双方都缺epoch的v1输入继续可读，不补造epoch观测。
+
+冻结2c655e9原生测试首次5/6通过；跨语言因Foundation临时目录返回系统符号链接路径被安全导出器拒绝，SDK步骤未执行。修正仅为测试使用解析后的真实路径（支持FOX_LAB_CROSS_ROOT外盘根）及子进程失败立即抛出；未放宽导出路径或摘要断言。旧失败和租约释放回执保留。新的3D source_id和PTS epoch反例先观察到拒绝，再加窄可选字段，需以替代候选重新执行。

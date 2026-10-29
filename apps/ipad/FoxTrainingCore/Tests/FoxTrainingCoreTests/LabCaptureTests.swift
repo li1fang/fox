@@ -20,11 +20,12 @@ final class LabCaptureTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(LabCaptureManifest.self, from: data), m)
     }
     func testFramePreservesPTSIntegerBeyondDoublePrecision() throws {
-        let frame = LabFrameRecord(seq: 0, pts: .init(value: "9007199254740993", timescale: 30),
-                                   originPTS: .init(value: "9007199254740990", timescale: 30), videoSeconds: 0.1,
+        let frame = LabFrameRecord(seq: 0, pts: .init(value: "9007199254740993", timescale: 30, epoch: "7"),
+                                   originPTS: .init(value: "9007199254740990", timescale: 30, epoch: "7"), videoSeconds: 0.1,
                                    hostReceivedNS: 9007199254740993, state: "observed", reason: nil)
         let restored = try JSONDecoder().decode(LabFrameRecord.self, from: JSONEncoder().encode(frame))
         XCTAssertEqual(restored.pts.value, "9007199254740993")
+        XCTAssertEqual(restored.pts.epoch, "7")
         XCTAssertEqual(restored.hostReceivedNS, "9007199254740993")
     }
     func testPumpLittleEndianZeroAndUnknownUnitsRemainRaw() {
@@ -59,7 +60,7 @@ final class LabCaptureTests: XCTestCase {
     func testPythonExportIsNativeReadableAndNativeWireIsPythonVerified() throws {
         var repo = URL(fileURLWithPath: #filePath)
         for _ in 0..<6 { repo.deleteLastPathComponent() }
-        let base = FileManager.default.temporaryDirectory.appendingPathComponent("fox-lab-cross-\(UUID())")
+        let base = URL(fileURLWithPath: ProcessInfo.processInfo.environment["FOX_LAB_CROSS_ROOT"] ?? FileManager.default.temporaryDirectory.path).resolvingSymlinksInPath().appendingPathComponent("fox-lab-cross-\(UUID())")
         defer { try? FileManager.default.removeItem(at: base) }
         func python(_ action: String) throws {
             let process = Process()
@@ -69,7 +70,10 @@ final class LabCaptureTests: XCTestCase {
             try process.run()
             let data = output.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
-            XCTAssertEqual(process.terminationStatus, 0, String(decoding: data, as: UTF8.self))
+            guard process.terminationStatus == 0 else {
+                throw NSError(domain: "fox.lab.cross-language", code: Int(process.terminationStatus),
+                    userInfo: [NSLocalizedDescriptionKey: String(decoding: data, as: UTF8.self)])
+            }
         }
         try python("prepare")
         let input = base.appendingPathComponent("native-input")

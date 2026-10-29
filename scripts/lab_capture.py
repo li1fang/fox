@@ -49,15 +49,19 @@ def decimal(value):
 
 
 def rational(value):
-    fields(value, 'value timescale')
+    fields(value, 'value timescale', 'epoch')
     raw = value['value']
     require(isinstance(raw, str) and re.fullmatch(r'0|-?[1-9][0-9]{0,18}', raw), 'PTS value must be an integer string')
     require(-(2**63) <= int(raw) < 2**63, 'PTS outside Int64')
+    if 'epoch' in value:
+        epoch = value['epoch']
+        require(isinstance(epoch, str) and re.fullmatch(r'0|-?[1-9][0-9]{0,18}', epoch) and -(2**63) <= int(epoch) < 2**63, 'Invalid PTS epoch')
     return Fraction(int(raw), integer(value['timescale'], 1, 2**31-1))
 
 
 def video_seconds(pts, origin):
     result = rational(pts) - rational(origin)
+    require(pts.get('epoch') == origin.get('epoch'), 'PTS epoch differs or is unknown; cannot normalize')
     require(result >= 0, 'PTS before video origin')
     return float(result)
 
@@ -116,12 +120,14 @@ def validate_manifest(m):
         if s.get('reason') is not None:
             text(s['reason'])
         require(s['state'] not in ('interrupted', 'failed', 'unavailable') or s.get('reason') is not None, 'Failure reason required')
-        src = s['source']; fields(src, 'producer version clock_id', 'device_alias coordinate_system unit')
+        src = s['source']; fields(src, 'producer version clock_id', 'device_alias coordinate_system unit source_id')
         for key in ('producer', 'version', 'clock_id'):
             text(src[key])
         for key in ('device_alias', 'coordinate_system', 'unit'):
             if src.get(key) is not None:
                 text(src[key])
+        if src.get('source_id') is not None:
+            identifier(src['source_id'])
         require(src['clock_id'] == m['host_clock_id'], 'Stream receive clock differs from capture host clock')
         streams[s['id']] = s
     require(isinstance(m['files'], list) and len(m['files']) <= 256, 'Too many files')
@@ -161,7 +167,7 @@ def verify_rows(open_file, names, streams, m):
                 row = load_json(line)
                 fields(row, 'schema seq pts origin_pts video_seconds host_received_ns state', 'reason')
                 require(row['schema'] == 'fox.lab_frame.v1', 'Wrong row schema')
-                seq = integer(row['seq']); pts = rational(row['pts']); current_origin = rational(row['origin_pts'])
+                seq = integer(row['seq']); pts = rational(row['pts']); current_origin = (rational(row['origin_pts']), row['origin_pts'].get('epoch'))
                 require(seq > prev_seq and (prev_pts is None or pts >= prev_pts), 'Out of order camera row')
                 require(origin is None or origin == current_origin, 'Video origin changed; start a new stream')
                 value = row['video_seconds']; require(type(value) in (int, float) and math.isfinite(value), 'Nonfinite video time')

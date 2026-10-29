@@ -4,9 +4,9 @@
   "ended_host_ns": "2000000000",
   "files": [
     {
-      "bytes": 230,
+      "bytes": 254,
       "path": "frames.jsonl",
-      "sha256": "66720d05bbe4805704d9562ece7314be89b12106821a65892603c806eaec4350",
+      "sha256": "abec957cd419328bbcfa51830abcdc51439fcebe7abe85f828c345284b3c2b4c",
       "stream_id": "camera"
     },
     {
@@ -33,6 +33,7 @@
         "coordinate_system": null,
         "device_alias": null,
         "producer": "synthetic-golden",
+        "source_id": "camera-source-1",
         "unit": null,
         "version": "1"
       },
