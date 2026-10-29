@@ -77,3 +77,12 @@ LAB-2 的 `fox.pose3d_frame.v1` 行使用其原有camelCase键，完整附件按
 上述Python两组反例先实测失败8条断言；订阅与Native共享负例测试先写，但原生窗口属于客户端，本轮仅轻量验证，不声称Native新断言已经运行。旧5ba7eff原生结果不转作本次增量通过。
 
 订阅拒绝补充：begin在修改CBPeripheral之前，若已有delegate或缓存的FFE1已通知，使用纯adoptionRejection判定并通过onState记录failed/existing_delegate或existing_subscription，返回false且不设置delegate、不发现服务、不变更通知。调用方应只提供已连接且未被其他消费者占用的peripheral。若通知状态在发现后才可知，仍拒绝setNotify；结束时仅在delegate仍为本adapter时恢复，避免覆盖后来接管者。相应纯状态断言已补，Native执行仍待窗口。
+
+## 31bf600定向原生复验
+
+客户端清理不确定项被原owner独立核实并明确交还窗口后，本线重新核对resources free、进程无残留和内盘约4.5GiB，再以冻结干净 `31bf600715500b1b91f8e2883c2c52e5e56dd7fd` 执行；未启动模拟器或访问BLE。
+
+- reason原实现红灯：外盘临时最小包直接使用git中5ba7eff的LabCapture.swift原字节，抽取当前已登记共享reason测试（仅替换repo定位），1项/6条断言实际失败；源文件摘要及失败suite保留。不是编译错误，也不改写原实现。
+- 旧订阅取消问题维持静态证据边界。SDK CBPeer.init声明NS_UNAVAILABLE，CBPeripheral由系统提供；没有以真实外设或伪造对象报告原硬件红灯。当前纯所有权策略的拒绝/自有申请/重复释放断言实际执行；Native适配器接线另经SDK typecheck，仍不代表真实回调验收。
+- 当前LabCaptureTests 9/9通过，无skip；含Python/Native共用reason非法值、所有权纯状态及双向golden。当前Python 57/57通过，iOS16核心模块及PumpReadOnlyAdapter SDK检查通过。仅这些受影响选集，不重跑其他视觉全量。
+- 全部steps resource released，进程核对无残留构建/启动子进程，未触发2GiB容量取消。原先失败、743c095/31bf600冻结回执和5ba7eff旧结果保留；独立复审、App集成和硬件能力仍分别验收。
