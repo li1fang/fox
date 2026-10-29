@@ -24,7 +24,10 @@ class LabCaptureTests(unittest.TestCase):
         (self.root / "manifest.json").write_text(json.dumps(self.manifest))
     def test_shared_native_manifest_rejection_vectors(self):
         base = Path(__file__).resolve().parents[1] / "fixtures/lab-capture"
-        lab.validate_manifest(json.loads((base / "synthetic-v1/manifest.json").read_text()))
+        valid = json.loads((base / "synthetic-v1/manifest.json").read_text())
+        lab.validate_manifest(valid)
+        valid["streams"][0]["record_schema"] = "fox.future_raw.v99"
+        lab.validate_manifest(valid)
         vectors = json.loads((base / "invalid-manifests.json").read_text())
         for vector in vectors["cases"]:
             with self.subTest(vector=vector["id"]):

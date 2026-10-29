@@ -130,6 +130,11 @@ final class LabCaptureTests: XCTestCase {
         let base = repo.appendingPathComponent("tests/fixtures/lab-capture")
         let valid = try JSONDecoder().decode(LabCaptureManifest.self, from: Data(contentsOf: base.appendingPathComponent("synthetic-v1/manifest.json")))
         XCTAssertNoThrow(try valid.validate())
+        var futureRows = valid
+        futureRows.streams[0].recordSchema = "fox.future_raw.v99"
+        let preserved = try JSONDecoder().decode(LabCaptureManifest.self, from: JSONEncoder().encode(futureRows))
+        XCTAssertNoThrow(try preserved.validate())
+        XCTAssertEqual(preserved.streams[0].recordSchema, "fox.future_raw.v99")
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: base.appendingPathComponent("invalid-manifests.json"))) as? [String: Any])
         let cases = try XCTUnwrap(object["cases"] as? [[String: Any]])
         for vector in cases {

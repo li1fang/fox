@@ -53,6 +53,29 @@ final class FreeCaptureArchiveTests: XCTestCase {
             XCTAssertEqual(try Data(contentsOf: file), before)
         }
     }
+    func testUnknownManifestObjectKeysNeverBecomeIntactLibraryEntries() throws {
+        for level in ["manifest", "stream", "source", "asset"] {
+            let root = try root(), archive = try FreeCaptureArchive(id: UUID(), options: .init(analysis: .none), root: root, synthetic: true)
+            _ = try archive.seal(video: nil, reason: "cameraUnavailable")
+            let file = archive.folder.appendingPathComponent("manifest.json")
+            var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+            var streams = try XCTUnwrap(object["streams"] as? [[String: Any]])
+            var files = try XCTUnwrap(object["files"] as? [[String: Any]])
+            switch level {
+            case "stream": streams[0]["future_attribute"] = "synthetic-unrecognized"
+            case "source":
+                var source = try XCTUnwrap(streams[0]["source"] as? [String: Any])
+                source["future_attribute"] = "synthetic-unrecognized"; streams[0]["source"] = source
+            case "asset": files[0]["future_attribute"] = "synthetic-unrecognized"
+            default: object["future_attribute"] = "synthetic-unrecognized"
+            }
+            object["streams"] = streams; object["files"] = files
+            try JSONSerialization.data(withJSONObject: object).write(to: file)
+            let before = try Data(contentsOf: file), result = try FreeCaptureArchive.library(root: root)
+            XCTAssertTrue(result.packages.isEmpty, level); XCTAssertEqual(result.issues.count, 1, level)
+            XCTAssertEqual(try Data(contentsOf: file), before)
+        }
+    }
     func testNativeSyntheticVideoPackageCanBeRetainedForIndependentConsumers() async throws {
         let export = ProcessInfo.processInfo.environment["FOX_LAB_NATIVE_EXPORT_ROOT"]
         let base: URL

@@ -1,6 +1,7 @@
 import Foundation
 
-// Wire values only. Native owns recording; offline validation verifies the sealed package.
+// Declared v1 object keys are checked when decoding; manifest semantics use validate().
+// Native owns recording; offline validation also verifies the sealed package bytes.
 public struct LabCaptureManifest: Codable, Equatable {
     public var schema: String
     public var captureID: String
@@ -28,7 +29,17 @@ public struct LabCaptureManifest: Codable, Equatable {
         self.streams = streams
         self.files = files
     }
-    enum CodingKeys: String, CodingKey {
+    public init(from decoder: Decoder) throws {
+        try requireDeclaredLabKeys(decoder, CodingKeys.self)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(schema: try c.decode(String.self, forKey: .schema), captureID: try c.decode(String.self, forKey: .captureID),
+            hostClockID: try c.decode(String.self, forKey: .hostClockID), mode: try c.decode(String.self, forKey: .mode),
+            action: try c.decodeIfPresent(String.self, forKey: .action), side: try c.decodeIfPresent(String.self, forKey: .side),
+            strategy: try c.decodeIfPresent(String.self, forKey: .strategy), startedHostNS: try c.decode(String.self, forKey: .startedHostNS),
+            endedHostNS: try c.decode(String.self, forKey: .endedHostNS), utcAnchor: try c.decodeIfPresent(LabUTCAnchor.self, forKey: .utcAnchor),
+            streams: try c.decode([LabCaptureStream].self, forKey: .streams), files: try c.decode([LabCaptureAsset].self, forKey: .files))
+    }
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case schema = "schema"
         case captureID = "capture_id"
         case hostClockID = "host_clock_id"
@@ -59,7 +70,14 @@ public struct LabCaptureStream: Codable, Equatable {
         self.recordSchema = recordSchema
         self.source = source
     }
-    enum CodingKeys: String, CodingKey {
+    public init(from decoder: Decoder) throws {
+        try requireDeclaredLabKeys(decoder, CodingKeys.self)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(String.self, forKey: .id), kind: try c.decode(String.self, forKey: .kind),
+            state: try c.decode(String.self, forKey: .state), reason: try c.decodeIfPresent(String.self, forKey: .reason),
+            recordSchema: try c.decode(String.self, forKey: .recordSchema), source: try c.decode(LabCaptureSource.self, forKey: .source))
+    }
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case id = "id"
         case kind = "kind"
         case state = "state"
@@ -80,7 +98,13 @@ public struct LabCaptureAsset: Codable, Equatable {
         self.sha256 = sha256
         self.streamID = streamID
     }
-    enum CodingKeys: String, CodingKey {
+    public init(from decoder: Decoder) throws {
+        try requireDeclaredLabKeys(decoder, CodingKeys.self)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(path: try c.decode(String.self, forKey: .path), bytes: try c.decode(Int64.self, forKey: .bytes),
+            sha256: try c.decode(String.self, forKey: .sha256), streamID: try c.decode(String.self, forKey: .streamID))
+    }
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case path = "path"
         case bytes = "bytes"
         case sha256 = "sha256"
@@ -105,7 +129,15 @@ public struct LabCaptureSource: Codable, Equatable {
         self.coordinateSystem = coordinateSystem
         self.unit = unit
     }
-    enum CodingKeys: String, CodingKey {
+    public init(from decoder: Decoder) throws {
+        try requireDeclaredLabKeys(decoder, CodingKeys.self)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(producer: try c.decode(String.self, forKey: .producer), version: try c.decode(String.self, forKey: .version),
+            clockID: try c.decode(String.self, forKey: .clockID), deviceAlias: try c.decodeIfPresent(String.self, forKey: .deviceAlias),
+            coordinateSystem: try c.decodeIfPresent(String.self, forKey: .coordinateSystem), unit: try c.decodeIfPresent(String.self, forKey: .unit),
+            sourceID: try c.decodeIfPresent(String.self, forKey: .sourceID))
+    }
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case producer = "producer"
         case version = "version"
         case clockID = "clock_id"
@@ -127,7 +159,13 @@ public struct LabUTCAnchor: Codable, Equatable {
         self.uncertaintyUS = uncertaintyUS
         self.method = method
     }
-    enum CodingKeys: String, CodingKey {
+    public init(from decoder: Decoder) throws {
+        try requireDeclaredLabKeys(decoder, CodingKeys.self)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(hostNS: try c.decode(String.self, forKey: .hostNS), utcUS: try c.decode(String.self, forKey: .utcUS),
+            uncertaintyUS: try c.decode(String.self, forKey: .uncertaintyUS), method: try c.decode(String.self, forKey: .method))
+    }
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case hostNS = "host_ns"
         case utcUS = "utc_us"
         case uncertaintyUS = "uncertainty_us"
@@ -204,3 +242,18 @@ public struct LabFrameRecord: Codable, Equatable {
 }
 
 public enum LabCaptureWireError: Error { case invalidFrameReason }
+
+private struct LabContractKey: CodingKey {
+    let stringValue: String
+    var intValue: Int? { nil }
+    init?(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { return nil }
+}
+
+private func requireDeclaredLabKeys<K: CodingKey & CaseIterable>(_ decoder: Decoder, _ keys: K.Type) throws {
+    let actual = try decoder.container(keyedBy: LabContractKey.self)
+    let declared = Set(K.allCases.map(\.stringValue))
+    guard actual.allKeys.allSatisfy({ declared.contains($0.stringValue) }) else {
+        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown field in lab v1 object"))
+    }
+}
