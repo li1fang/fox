@@ -1,0 +1,1 @@
+{"host_received_ns":"1000000000","origin_pts":{"timescale":30,"value":"9007199254740990"},"pts":{"timescale":30,"value":"9007199254740993"},"reason":null,"schema":"fox.lab_frame.v1","seq":0,"state":"observed","video_seconds":0.1}

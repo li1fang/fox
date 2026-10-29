@@ -28,6 +28,7 @@
     "test": "npm run test --workspaces --if-present && npm run test:scripts",
     "test:scripts": "node scripts/test-scripts.mjs public",
     "test:archive": "python3.12 scripts/run-python-tests.py tests/scripts/test_archive.py tests/scripts/test_archive_batch.py",
+    "test:lab-data": "python3.12 scripts/run-python-tests.py tests/scripts/test_lab_capture.py tests/scripts/test_pump_telemetry.py",
     "test:sync": "python3.12 scripts/run-python-tests.py tests/scripts/test_personal_sync.py tests/scripts/test_sync_https.py tests/scripts/test_sync_pairing.py",
     "test:sync:native": "node scripts/test-sync-native.mjs",
     "test:e2e": "playwright test",

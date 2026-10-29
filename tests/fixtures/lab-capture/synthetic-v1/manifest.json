@@ -1,0 +1,58 @@
+{
+  "action": null,
+  "capture_id": "synthetic-golden",
+  "ended_host_ns": "2000000000",
+  "files": [
+    {
+      "bytes": 230,
+      "path": "frames.jsonl",
+      "sha256": "66720d05bbe4805704d9562ece7314be89b12106821a65892603c806eaec4350",
+      "stream_id": "camera"
+    },
+    {
+      "bytes": 589,
+      "path": "pump.jsonl",
+      "sha256": "b6d745ff93d6e475c7ae4122c4d231215ab1c56b1df64b8b928db8e8524c3625",
+      "stream_id": "pump"
+    }
+  ],
+  "host_clock_id": "host-1",
+  "mode": "free_capture",
+  "schema": "fox.lab_capture.v1",
+  "side": null,
+  "started_host_ns": "1000000000",
+  "strategy": null,
+  "streams": [
+    {
+      "id": "camera",
+      "kind": "camera_frames",
+      "reason": null,
+      "record_schema": "fox.lab_frame.v1",
+      "source": {
+        "clock_id": "host-1",
+        "coordinate_system": null,
+        "device_alias": null,
+        "producer": "synthetic-golden",
+        "unit": null,
+        "version": "1"
+      },
+      "state": "complete"
+    },
+    {
+      "id": "pump",
+      "kind": "pump_raw",
+      "reason": null,
+      "record_schema": "fox.lab_pump_events.v1",
+      "source": {
+        "clock_id": "host-1",
+        "coordinate_system": null,
+        "device_alias": "pump-A",
+        "producer": "synthetic-golden",
+        "unit": null,
+        "version": "1"
+      },
+      "state": "complete"
+    }
+  ],
+  "utc_anchor": null
+}

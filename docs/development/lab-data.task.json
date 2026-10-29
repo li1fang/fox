@@ -1,0 +1,43 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Versioned lab capture envelope, safe offline export and read-only PUMP telemetry adapter",
+  "nonGoals": [
+    "UI/controller/camera/project edits",
+    "Device/BLE/server operations",
+    "New database",
+    "Control writes",
+    "Native execution before resource handoff"
+  ],
+  "invariants": [
+    "Unknown stays unknown",
+    "Original bytes retained",
+    "Separate source ticks/host receive/server arrival",
+    "No sensor-stream impersonation",
+    "No overwrite or automatic cleanup"
+  ],
+  "modules": [
+    "schemas",
+    "scripts/lab_capture.py",
+    "FoxTrainingCore/LabCapture.swift",
+    "new standalone Pump adapter",
+    "focused tests"
+  ],
+  "acceptance": [
+    "test:lab-data",
+    "test:training-store",
+    "test:archive",
+    "verify:repository"
+  ],
+  "stopConditions": [
+    "Protocol side effects unclear",
+    "Unknown redistribution rights",
+    "Concurrent edits",
+    "Input drift"
+  ],
+  "evidence": [
+    "External ignored red/green receipts"
+  ],
+  "humanUnknowns": [
+    "Real BLE and camera remain untested"
+  ]
+}

@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/lab-capture.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "capture_id",
+    "mode",
+    "started_host_ns",
+    "ended_host_ns",
+    "streams",
+    "files",
+    "host_clock_id"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fox.lab_capture.v1"
+    },
+    "capture_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "mode": {
+      "enum": [
+        "free_capture",
+        "exercise_evaluation"
+      ]
+    },
+    "action": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      ]
+    },
+    "side": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "left",
+            "right",
+            "both",
+            "not_applicable"
+          ]
+        }
+      ]
+    },
+    "strategy": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      ]
+    },
+    "started_host_ns": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,24})$"
+    },
+    "ended_host_ns": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,24})$"
+    },
+    "utc_anchor": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host_ns",
+            "utc_us",
+            "uncertainty_us",
+            "method"
+          ],
+          "properties": {
+            "host_ns": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,24})$"
+            },
+            "utc_us": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,24})$"
+            },
+            "uncertainty_us": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,24})$"
+            },
+            "method": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          }
+        }
+      ]
+    },
+    "streams": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "record_schema",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "kind": {
+            "enum": [
+              "video",
+              "camera_frames",
+              "pose2d",
+              "pose3d",
+              "pump_raw",
+              "pump_parsed",
+              "events"
+            ]
+          },
+          "state": {
+            "enum": [
+              "complete",
+              "interrupted",
+              "failed",
+              "unavailable",
+              "not_requested"
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            ]
+          },
+          "record_schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "producer",
+              "version",
+              "clock_id"
+            ],
+            "properties": {
+              "producer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "clock_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "device_alias": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  }
+                ]
+              },
+              "coordinate_system": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  }
+                ]
+              },
+              "unit": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "bytes",
+          "sha256",
+          "stream_id"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "stream_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          }
+        }
+      }
+    },
+    "host_clock_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    }
+  }
+}
