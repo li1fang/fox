@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { spawnSync, execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {doctor, allocateSimulators, releaseSimulators, isolateSimulatorStep, environment} from './development-environment.mjs';
+import {doctor, allocateSimulators, releaseSimulators, isolateSimulatorStep, environment, evidencePath} from './development-environment.mjs';
 import {checkedCatalogue} from './test-inventory.mjs';
 import {runSuite, execute, fingerprint} from './trial-suite.mjs';
 
@@ -126,7 +126,7 @@ export function parseDesignArguments(args) {
   const device = options['--device'] ?? 'ipad';
   if (!['ipad', 'iphone'].includes(device)) throw Error('Expected --device ipad or iphone');
   return {command, groups: selected, device, result: options['--result'],
-    output: path.resolve(options['--output'] ?? path.join(root, '.tmp/design-review', new Date().toISOString().replace(/[:.]/g, '-')))};
+    output: path.resolve(options['--output'] ?? path.join(evidencePath('design-review'), new Date().toISOString().replace(/[:.]/g, '-')))};
 }
 
 export function validateDesignEvidence(report, methods) {
@@ -152,7 +152,7 @@ export async function runDesignReview(options, overrides = {}) {
     evidenceBoundary: 'Synthetic render/interaction diagnostic, not full candidate or physical-device acceptance.'};
   let lease;
   return runSuite({directory, steps, metadata, fingerprint: deps.fingerprint,
-    preflight: async () => {
+    preflight: async ({signal}) => {
       if (deps.env.FOX_PRIVATE_INPUT_MANIFEST || deps.env.TEST_RUNNER_FOX_PRIVATE_INPUT_MANIFEST) throw Error('Design capture must not receive private inputs');
       const catalogue = await deps.catalogue();
       for (const id of ids) {
@@ -163,7 +163,7 @@ export async function runDesignReview(options, overrides = {}) {
         if (!['ipad', 'iphone'].includes(options.device)) throw Error('Unsupported design device');
         const info = deps.doctor({native: true});
         Object.assign(metadata.environment, info);
-        lease = await deps.allocate(info, {families: [options.device],
+        lease = await deps.allocate(info, {signal, families: [options.device],
           overrides: deps.env.FOX_IOS_SIMULATOR ? {[options.device]: deps.env.FOX_IOS_SIMULATOR} : {}});
         metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
         writeFileSync(path.join(directory, 'source.json'), JSON.stringify(sourceFingerprint(), null, 2) + '\n', {flag: 'wx'});

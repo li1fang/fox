@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Provide explicit sensor inboxes, capture-time training storage and external development output paths",
+  "nonGoals": ["Real vendor adapters or fusion", "Device operations", "CI changes", "Deleting originals", "Product behavior changes"],
+  "invariants": ["Preserve originals and other worktrees", "Only eligible event-time samples enter the new training database", "No fabricated measurements or timing", "No private data in Git"],
+  "modules": ["scripts/training_store.py", "scripts/storage-paths.mjs", "scripts/development-environment.mjs", "docs/planning", "tests/scripts"],
+  "acceptance": ["test:training-store", "test:archive", "test:scripts", "verify:repository"],
+  "stopConditions": ["Concurrent writer", "Original integrity drift", "Unknown volume identity", "Missing storage or SSH access"],
+  "evidence": ["Failing tests before implementation", "Local and Linux synthetic RPC results", "Fresh-context review"],
+  "humanUnknowns": ["Actual sensor formats, clock drift and acquisition throughput require a later real-data round"]
+}

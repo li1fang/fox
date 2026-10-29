@@ -30,13 +30,13 @@ export async function runDuo({commit, output}) {
     if (s.bavail * s.bsize < 2 * 2 ** 30) throw Error('Internal capacity below 2 GiB');
   };
   return runSuite({directory: path.resolve(output), steps, metadata,
-    preflight: async () => {
+    preflight: async ({signal}) => {
       checkCandidate(commit); capacity();
       if (process.env.FOX_PRIVATE_INPUT_MANIFEST) throw Error('Duo layout check must not receive private inputs');
       if (!steps.length) {
         const tests = duoSelection(await checkedCatalogue()), info = doctor({native: true});
         info.simulatorRuntime = duoRuntime;
-        lease = await allocateSimulators(info, {families: ['iphone'], models: {iphone: duoModel}, overrides: {}});
+        lease = await allocateSimulators(info, {signal, families: ['iphone'], models: {iphone: duoModel}, overrides: {}});
         metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
         steps.push({id: 'duo-layout', command: 'node', args: ['scripts/ipad.mjs', 'test-ui'], native: true,
           expectedNative: tests, timeoutMs: 40 * 60 * 1000,

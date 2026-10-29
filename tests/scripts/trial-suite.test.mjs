@@ -3,11 +3,121 @@ import assert from 'node:assert/strict';
 import {mkdtemp, writeFile, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {Writable} from 'node:stream';
+import {Writable, PassThrough} from 'node:stream';
+import {EventEmitter} from 'node:events';
 import {spawn} from 'node:child_process';
 import * as suiteModule from '../../scripts/trial-suite.mjs';
 import {runSuite, checkXCTestLog, suiteSteps, compareHistory} from '../../scripts/trial-suite.mjs';
 import {auditReceipt} from '../../scripts/verification-contracts.mjs';
+
+test('unresponsive process inventory is killed and detached from the observer within its budget', {timeout: 1000}, async () => {
+  const child = new EventEmitter(), signals = [];
+  child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.kill = signal => { signals.push(signal); return false; };
+  let detached = false; child.unref = () => { detached = true; };
+  await assert.rejects(suiteModule.readProcessTable({launch: () => child, timeoutMs: 20}), /timed out/);
+  assert.deepEqual(signals, ['SIGKILL']);
+  assert.ok(detached && child.stdout.destroyed && child.stderr.destroyed);
+});
+
+test('inventory launch failure without stdio remains a caught error', async () => {
+  const child = new EventEmitter();
+  child.kill = () => false; child.unref = () => {};
+  await assert.rejects(suiteModule.readProcessTable({launch: () => {
+    queueMicrotask(() => child.emit('error', Object.assign(Error('EMFILE'), {code: 'EMFILE'})));
+    return child;
+  }}), /EMFILE/);
+});
+
+test('command launch failure without stdio seals its failed receipt and log', async t => {
+  const {dir} = await harness(t);
+  const script = `
+    import {EventEmitter} from 'node:events';
+    import {runSuite, execute} from ${JSON.stringify(new URL('../../scripts/trial-suite.mjs', import.meta.url).href)};
+    const launch = () => {
+      const child = new EventEmitter();
+      child.stdout = null; child.stderr = null;
+      queueMicrotask(() => {
+        child.emit('error', Object.assign(Error('fixture EMFILE'), {code: 'EMFILE'}));
+        child.emit('close', -1, null);
+      });
+      return child;
+    };
+    try {
+      await runSuite({directory: ${JSON.stringify(dir)}, steps: [{id:'launch',command:'synthetic',args:[]}],
+        fingerprint: async () => 'same', preflight: async () => [],
+        execute: (step, options) => execute(step, {...options, launch})});
+      process.exit(2);
+    } catch (error) {
+      console.log(error.message);
+      process.exit(error.code === 'EMFILE' ? 0 : 3);
+    }
+  `;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', script], {stdio: ['ignore', 'pipe', 'pipe']});
+  let output = '';
+  child.stdout.on('data', bytes => { output += bytes; }); child.stderr.on('data', bytes => { output += bytes; });
+  const code = await new Promise(resolve => child.on('close', resolve));
+  assert.equal(code, 0, output);
+  const receipt = JSON.parse(await readFile(path.join(dir, 'suite.json')));
+  assert.equal(receipt.status, 'failed'); assert.equal(receipt.steps[0].status, 'failed');
+  assert.match(receipt.error, /fixture EMFILE/);
+  assert.equal(await readFile(path.join(dir, 'launch.log'), 'utf8'), '');
+});
+
+test('a receipt write error cannot erase unsafe cleanup and release a live lease', async t => {
+  const {dir, steps} = await harness(t); let released = false;
+  await assert.rejects(runSuite({directory: dir, steps, fingerprint: async () => 'same', preflight: async () => [],
+    execute: async () => { throw Object.assign(Error('unsafe child'), {resourceCleanupUncertain: true}); },
+    writeReceipt: async (filename, body, options) => {
+      if (filename.endsWith('suite.json.tmp') && JSON.parse(body).steps[0]?.status === 'failed') throw Error('fixture disk full');
+      return writeFile(filename, body, options);
+    }, finalize: async () => { released = true; }}), /disk full/);
+  assert.equal(released, false);
+  assert.match(JSON.parse(await readFile(path.join(dir, 'suite.json'))).finalizationError, /retain|unsafe/i);
+});
+
+test('ownership observation follows known compiler descendants across groups without adopting foreign or reused PIDs', async () => {
+  let table = '10 1 10 S START-A\n20 10 20 S START-B\n30 1 30 S FOREIGN';
+  const observe = suiteModule.ownedProcessObserver(10, async () => table);
+  assert.deepEqual(await observe(), [10, 20]);
+  table = '20 1 20 S START-B\n30 1 30 S FOREIGN\n40 20 40 S START-C';
+  assert.deepEqual(await observe(), [20, 40]);
+  table = '20 1 20 S REUSED\n40 1 40 Z START-C\n50 20 50 S NOT-OURS';
+  assert.deepEqual(await observe(), []);
+});
+
+test('process-group release waits for observed exit and treats unobservable cleanup as unsafe', async () => {
+  let polls = 0; const killed = [];
+  await suiteModule.settleProcessGroup(123, {observe: async () => ++polls < 3 ? [456] : [],
+    kill: (pid, signal) => killed.push([pid, signal]), pause: async () => {}});
+  assert.equal(polls, 3, 'sending a signal is not proof that a child exited');
+  assert.ok(killed.some(([pid, signal]) => pid === -123 && signal === 'SIGKILL'));
+  await assert.rejects(suiteModule.settleProcessGroup(123, {observe: async () => { throw Error('ps unavailable'); }}),
+    error => error.resourceCleanupUncertain === true);
+});
+
+test('unsafe process cleanup preserves the lease instead of calling finalizers', async t => {
+  const {dir, steps} = await harness(t); let released = false;
+  await assert.rejects(runSuite({directory: dir, steps, fingerprint: async () => 'same', preflight: async () => [],
+    execute: async () => { throw Object.assign(Error('unknown process state'), {resourceCleanupUncertain: true}); },
+    finalize: async () => { released = true; }}), /unknown/);
+  assert.equal(released, false);
+  assert.match(JSON.parse(await readFile(path.join(dir, 'suite.json'))).finalizationError, /retain|unsafe/i);
+});
+
+test('preflight resource waiting receives cancellation and cannot create devices afterwards', async t => {
+  const {dir, steps} = await harness(t);
+  let created = false;
+  await assert.rejects(runSuite({directory: dir, steps, fingerprint: async () => 'same',
+    preflight: async ({signal}) => {
+      process.emit('SIGTERM');
+      signal.throwIfAborted();
+      created = true;
+      return [];
+    }}));
+  assert.equal(created, false);
+  assert.equal(JSON.parse(await readFile(path.join(dir, 'suite.json'))).status, 'cancelled');
+});
 
 test('suite has actual controller, phone/pad UI, real speech, wire and per-event history gates', () => {
   const steps = suiteSteps('/run', {ipad: 'pad', iphone: 'phone'}, [], {catalogue: [

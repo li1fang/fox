@@ -4,11 +4,12 @@ import {spawnSync} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {isDeepStrictEqual} from 'node:util';
 import {runSuite, suiteSteps, fingerprint, compareHistory, execute} from './trial-suite.mjs';
-import {doctor, root, allocateSimulators, releaseSimulators, isolateSimulatorStep} from './development-environment.mjs';
+import {doctor, root, allocateSimulators, releaseSimulators, isolateSimulatorStep, simulatorSelection, evidencePath} from './development-environment.mjs';
 import {checkedCatalogue} from './test-inventory.mjs';
 import {validatePrivateInputs} from './private-inputs.mjs';
 import {artifact} from './trial-readiness.mjs';
 import {auditReceipt, auditNativeCoverage, auditCommandOutput} from './verification-contracts.mjs';
+import {executeAdmitted} from './native-resource.mjs';
 
 function checkCandidateCommit(commit) {
   if (typeof commit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)) {
@@ -82,6 +83,32 @@ export async function verifyReceipt(filename, scope, component = 'all') {
   return {status:'receipt_verified',scope,component,commit:receipt.commit,deviceVerified:false};
 }
 
+export function createNativeStepExecutor({info, metadata, allocate = allocateSimulators,
+  release = releaseSimulators, isolate = isolateSimulatorStep, execute: run = execute}) {
+  let lease;
+  return {
+    async run(step, options) {
+      if (step.args.includes('test-ui')) {
+        if (!lease) {
+          lease = await allocate(info, {signal: options.signal});
+          metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
+        }
+        const family = step.env?.FOX_IOS_SIMULATOR?.replace('pending:', '');
+        if (!['ipad', 'iphone'].includes(family)) throw Error('Missing explicit simulator family in verification plan');
+        step.env.FOX_IOS_SIMULATOR = lease.devices[family];
+        const isolation = await isolate(lease, step);
+        if (isolation) metadata.environment.simulatorIsolation.push(isolation);
+      }
+      return step.resource ? executeAdmitted(step, options) : run(step, options);
+    },
+    async finalize() {
+      if (!lease) return;
+      try { await release(lease); metadata.environment.simulatorLifecycle.status = 'released'; }
+      catch (error) { metadata.environment.simulatorLifecycle.status = 'cleanup_failed'; throw error; }
+    }
+  };
+}
+
 export async function runVerification({scope = 'fast', component = 'all', output, candidateCommit} = {}) {
   if (!['fast', 'public', 'private'].includes(scope) || !['all', 'web', 'native'].includes(component)) throw Error('Invalid verification scope/component');
   if (scope === 'private' && component !== 'all') throw Error('Private acceptance requires the complete suite');
@@ -89,7 +116,7 @@ export async function runVerification({scope = 'fast', component = 'all', output
     checkCandidateCommit(candidateCommit);
     if (scope === 'fast') throw Error('Candidate acceptance requires public or private scope');
   }
-  const directory = path.resolve(output ?? path.join(root, '.tmp/verification', `${scope}-${component}-${new Date().toISOString().replace(/[:.]/g, '-')}`));
+  const directory = path.resolve(output ?? path.join(evidencePath('verification'), `${scope}-${component}-${new Date().toISOString().replace(/[:.]/g, '-')}`));
   const git = args => {
     const p = spawnSync('git', args, {cwd: root, encoding: 'utf8'});
     if (p.status !== 0) throw Error('Cannot inspect Git identity');
@@ -100,21 +127,21 @@ export async function runVerification({scope = 'fast', component = 'all', output
     dirty: !!git(['status', '--porcelain']), environment: {simulatorIsolation: []}, excludedTests: [],
     evidenceBoundary: 'Software verification only. No device installation, camera accuracy, audibility, or human acceptance claim.'};
   const steps = [];
-  let lease;
+  let nativeExecutor;
   const preflight = async () => {
     // Run before private input reads, catalogue scans, doctor or simulator allocation; recheck at completion.
     if (candidateCommit !== undefined) checkCandidate(candidateCommit);
+    if (process.env.FOX_SIMULATOR_SESSION_TOKEN) throw Error('Nested verification is unsupported; run verify directly, without native:run');
     if (scope !== 'private' && process.env.FOX_PRIVATE_INPUT_MANIFEST) throw Error('Public/fast runs must not receive private input locations');
     const inputs = scope === 'private' ? await validatePrivateInputs(process.env.FOX_PRIVATE_INPUT_MANIFEST) : [];
     if (!steps.length) {
       const catalogue = await checkedCatalogue();
       const info = doctor({native: component !== 'web'});
       Object.assign(metadata.environment, info);
-      if (component !== 'web' && scope !== 'fast') {
-        lease = await allocateSimulators(info);
-        metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
-      }
-      const devices = lease?.devices ?? {};
+      // Validate both targets early without reserving them during Web/host work.
+      if (component !== 'web' && scope !== 'fast') simulatorSelection(info);
+      nativeExecutor = createNativeStepExecutor({info, metadata});
+      const devices = {ipad: 'pending:ipad', iphone: 'pending:iphone'};
       steps.push(...suiteSteps(directory, devices, inputs, {scope, component, catalogue}));
       const selected = new Set(steps.flatMap(s => s.expectedNative ?? []));
       for (const row of catalogue) {
@@ -126,23 +153,10 @@ export async function runVerification({scope = 'fast', component = 'all', output
     }
     return inputs;
   };
-  const finalize = async () => {
-    if (!lease) return;
-    try {
-      await releaseSimulators(lease);
-      metadata.environment.simulatorLifecycle.status = 'released';
-    } catch (error) {
-      metadata.environment.simulatorLifecycle.status = 'cleanup_failed';
-      throw error;
-    }
-  };
+  const finalize = async () => nativeExecutor?.finalize();
   try {
     const result = await runSuite({directory, steps, preflight, finalize, metadata,
-      execute: async (step, options) => {
-        const isolation = await isolateSimulatorStep(lease, step);
-        if (isolation) metadata.environment.simulatorIsolation.push(isolation);
-        return execute(step, options);
-      }
+      execute: (step, options) => nativeExecutor.run(step, options)
     });
     console.log(JSON.stringify({status: result.status, scope, component, receipt: path.join(directory, 'suite.json'), deviceVerified: false}));
     return result;

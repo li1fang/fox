@@ -1,10 +1,11 @@
 import {spawnSync, execFile} from 'node:child_process';
-import {randomUUID} from 'node:crypto';
+import {randomUUID, createHash} from 'node:crypto';
 import {existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync} from 'node:fs';
 import {homedir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
+import {storagePath} from './storage-paths.mjs';
 
 export const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const developerDir = process.env.DEVELOPER_DIR ?? '/Applications/Xcode.app/Contents/Developer';
@@ -25,9 +26,24 @@ export function assertXcodeVersion(actual, profile) {
   const expected = xcodeConfiguration(profile);
   if (actual !== expected.version) throw Error(`environment_failure: expected ${expected.version}; select FOX_XCODE_PROFILE and DEVELOPER_DIR explicitly`);
 }
-const sessionDirectory = path.join(homedir(), '.cache', 'fox', 'simulator-session');
+export const sessionDirectory = path.join(homedir(), '.cache', 'fox', 'simulator-session');
 export const environment = {...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH}`,
   DEVELOPER_DIR: developerDir, FOX_JOURNAL_PYTHON: python, PYTHONDONTWRITEBYTECODE: '1'};
+
+export function swiftJobs(value = process.env.FOX_SWIFT_JOBS ?? '2') {
+  if (!/^[1-4]$/.test(String(value))) throw Error('FOX_SWIFT_JOBS must be from 1 to 4');
+  return Number(value);
+}
+
+export function nativeScratchPath(name) {
+  if (!/^[a-z0-9-]+$/.test(name)) throw Error('Invalid native cache name');
+  const base = process.env.FOX_BUILD_CACHE_ROOT;
+  // External caches remain separate for each worktree, even on the same volume.
+  return base ? path.join(path.resolve(base), createHash('sha256').update(root).digest('hex').slice(0, 16), name)
+    : storagePath('cache', name, root);
+}
+
+export function evidencePath(name) { return storagePath('evidence', name, root); }
 
 function capture(command, args) {
   const result = spawnSync(command, args, {cwd: root, env: environment, encoding: 'utf8'});
@@ -80,14 +96,15 @@ export function simulatorCandidates(info, runtime = info.simulatorRuntime ?? res
 }
 
 // One claim across worktrees. Never steal a stale claim: a dead parent may still have live test children.
-export function acquireSimulatorSession(directory = sessionDirectory) {
+export function acquireSimulatorSession(directory = sessionDirectory, {purpose = 'simulator verification'} = {}) {
   mkdirSync(path.dirname(directory), {recursive: true});
   try { mkdirSync(directory); }
   catch (error) {
-    if (error.code === 'EEXIST') throw Error(`environment_failure: simulator session busy; inspect ${path.join(directory, 'owner.json')} and its processes before recovery`);
+    if (error.code === 'EEXIST') throw Object.assign(Error(`environment_failure: simulator session busy; inspect ${path.join(directory, 'owner.json')} and its processes before recovery`), {code: 'FOX_RESOURCE_BUSY'});
     throw error;
   }
-  const session = {directory, token: randomUUID(), pid: process.pid, root, developerDir, startedAt: new Date().toISOString()};
+  const session = {directory, token: randomUUID(), pid: process.pid, root, developerDir, purpose,
+    resource: 'mac-native', startedAt: new Date().toISOString()};
   try { writeFileSync(path.join(directory, 'owner.json'), JSON.stringify({...session, created: [], devices: {}}, null, 2)); }
   catch (error) { rmSync(directory, {recursive: true}); throw error; }
   return session;
@@ -118,14 +135,15 @@ export async function assertSimulatorAvailability(allowed, execute = captureAsyn
   if (foreign.length) throw Error(`environment_failure: other simulators active: ${foreign.map(d => `${d.udid} (${d.name ?? d.state})`).join(', ')}; coordinate shutdown with their owner; nothing was stopped`);
 }
 
-export async function allocateSimulators(info, {execute = captureAsync, coordinate = true, sessionPath = sessionDirectory, families = ['ipad', 'iphone'], models = {
+export function simulatorSelection(info, {families = ['ipad', 'iphone'], models = {
   ipad: 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M5-12GB',
   iphone: 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}, overrides = {
   ipad: process.env.FOX_TRIAL_IPAD_SIMULATOR, iphone: process.env.FOX_TRIAL_IPHONE_SIMULATOR}} = {}) {
+  if (!families.length || new Set(families).size !== families.length || families.some(x => !['ipad', 'iphone'].includes(x))) throw Error('Invalid simulator families');
   const available = simulatorCandidates(info);
   // Installed device types do not imply runtime support: 27.1 is Duo-only; general iPad/phone uses 27.0.
   // Resolve every requested family before acquiring ownership or creating a partial device batch.
-  const templates = [['ipad', 'iPad'], ['iphone', 'iPhone']].filter(([key]) => families.includes(key)).map(([key, family]) => {
+  return [['ipad', 'iPad'], ['iphone', 'iPhone']].filter(([key]) => families.includes(key)).map(([key, family]) => {
     const candidates = available.filter(d => d.deviceTypeIdentifier?.includes(`.${family}-`));
     const installedType = info.simulatorTypes?.find(d => d.identifier === models[key]);
     const template = overrides[key] ? candidates.find(d => d.udid === overrides[key])
@@ -140,11 +158,26 @@ export async function allocateSimulators(info, {execute = captureAsync, coordina
     }
     return {key, family, template};
   });
+}
+
+export async function allocateSimulators(info, {execute = captureAsync, coordinate = true, sessionPath = sessionDirectory, signal,
+  waitMs = Number(process.env.FOX_NATIVE_WAIT_MS ?? 0), overrides = {
+    ipad: process.env.FOX_TRIAL_IPAD_SIMULATOR, iphone: process.env.FOX_TRIAL_IPHONE_SIMULATOR}, ...selection} = {}) {
+  signal?.throwIfAborted();
+  const templates = simulatorSelection(info, {...selection, overrides});
   const lease = {devices: {}, created: [], selection: {}, creationIntents: []};
-  if (coordinate) lease.session = acquireSimulatorSession(sessionPath);
+  if (coordinate) {
+    const {acquireNativeResource, rejectNestedRunner} = await import('./native-resource.mjs');
+    rejectNestedRunner();
+    const claim = await acquireNativeResource({directory: sessionPath, waitMs, signal, purpose: 'simulator verification'});
+    lease.session = claim.session;
+    lease.waitMs = claim.waitMs;
+  }
   try {
+    signal?.throwIfAborted();
     if (coordinate) await assertSimulatorAvailability(Object.values(overrides).filter(Boolean), execute);
     for (const {key, family, template} of templates) {
+      signal?.throwIfAborted();
       const name = `FoxVerification-${family}-${randomUUID()}`;
       if (!overrides[key]) {
         lease.creationIntents.push({name, runtime: template.runtime, deviceType: template.deviceTypeIdentifier});
@@ -170,6 +203,11 @@ export async function allocateSimulators(info, {execute = captureAsync, coordina
 }
 
 export async function isolateSimulatorStep(lease, step, execute = captureAsync) {
+  // Legacy suites may hold the claim while running host tests/builds too.
+  if (lease?.session) {
+    step.env ??= {};
+    step.env.FOX_SIMULATOR_SESSION_TOKEN = lease.session.token;
+  }
   const target = step.env?.FOX_IOS_SIMULATOR;
   if (!target) return;
   if (!lease || !Object.values(lease.devices).includes(target)) throw Error('Simulator target does not belong to this lease');

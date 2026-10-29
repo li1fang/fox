@@ -1,5 +1,44 @@
 # 重建与验证
 
+## 资源准入与独立验证（RES）
+
+实施依据：[RES-0～RES-3](../planning/RESOURCE_DECOUPLING_RES_0_3.zh-CN.md)。不是新调度系统：继续使用本用户既有 `~/.cache/fox/simulator-session` 原子目录与 token，旧工作树的有效租约仍会阻止新入口。目录名为兼容性保留，资源含义扩展为 `mac-native`。
+
+`npm run resources` 只读显示持有任务、工作树、PID、工具链和开始时间，不显示 token、不回收锁。`free` 只说明没有 Fox 租约，不证明没有人工 Xcode/其他项目的重型进程。父进程不在也不能推断可抢占：遗留子进程、创建结果不明和清理失败都须先核对原回执，不自动删除目录。
+
+核心/Journal/Sync 主机测试、模拟器及真机的构建/工程生成、`vision:replay`/`vision:video` 使用同一准入；安装缺包时触发的构建也经过准入。资源授权不等于真机操作授权，安装/启动仍须原交付许可与保全流程，本轮没有实做。新脚本不能控制未集成的旧树、人工 Xcode 或任意 shell，相关任务仍须告知占用。
+
+- 默认争用立即拒绝，保留原行为；显式 `FOX_NATIVE_WAIT_MS=120000` 可等至多两分钟，最大一小时。取消等待不启动工作，也不释放别人的租约。不承诺 FIFO/公平调度，不持久化排队任务。
+- 持有者与继承者核对 token、工作树和工具链。只有叶命令继承；`verify`/`verify:workstream` 等编排器须直接调用，拒绝套进 `native:run` 再申请自己的租约。原父执行器统一处理取消、日志及收尾，观察 PID/启动时间与已见后代，包括 Swift 改进程组的子编译器；确认停止执行后才释放。无法观察/清理时保留租约及失败回执，不继续 finalizer。不是容器或通用守护进程管理器，强杀执行器、断电、采样前脱离且已失去父关系的后台进程不保证回收；不得在此包装中启动常驻 daemon。
+- `runSuite` 步骤回执保存准入等待、取得/结束时间及释放状态；源码变化、缺测、跳过、取消仍失败。完整套件先核对机型/runtime 可用性，到首次 App-host/UI 步骤才真正申请模拟器，Web 与主机步骤不提前占用它。
+- Swift 默认 `--jobs 2`，`FOX_SWIFT_JOBS` 只接受 1～4。`FOX_BUILD_CACHE_ROOT` 可显式指定外盘缓存根，其下按工作树摘要分目录；不共享可变缓存、不迁移/删除原有缓存，不把缓存当测试回执。内盘仍承担系统和模拟器数据，必须另查空间。
+- 临时直接 Swift 命令可使用 `npm run native:run -- -- <command> <args...>`；这只是同一租约与执行器的包装，不赋予命令更多权限、不使任意命令成为验收。
+
+### 工作线入口
+
+2026-10-28 外置存储接入：本机私有 `~/.config/fox/storage.json` 可配置已挂载卷；`npm run storage:paths` 查看结果。新 SwiftPM 缓存、verify/verify:workstream/design:review 默认输出及 native:run 日志按工作树分开，已配置但卷缺失/标记不符会失败；未配置保持兼容默认，显式环境变量/输出仍优先。旧缓存、原件、回执未删，真机签名路径未变，独立树需合入才能生效。见 [投递和存储接手](TRAINING_DATA_HANDOFF.zh-CN.md)。
+
+先用 `npm run verify:workstream -- client --list` 查看实际清单，再去掉 `--list` 执行。可加 `--output <fresh-directory>`。入口检查原 catalogue，选中原测试，复用 `runSuite` 的指纹、日志摘要、取消和精确 XCTest 覆盖，不增设第二份测试台账。
+
+| lane | 当前覆盖 | 资源与不覆盖 |
+| --- | --- | --- |
+| `client` | 既有 Training、TrialConfirmation、Guidance 的 34 项确定性契约 | Mac Swift 主机，不创建模拟器；不是新客户端分支的 App stores、布局、键盘或可访问性验收 |
+| `vision` | 启动、主体/会话、策略、几何与下拉的显式 41 项公开子集 | 不创建模拟器；不是全部视觉测试、Apple Vision、控制器或新真人准确率 |
+| `data` | 归档/资料关联/附件和训练传感器时间窗契约，全部使用合成输入与临时库 | Node/Python；不争 Mac 原生锁、不访问正式资料库；不是已实现的智能分析或厂商格式适配 |
+| `storage` | 完整 Journal/SyncCore 主机测试与合成同步服务 | Mac 原生准入；本 lane 不做 SDK 编译/Keychain App-host/真机，默认完整入口仍保留这些门槛 |
+| `tooling` | 准入、验证入口、原 suite 的定向工具反例 | Node，原生命令为假实现；不是全部脚本或产品验收 |
+
+`client`/`vision` 沿用视觉线提交 `667abd3` 的 [同源公开投影工具](../../scripts/vision-core-offline.py)：业务源码逐字节复制，只选择登记为 public/host 的完整测试类，移除对 Apple 工具/私人 TestSupport 的构建依赖，不复制业务实现或修改断言。临时包和 manifest 保存在独立证据目录，执行前后校验文件与 manifest。源码树变化使本批失败。Linux 可在有 Node/Python/Swift 的已配置工作区运行相同 lane；也可只转移生成包、沿既有受限 Swift 容器运行，回执类型及主机必须分别标注。Mac 上使用 `verify:workstream client/vision`；Python driver 的独立 `run` 仅供 Linux，Mac 会在编译前拒绝，`stage`/`check` 仍可用。Linux runner 清理自己的进程组，不宣称替代容器生命周期或 Mac 的共享资源准入。
+
+新回执 scope 为 `development/workstream`，含 selectedTests/excludedTests 和明确证据边界；`verify:receipt` 不接受它冒充 public/private。未覆盖不等于 skip，也不能用多个专项拼出完整通过。最终集成继续使用完整 public/private、必要的 iPhone/iPad/Duo UI 与设备门槛；CI 触发和覆盖集合不变。
+
+### 接手顺序
+
+1. 在各工作树核对基线与原改动，选择 lane 和必要补充测试；数据服务的语义/消费任务不默认接管同步运维。
+2. 先运行公开契约与接口反例；需要主机原生时检查占用与容量。没有资源窗口先做独立轻量工作，不抢锁、不反复重试。
+3. UI 生命周期、真实控制器、SDK 接入等仍走对应平台测试。已知动画等待按原规则停止受影响组，不追查框架、不关闭断言。
+4. 候选冻结后集成验收。已有独立树正在验收时，不热更新其脚本；本轮改进需在其下一候选中合入后生效。保留旧回执，不能宣称已经全局覆盖所有 Agent。
+
 ## B 方案的分组验证
 
 2026-10-26 起，动画采集器支线按用户决定暂停，见 [B0～B3](../planning/TRAINING_STORY_B_IMPLEMENTATION.zh-CN.md)。开发按状态/存储、无键盘 UI、真实输入 UI 分组；沿用既有 runSuite 和模拟器租约。已知动画等待保留失败回执并暂停受影响组，其他独立组继续。不自动重试、不附加调试器、不削弱断言、不把新产品错误归入旧故障。此规则不修改 public/private 全覆盖、正式候选准入或 CI；分组通过不是完整验收，关键输入受阻时不可宣布完整 B 或发布通过。
@@ -127,7 +166,7 @@ npm run verify:candidate -- private --commit "$candidate" --output .tmp/verifica
 
 完整原生运行默认创建专属临时 iPad/iPhone 模拟器，固定本地通用 iOS 27.0、云端显式兼容 profile，以及 iPhone 17 Pro 与 iPad Pro 11-inch M5 12GB。Duo 27.1 单独选型，不用于 iPad 回退。目标缺失直接失败，不按列表顺序回退；`FOX_SIMULATOR_RUNTIME` 可显式选运行时。完成、失败或正常套件取消后仅清理本次创建的实例。已有模拟器和真机不删除。回执记录实例、运行时、所有权及清理状态；清理失败也不能通过。`doctor` 只读，fast/Web 不创建实例。诊断时可用 `FOX_TRIAL_IPAD_SIMULATOR` / `FOX_TRIAL_IPHONE_SIMULATOR` 指定已有 UDID；它们不会被清理，但其原有状态会影响结果，不属于干净环境证明。
 
-套件、诊断及直接 UI 入口共享本用户的模拟器会话，跨工作树争用立即失败。每步若有外部启动实例则停止，不自动关闭。直接 UI 默认也使用临时实例；继承套件目标时核对 token、工作树、工具链和 UDID，不另抢锁。强制终止与异常创建/清理保留 owner 待核查，恢复步骤及工具链并存的退出条件见 [过渡计划](TOOLCHAIN_TRANSITION.zh-CN.md)。人工 Xcode 操作和旧脚本不受互斥约束。
+套件、诊断及直接 UI 入口共享本用户的模拟器会话，跨工作树争用默认立即失败，可按上文 RES 指定有界等待。每步若有外部启动实例则停止，不自动关闭。直接 UI 默认也使用临时实例；继承套件目标时核对 token、工作树、工具链和 UDID，不另抢锁。强制终止与异常创建/清理保留 owner 待核查，恢复步骤及工具链并存的退出条件见 [过渡计划](TOOLCHAIN_TRANSITION.zh-CN.md)。人工 Xcode 操作和未集成新入口的旧脚本不受完整准入约束。
 
 原生批次执行前，只关闭本次拥有的其他模拟器，避免 iPad 测完后继续与 iPhone 同时运行；不清除数据，切回系统语音批次时重新启动原 iPad。回执的 `environment.simulatorIsolation` 逐项记录目标和已停止的同批实例。显式指定的已有实例不会被这一步关闭；关闭错误使检查失败，不重试或吞掉非“已关闭”错误。这是资源隔离措施，不等于已证明此前超时的系统根因，也不改变交互断言期限。
 

@@ -534,15 +534,21 @@ if(name==='xcrun' && args[1]==='list') {
  console.log(JSON.stringify(output));
 }
 if(name==='xcrun' && args[1]==='create') console.log('${id}');
+if(name==='xcrun' && args.includes('--show-sdk-path')) console.log('/fixture-sdk');
 if(name==='xcodebuild') console.log('NATIVE_PARTIAL_OUTPUT');
 if(name==='xcodebuild' && process.env.FOX_TEST_IDLE_EXPIRED==='1') console.log('    t = 60.00s App animations complete notification not received, will attempt to continue.');
 if(name==='xcodebuild' && process.env.FOX_TEST_WAIT==='1'){writeFileSync(process.env.FOX_TEST_READY,String(process.pid));if(process.env.FOX_TEST_RESIST==='1')process.on('SIGTERM',()=>{});setTimeout(()=>{},60000);}
 if(name==='xcrun' && args[1]==='delete' && process.env.FOX_TEST_CLEANUP_WAIT==='1'){writeFileSync(process.env.FOX_TEST_READY,'cleanup');setTimeout(()=>{},400);}
 `;
-  for (const name of ['xcrun', 'xcodegen', 'xcodebuild']) {
+  for (const name of ['xcrun', 'xcodegen', 'xcodebuild', 'python3']) {
     const file = path.join(bin, name); await writeFile(file, body); await chmod(file, 0o755);
   }
+  const platformFixture = path.join(dir, 'fixture-platform.mjs');
+  await writeFile(platformFixture, "Object.defineProperty(process, 'platform', {value: 'darwin'});\n");
   return {dir, id, env: {...process.env, HOME: dir, PATH: `${bin}:${process.env.PATH}`,
+    NODE_OPTIONS: `--import=${platformFixture}`,
+    FOX_NATIVE_LOG_ROOT: path.join(dir, 'admission'), FOX_NATIVE_WAIT_MS: '0',
+    FOX_JOURNAL_PYTHON: path.join(bin, 'python3'),
     FOX_SIMULATOR_SESSION_TOKEN: '', FOX_IOS_SIMULATOR: '', FOX_SIMULATOR_RUNTIME: 'com.apple.CoreSimulator.SimRuntime.iOS-26-3',
     FOX_TEST_TRACE: path.join(dir, 'trace.jsonl'), FOX_TEST_READY: path.join(dir, 'ready')}};
 }
@@ -622,6 +628,36 @@ test('simulator builds share the explicit isolated derived-data path with UI ver
   const builds = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse).filter(x => x.name === 'xcodebuild');
   assert.equal(builds.length, 2);
   assert.ok(builds.every(x => x.args[x.args.indexOf('-derivedDataPath') + 1] === derived));
+});
+
+test('direct native build cannot bypass an existing simulator session', async t => {
+  const fixture = await fakeNativeCommands(t);
+  const session = developmentEnvironment.acquireSimulatorSession(path.join(fixture.dir, '.cache/fox/simulator-session'));
+  try {
+    const result = spawnSync(process.execPath, ['scripts/ipad.mjs', 'build-simulator'], {cwd: developmentEnvironment.root,
+      env: {...fixture.env, FOX_NATIVE_WAIT_MS: '0'}, encoding: 'utf8', timeout: 5000});
+    assert.equal(result.status, 1, 'native build must not bypass another worktree holder');
+    assert.match(result.stderr, /busy/);
+    await assert.rejects(readFile(fixture.env.FOX_TEST_TRACE), /ENOENT/);
+  } finally { developmentEnvironment.releaseSimulatorSession(session); }
+});
+
+test('host-only journal and sync keep full tests while default entries still compile the iOS SDK', async t => {
+  for (const script of ['test-journal.mjs', 'test-sync-native.mjs']) {
+    for (const hostOnly of [false, true]) {
+      const fixture = await fakeNativeCommands(t);
+      const result = spawnSync(process.execPath, [`scripts/${script}`, ...(hostOnly ? ['--host-only'] : [])],
+        {cwd: developmentEnvironment.root, env: fixture.env, encoding: 'utf8', timeout: 10000});
+      assert.equal(result.status, 0, result.stderr);
+      const commands = (await readFile(fixture.env.FOX_TEST_TRACE, 'utf8')).trim().split('\n').map(JSON.parse);
+      const swift = commands.filter(c => c.name === 'xcrun' && c.args[0] === 'swift');
+      assert.equal(swift.filter(c => c.args[1] === 'test').length, 1);
+      assert.ok(swift.every(c => !c.args.includes('--filter')));
+      assert.equal(swift.filter(c => c.args[1] === 'build').length, hostOnly ? 0 : 1);
+      if (script === 'test-journal.mjs') assert.equal(commands.filter(c => c.args[0] === 'scripts/validate-journal-schema.py').length, 2);
+      assert.ok(!commands.some(c => c.args[0] === 'simctl'));
+    }
+  }
 });
 
 test('direct UI entry cancels its command, releases owned simulators and frees the shared session', {timeout: 15_000}, async t => {

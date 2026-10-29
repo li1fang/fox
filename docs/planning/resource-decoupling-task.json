@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Reuse native admission and independent scoped verification to reduce workstream contention without weakening full acceptance",
+  "nonGoals": ["New scheduler", "Product or algorithm changes", "CI changes", "Device operations", "Animation root-cause diagnosis"],
+  "invariants": ["Preserve all records, working trees and receipts", "Never steal legacy or uncertain leases", "Scoped evidence is not full product acceptance", "Keep exact test coverage and failure semantics"],
+  "modules": ["scripts/development-environment.mjs", "scripts/verify.mjs", "scripts/trial-suite.mjs", "scripts/ipad.mjs", "tests/scripts", "docs/development"],
+  "acceptance": ["verify:repository", "test:scripts", "verify:fast"],
+  "stopConditions": ["Conflicting writer or native resource owner", "Insufficient disk capacity", "Uncertain process cleanup", "Known XCTest animation wait", "Source or input drift"],
+  "evidence": ["Failing focused regressions before implementation", "Same-source scoped runSuite receipts", "Resource waiting and occupancy observations", "Fresh-context review"],
+  "humanUnknowns": ["No new device or exercise validation", "Full existing animation-related acceptance debt remains", "Long-term coordination savings require real subsequent tasks"]
+}

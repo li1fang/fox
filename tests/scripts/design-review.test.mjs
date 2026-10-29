@@ -69,8 +69,23 @@ test('design entry uses shared lifecycle and real suite coverage rather than dir
   const step = h.calls.find(x => x?.native);
   assert.deepEqual(step.args,['scripts/ipad.mjs','test-ui']);
   assert.equal(step.env.FOX_IOS_UI_RESULT,path.join(h.output,'result.xcresult'));
-  assert.deepEqual(h.calls.find(x => Array.isArray(x))[1],{families:['ipad'],overrides:{}});
+  const allocation = h.calls.find(x => Array.isArray(x))[1];
+  assert.ok(allocation.signal instanceof AbortSignal);
+  assert.equal(allocation.signal.aborted, false);
+  assert.deepEqual(allocation,{families:['ipad'],overrides:{},signal:allocation.signal});
   assert(h.calls.indexOf('release') > h.calls.indexOf(step));
+});
+
+test('cancelling design preflight reaches the allocation waiter before it can create a simulator', async t => {
+  let created = false;
+  const h = await designHarness(t, {allocate: async (_info, {signal}) => {
+    process.emit('SIGTERM');
+    signal.throwIfAborted();
+    created = true;
+  }});
+  await assert.rejects(design.runDesignReview(h.options, h.deps));
+  assert.equal(created, false);
+  assert.equal(JSON.parse(await readFile(path.join(h.output, 'suite.json'))).status, 'cancelled');
 });
 
 test('private inputs and wrong classification fail before environment or simulator allocation', async t => {

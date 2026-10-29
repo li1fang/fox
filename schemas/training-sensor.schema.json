@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fox.local/schemas/training-sensor.schema.json",
+  "title": "Fox canonical training intake v1",
+  "description": "Interchange shape only. Runtime additionally validates cross-field time windows, monotonic ticks, finite unit values, archive digests and transactional identity. Not a vendor adapter.",
+  "oneOf": [{"$ref":"#/$defs/capture"}, {"$ref":"#/$defs/stream"}, {"$ref":"#/$defs/sample"}, {"$ref":"#/$defs/link"}],
+  "$defs": {
+    "id": {"type":"string", "pattern":"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "uint": {"type":"integer", "minimum":0, "maximum":9007199254740991},
+    "tick": {"type":"string", "pattern":"^(0|[1-9][0-9]{0,24})$"},
+    "text": {"type":"string", "minLength":1, "maxLength":512},
+    "capture": {
+      "type":"object", "additionalProperties":false,
+      "required":["schema","id","activity_id","start_us","end_us","data_class"],
+      "properties": {
+        "schema":{"const":"fox.training.capture.v1"}, "id":{"$ref":"#/$defs/id"}, "activity_id":{"$ref":"#/$defs/id"},
+        "start_us":{"$ref":"#/$defs/uint"}, "end_us":{"$ref":"#/$defs/uint"}, "data_class":{"enum":["synthetic","recorded"]}
+      }
+    },
+    "stream": {
+      "type":"object", "additionalProperties":false,
+      "required":["schema","id","session_id","kind","source","clock","frame","size","sha256"],
+      "properties": {
+        "schema":{"const":"fox.training.stream.v1"}, "id":{"$ref":"#/$defs/id"}, "session_id":{"$ref":"#/$defs/id"},
+        "kind":{"enum":["controller_6dof","depth","resistance"]}, "source":{"$ref":"#/$defs/text"},
+        "size":{"type":"integer","minimum":1,"maximum":268435456},
+        "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+        "clock":{
+          "type":"object", "additionalProperties":false,
+          "required":["id","origin_tick","origin_utc_us","ticks_per_second","uncertainty_us","method"],
+          "properties":{
+            "id":{"$ref":"#/$defs/id"}, "origin_tick":{"$ref":"#/$defs/tick"}, "origin_utc_us":{"$ref":"#/$defs/uint"},
+            "ticks_per_second":{"type":"integer","minimum":1,"maximum":1000000000000},
+            "uncertainty_us":{"type":"integer","minimum":0,"maximum":86400000000}, "method":{"$ref":"#/$defs/text"}
+          }
+        },
+        "frame":{
+          "type":"object", "additionalProperties":false,
+          "required":["id","axes","handedness","measurement_point","calibration_archive_id"],
+          "properties":{
+            "id":{"$ref":"#/$defs/id"}, "axes":{"$ref":"#/$defs/text"}, "handedness":{"enum":["left","right","not_applicable"]},
+            "measurement_point":{"$ref":"#/$defs/text"}, "calibration_archive_id":{"anyOf":[{"type":"null"},{"$ref":"#/$defs/id"}]}
+          }
+        }
+      }
+    },
+    "sample":{
+      "type":"object", "additionalProperties":false, "required":["seq","tick","values"],
+      "properties":{
+        "seq":{"$ref":"#/$defs/uint"}, "tick":{"$ref":"#/$defs/tick"},
+        "values":{"type":"object","description":"Stream kind selects the runtime whitelist. Unknown value fields are counted and excluded. Required pose, depth dimensions, intrinsics, units and finite-value checks are enforced by normalized_values in training_store.py."}
+      }
+    },
+    "link":{
+      "type":"object", "additionalProperties":false, "required":["id","session_id","archive_id","role","offset_us"],
+      "properties":{
+        "id":{"$ref":"#/$defs/id"}, "session_id":{"$ref":"#/$defs/id"}, "archive_id":{"$ref":"#/$defs/id"},
+        "role":{"enum":["video","report","reference","calibration"]},
+        "offset_us":{"type":["null","integer"],"minimum":-9007199254740991,"maximum":9007199254740991,
+          "description":"Capture start UTC plus offset equals media/reference origin UTC; null means unknown, not zero."}
+      }
+    }
+  }
+}

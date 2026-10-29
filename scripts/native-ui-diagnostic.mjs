@@ -184,12 +184,12 @@ export async function runPhoneDiagnostic(output, includeVision = false) {
       }
       return result;
     },
-    preflight: async () => {
+    preflight: async ({signal}) => {
       checkDiagnosticContext(process.env, await checkedCatalogue(), includeVision);
       if (!steps.length) {
         const info = diagnosticRuntime(doctor({native: true}), process.env.FOX_DIAGNOSTIC_RUNTIME);
         Object.assign(metadata.environment, info);
-        lease = await allocateSimulators(info);
+        lease = await allocateSimulators(info, {signal});
         metadata.environment.simulatorLifecycle = {status: 'allocated', ...lease};
         if (includeVision) steps.push(visionDiagnosticStep(lease.devices.ipad));
         steps.push(phoneDiagnosticStep(lease.devices.iphone));

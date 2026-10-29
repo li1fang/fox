@@ -2,6 +2,11 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"tests/scripts/test_training_store.py","file":"tests/scripts/test_training_store.py","scope":"public","surface":"host"},
+    {"id":"tests/scripts/storage-paths.test.mjs","file":"tests/scripts/storage-paths.test.mjs","scope":"public","surface":"host"},
+    {"id":"tests/scripts/workstream-verification.test.mjs","file":"tests/scripts/workstream-verification.test.mjs","scope":"public","surface":"host"},
+    {"id":"tests/scripts/test_vision_core_offline.py","file":"tests/scripts/test_vision_core_offline.py","scope":"public","surface":"host"},
+    {"id":"tests/scripts/native-resource.test.mjs","file":"tests/scripts/native-resource.test.mjs","scope":"public","surface":"host"},
     {"id":"FoxTrainingCoreTests/LabCaptureTests/testSharedPythonFrameReasonVectorsAreRejectedByNativeCodec","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LabCaptureTests.swift","scope":"public","surface":"host"},
     {"id":"FoxTrainingCoreTests/LabCaptureTests/testPumpSubscriptionRefusesPreexistingOwnershipAndDoesNotReleaseIt","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LabCaptureTests.swift","scope":"public","surface":"host"},
     {"id":"FoxTrainingCoreTests/LabCaptureTests/testPumpSubscriptionOwnsOnlyItsRequestAndReleasesExactlyOnce","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/LabCaptureTests.swift","scope":"public","surface":"host"},

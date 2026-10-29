@@ -9,6 +9,7 @@ import {classifyDeviceError} from './verification-contracts.mjs';
 import {allocateSimulators, releaseSimulators, isolateSimulatorStep, readSimulatorSession,
   assertSimulatorAvailability, resolveSimulatorRuntime, simulatorCandidates} from './development-environment.mjs';
 import {execute as executeTestCommand} from './trial-suite.mjs';
+import {nativeScratchPath, swiftJobs} from './native-resource.mjs';
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const ipadDir = join(root, "apps", "ipad");
@@ -200,7 +201,9 @@ function generate() {
   run("xcodegen", ["generate"], { cwd: ipadDir });
 }
 
-function build(apps = Object.values(ipadApps)) {
+async function build(apps = Object.values(ipadApps)) {
+  const {guardNativeEntry} = await import('./native-resource.mjs');
+  if (await guardNativeEntry('physical-build', [join(root, 'scripts/ipad.mjs'), 'build', apps.length === 1 ? apps[0].key : 'all'])) return;
   if (!process.env.FOX_DEVELOPMENT_TEAM) throw new Error("Set FOX_DEVELOPMENT_TEAM locally for a signed physical build. Simulator verification needs no Apple account.");
   const registration = process.env.FOX_IOS_REGISTER_DEVICE === "1";
   const selected = registration ? selectedDeviceDetails() : null;
@@ -236,11 +239,11 @@ function build(apps = Object.values(ipadApps)) {
   }
 }
 
-function install(apps = Object.values(ipadApps)) {
+async function install(apps = Object.values(ipadApps)) {
   const device = selectDevice();
   const missingApps = apps.filter((app) => !existsSync(appPath(app)));
   if (missingApps.length > 0) {
-    build(missingApps);
+    await build(missingApps);
   }
   for (const app of apps) {
     try {
@@ -394,8 +397,8 @@ async function waitForChildExit(children) {
 async function smoke() {
   const app = selectedApp();
   if (app.key === "fox") {
-    build([app]);
-    install([app]);
+    await build([app]);
+    await install([app]);
     open(app);
     console.log("Native Fox build/install/launch smoke complete. No LAN runtime was started.");
     return;
@@ -404,8 +407,8 @@ async function smoke() {
   try {
     await waitForUrl(`${apiUrl}/health`, "fox API");
     await waitForUrl(webUrl, "fox web runtime");
-    build(Object.values(ipadApps));
-    install(Object.values(ipadApps));
+    await build(Object.values(ipadApps));
+    await install(Object.values(ipadApps));
     process.env.FOX_WEB_URL = `${webUrl}${app.webPath}`;
     open(app);
     console.log("Smoke complete. Temporary LAN servers are stopping; use `npm run ipad:run` for hands-on iPad testing.");
@@ -417,8 +420,8 @@ async function smoke() {
 async function runIpad() {
   const app = selectedApp();
   if (app.key === "fox") {
-    build([app]);
-    install([app]);
+    await build([app]);
+    await install([app]);
     open(app);
     return;
   }
@@ -452,7 +455,7 @@ async function runIpad() {
 
 function testNativeCore() {
   resolveSimulatorRuntime();
-  run("xcrun", ["swift", "test", "--package-path", join(ipadDir, "FoxTrainingCore"), "--scratch-path", join(root, ".tmp", "native-core-build"),
+  run("xcrun", ["swift", "test", "--package-path", join(ipadDir, "FoxTrainingCore"), "--scratch-path", nativeScratchPath('native-core-build'), '--jobs', String(swiftJobs()),
     ...(process.env.FOX_SWIFT_TEST_FILTER ? ['--filter', process.env.FOX_SWIFT_TEST_FILTER] : [])]);
 }
 
@@ -472,7 +475,7 @@ async function testNativeUI() {
   const cancellation = new AbortController();
   const cancel = () => cancellation.abort();
   process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
-  let lease;
+  let lease, cleanupUncertain = false;
   try {
     mkdirSync(join(root, '.tmp'), {recursive: true});
     const logs = mkdtempSync(join(root, '.tmp', 'native-ui-command-'));
@@ -502,7 +505,7 @@ async function testNativeUI() {
       const selected = deviceId ? simulatorCandidates(info).find(d => d.udid === deviceId) : undefined;
       if (deviceId && !selected) throw Error('Explicit simulator unavailable in pinned runtime; no fallback');
       const family = selected?.deviceTypeIdentifier.includes('.iPhone-') ? 'iphone' : 'ipad';
-      lease = await allocateSimulators(info, {families: [family], overrides: deviceId ? {[family]: deviceId} : {}});
+      lease = await allocateSimulators(info, {families: [family], overrides: deviceId ? {[family]: deviceId} : {}, signal: cancellation.signal});
       deviceId = lease.devices[family];
     }
     cancellation.signal.throwIfAborted();
@@ -526,9 +529,12 @@ async function testNativeUI() {
       "-parallel-testing-enabled", "NO", ...tests.map((value) => `-only-testing:${value}`),
       "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-", "DEVELOPMENT_TEAM=", "test"], 60 * 60_000);
     cancellation.signal.throwIfAborted();
+  } catch (error) {
+    cleanupUncertain = error.resourceCleanupUncertain === true;
+    throw error;
   } finally {
     try {
-      if (lease) await releaseSimulators(lease);
+      if (lease && !cleanupUncertain) await releaseSimulators(lease);
       cancellation.signal.throwIfAborted();
     }
     finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }
@@ -538,14 +544,18 @@ async function testNativeUI() {
 const command = process.argv[2] ?? "doctor";
 
 try {
+  if (["generate", "build", "build-simulator", "test-core"].includes(command)) {
+    const {guardNativeEntry} = await import('./native-resource.mjs');
+    if (await guardNativeEntry(`ipad-${command}`)) process.exit(0);
+  }
   if (command === "doctor") {
     doctor();
   } else if (command === "generate") {
     generate();
   } else if (command === "build") {
-    build(appSelection(process.argv[3], { defaultToAll: true }));
+    await build(appSelection(process.argv[3], { defaultToAll: true }));
   } else if (command === "install") {
-    install(appSelection(process.argv[3], { defaultToAll: true }));
+    await install(appSelection(process.argv[3], { defaultToAll: true }));
   } else if (command === "open") {
     open(selectedApp());
   } else if (command === "smoke") {

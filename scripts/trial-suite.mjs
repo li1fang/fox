@@ -7,9 +7,10 @@ import {finished} from 'node:stream/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isDeepStrictEqual} from 'node:util';
+import {setTimeout as delay} from 'node:timers/promises';
 import {artifact} from './trial-readiness.mjs';
 import {auditNativeCoverage, auditNativeSelection, auditCommandOutput} from './verification-contracts.mjs';
-import {environment} from './development-environment.mjs';
+import {environment, nativeScratchPath} from './development-environment.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const developerDir = process.env.DEVELOPER_DIR ?? '/Applications/Xcode.app/Contents/Developer';
@@ -59,23 +60,23 @@ export function suiteSteps(directory, devices, inputs = [], {scope = 'private', 
   if (component === 'web') return steps;
   if (component === 'native') steps.splice(1);
   steps.push(
-    {id: 'core', command: 'npm', args: ['run', 'test:native'], native: true, env: {
+    {id: 'core', resource: 'mac-native', command: 'npm', args: ['run', 'test:native'], native: true, env: {
       FOX_GUIDANCE_REQUIRE_PRIVATE: privateScope ? '1' : '0', FOX_GUIDANCE_EVIDENCE_DIR: directory,
       FOX_SWIFT_TEST_FILTER: coreTests.map(x => x.split('/').slice(-2).join('/')).join('|'),
       FOX_R2_EVIDENCE_DIR: directory, FOX_M3_EVIDENCE_DIR: directory}, expectedNative: coreTests},
-    {id: 'journal', command: 'npm', args: ['run', 'test:journal'], native: true, expectedNative: selected('FoxJournalCoreTests')},
-    {id: 'sync-native', command: 'npm', args: ['run', 'test:sync:native'], native: true, expectedNative: selected('FoxSyncCoreTests')},
+    {id: 'journal', resource: 'mac-native', command: 'npm', args: ['run', 'test:journal'], native: true, expectedNative: selected('FoxJournalCoreTests')},
+    {id: 'sync-native', resource: 'mac-native', command: 'npm', args: ['run', 'test:sync:native'], native: true, expectedNative: selected('FoxSyncCoreTests')},
     {id: 'mapping', command: python, args: ['scripts/run-python-tests.py', ...pythonTests], audit: 'python'},
     {id: 'wire', command: python, args: ['scripts/validate-vision-schema.py', directory, ...(privateScope ? [asset('history.trials')] : [])]},
     {id: 'pulldown-wire', command: python, args: ['scripts/validate-pulldown-schema.py', directory]},
     {id: 'strategy-wire', command: python, args: ['scripts/validate-motion-contracts.py']});
   if (privateScope) steps.push(
     {id: 'private-scripts', command: 'node', args: ['scripts/test-scripts.mjs', 'private'], audit: 'node'},
-    {id: 'history', command: 'xcrun', args: ['swift', 'run', '--package-path', 'apps/ipad/FoxTrainingCore',
-      '--scratch-path', '.tmp/native-core-build', 'fox-pose-replay',
+    {id: 'history', resource: 'mac-native', command: 'xcrun', args: ['swift', 'run', '--package-path', 'apps/ipad/FoxTrainingCore',
+      '--scratch-path', nativeScratchPath('native-core-build'), 'fox-pose-replay',
       asset('history.trials'), '--current-runtime'], historyBaseline: asset('history.baseline')});
   if (scope !== 'fast') steps.push(
-    {id: 'native-build', command: 'node', args: ['scripts/ipad.mjs', 'build-simulator']},
+    {id: 'native-build', resource: 'mac-native', command: 'node', args: ['scripts/ipad.mjs', 'build-simulator']},
     ui('app-host', selected('FoxAppTests', 'ipad').join(','), devices.ipad),
     ui('ipad-ui', selected('FoxUITests', 'ipad').join(','), devices.ipad),
     ui('iphone-ui', [...selected('FoxAppTests', 'iphone'), ...selected('FoxUITests', 'iphone'),
@@ -103,16 +104,84 @@ export async function fingerprint() {
 
 const openLogFile = async filename => (await open(filename, 'wx')).createWriteStream();
 
-export async function execute(step, {logPath, signal, openLog = openLogFile, forwardOutput = false} = {}) {
+export function readProcessTable({launch = spawn, timeoutMs = 3000} = {}) {
+  return new Promise((resolve, reject) => {
+    const child = launch('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], {stdio: ['ignore', 'pipe', 'pipe']});
+    let output = '', errorOutput = '', done = false;
+    const finish = error => {
+      if (done) return;
+      done = true; clearTimeout(timer);
+      if (error) {
+        // Do not wait for close after the observation budget. A stuck ps is
+        // unknown cleanup, never proof that the native resource is free.
+        try { child.kill('SIGKILL'); } catch {}
+        child.stdout?.destroy(); child.stderr?.destroy(); child.unref();
+        reject(error);
+      } else resolve(output);
+    };
+    const timer = setTimeout(() => finish(Error('Process inventory timed out')), timeoutMs);
+    child.on('error', finish);
+    child.on('close', code => finish(code === 0 ? undefined : Error(`Process inventory failed (${code}): ${errorOutput}`)));
+    child.stdout?.on('data', bytes => {
+      output += bytes;
+      if (output.length > 2 * 1024 * 1024) finish(Error('Process inventory exceeded budget'));
+    });
+    child.stderr?.on('data', bytes => { errorOutput += bytes; });
+  });
+}
+
+// Swift can put a compiler child in a new process group. Remember observed
+// descendants by PID + start time, without inspecting or killing other jobs.
+export function ownedProcessObserver(pgid, table = readProcessTable) {
+  const known = new Map();
+  let pending;
+  return () => pending ??= (async () => {
+    const rows = (await table()).trim().split('\n').filter(Boolean).map(line => {
+      const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/);
+      if (!match) throw Error('Cannot parse process ownership inventory');
+      return {pid: +match[1], parent: +match[2], group: +match[3], state: match[4], identity: match[5]};
+    });
+    for (const row of rows) if (known.has(row.pid) && known.get(row.pid) !== row.identity) known.delete(row.pid);
+    const present = new Set(rows.filter(r => known.get(r.pid) === r.identity || r.group === pgid).map(r => r.pid));
+    let previous;
+    do {
+      previous = present.size;
+      for (const row of rows) if (present.has(row.parent)) present.add(row.pid);
+    } while (previous !== present.size);
+    for (const row of rows) if (present.has(row.pid)) known.set(row.pid, row.identity);
+    return rows.filter(r => present.has(r.pid) && !r.state.startsWith('Z')).map(r => r.pid);
+  })().finally(() => { pending = undefined; });
+}
+
+export async function settleProcessGroup(pgid, {observe = ownedProcessObserver(pgid),
+  kill = process.kill.bind(process), pause = delay, timeoutMs = 5000} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  try {
+    while (true) {
+      const remaining = await observe();
+      if (!remaining.length) return;
+      for (const pid of [-pgid, ...remaining]) {
+        try { kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      }
+      if (Date.now() >= deadline) throw Error(`Processes did not settle: ${remaining.join(', ')}`);
+      await pause(25);
+    }
+  } catch (error) {
+    throw Object.assign(Error(`Resource cleanup uncertain: ${error.message}`), {resourceCleanupUncertain: true});
+  }
+}
+
+export async function execute(step, {logPath, signal, openLog = openLogFile, forwardOutput = false, launch = spawn} = {}) {
   signal?.throwIfAborted();
   // Secure the log before spawning; a broken log is a failed run, even when the child exits zero.
   const log = await openLog(logPath);
   return new Promise((resolve, reject) => {
-    let child, forced, failure;
+    let child, forced, failure, observe, monitor, settled = Promise.resolve();
     let stdout = '', stderr = '';
     const terminate = () => {
       if (!child?.pid) return;
       try { process.kill(-child.pid, 'SIGTERM'); } catch {}
+      observe?.().then(pids => { for (const pid of pids) { try { process.kill(pid, 'SIGTERM'); } catch {} } }).catch(() => {});
       forced ??= setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, 5000);
     };
     const logFinished = finished(log, {cleanup: true}).catch(error => { failure ??= error; terminate(); });
@@ -122,8 +191,19 @@ export async function execute(step, {logPath, signal, openLog = openLogFile, for
       return;
     }
     const cancel = () => { failure ??= Error('Command cancelled'); terminate(); };
-    child = spawn(step.command, step.args, {cwd: root, env: {...environment, ...step.env},
+    child = launch(step.command, step.args, {cwd: root, env: {...environment, ...step.env},
       detached: true, stdio: ['ignore', 'pipe', 'pipe']});
+    // Failed stdio allocation can return a child with null pipes. Keep its
+    // asynchronous error inside the normal receipt/log finalization path.
+    child.on('error', error => { failure ??= error; });
+    if (child.pid) {
+      observe = ownedProcessObserver(child.pid);
+      const sample = () => observe().catch(error => {
+        failure ??= error; failure.resourceCleanupUncertain = true; terminate();
+      });
+      void sample();
+      monitor = setInterval(sample, 250);
+    }
     const timeout = setTimeout(() => {
       failure ??= Error(`${step.id ?? step.command} timed out`); terminate();
     }, step.timeoutMs ?? 45 * 60 * 1000);
@@ -140,10 +220,19 @@ export async function execute(step, {logPath, signal, openLog = openLogFile, for
         terminate();
       }
     };
-    child.stdout.on('data', chunk => { stdout += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stdout.write(chunk); detectIdleExpiry('stdout', chunk); });
-    child.stderr.on('data', chunk => { stderr += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stderr.write(chunk); detectIdleExpiry('stderr', chunk); });
-    child.on('error', error => { failure ??= error; });
+    child.stdout?.on('data', chunk => { stdout += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stdout.write(chunk); detectIdleExpiry('stdout', chunk); });
+    child.stderr?.on('data', chunk => { stderr += chunk.toString(); if (!log.destroyed) log.write(chunk); if (forwardOutput) process.stderr.write(chunk); detectIdleExpiry('stderr', chunk); });
+    child.on('exit', () => {
+      clearInterval(monitor);
+      // Start at exit, not close: a surviving child may still hold the log pipe.
+      settled = settleProcessGroup(child.pid, {observe}).catch(error => {
+        failure ??= error; failure.resourceCleanupUncertain = true;
+        child.stdout?.destroy(); child.stderr?.destroy();
+      });
+    });
     child.on('close', async (code, childSignal) => {
+      clearInterval(monitor);
+      await settled;
       clearTimeout(timeout); clearTimeout(forced); signal?.removeEventListener('abort', cancel);
       if (!log.destroyed) log.end();
       await logFinished;
@@ -168,9 +257,9 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
   const cancellation = new AbortController();
   const cancel = () => cancellation.abort();
   process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
-  let failure;
+  let failure, cleanupUncertain = false;
   try {
-    receipt.inputs = await preflight();
+    receipt.inputs = await preflight({signal: cancellation.signal});
     if (!steps.length) throw Error('Empty verification scope');
     receipt.sourceSHA256 = await sourceFingerprint();
     await save();
@@ -182,6 +271,7 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
       process.stdout.write(`trial-suite: ${step.id}\n`);
       try {
         const result = await run(step, {logPath: path.join(directory, `${step.id}.log`), signal: cancellation.signal});
+        if (result.resourceAdmission) item.resourceAdmission = result.resourceAdmission;
         item.exitCode = result.code; item.signal = result.signal ?? null;
         if (!result.liveLog) await writeFile(path.join(directory, `${step.id}.log`), result.output);
         item.log = await artifact(directory, `${step.id}.log`);
@@ -197,19 +287,26 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
         }
         if (await sourceFingerprint() !== receipt.sourceSHA256) throw Error('Source changed during suite; rerun candidate');
         item.status = 'passed';
-      } catch (error) { item.status = 'failed'; item.error = error.message; throw error; }
+      } catch (error) {
+        cleanupUncertain ||= error.resourceCleanupUncertain === true;
+        item.status = 'failed'; item.error = error.message;
+        if (error.resourceAdmission) item.resourceAdmission = error.resourceAdmission;
+        throw error;
+      }
       finally { item.finishedAt = new Date().toISOString(); await save(); }
     }
     // Re-read private bytes at the end too; source stability alone is insufficient.
-    if (!isDeepStrictEqual(await preflight(), receipt.inputs)) throw Error('Private inputs changed during suite');
+    if (!isDeepStrictEqual(await preflight({signal: cancellation.signal}), receipt.inputs)) throw Error('Private inputs changed during suite');
     if (cancellation.signal.aborted) throw Error('Suite cancelled');
     if (await sourceFingerprint() !== receipt.sourceSHA256) throw Error('Source changed during suite; rerun candidate');
     if (cancellation.signal.aborted) throw Error('Suite cancelled');
     receipt.status = 'software_suite_passed';
   } catch (error) {
+    cleanupUncertain ||= error.resourceCleanupUncertain === true;
     receipt.status = cancellation.signal.aborted ? 'cancelled' : 'failed'; receipt.error = error.message; failure = error;
   } finally {
     try {
+      if (cleanupUncertain) throw Error('Retain resource ownership: unsafe process cleanup; inspect receipt before recovery');
       await finalize?.();
     } catch (error) {
       receipt.finalizationError = error.message;
