@@ -29,6 +29,8 @@ targets:
       - package: FoxTrainingCore
       - package: FoxTrainingCore
         product: FoxPoseExperimentKit
+      - package: FoxTrainingCore
+        product: FoxVision3D
       - package: FoxJournalCore
       - package: FoxSyncCore
     settings:

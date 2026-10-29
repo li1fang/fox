@@ -42,6 +42,13 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onFrame: ((UUID, CapturedPose) -> Void)?
     var onState: ((UUID, PoseCameraState) -> Void)?
     var onDiscontinuity: ((UUID) -> Void)?
+    // A separate owner may record raw frames without entering the legacy pose/counting path.
+    // Callbacks run on the camera queue and must not perform synchronous inference.
+    var onRawSample: ((UUID, CMSampleBuffer) -> Void)?
+    var onRawDrop: ((UUID, CMTime, String) -> Void)?
+    var onRawDiscontinuity: ((UUID) -> Void)?
+    private var rawOwnerID: UUID?
+    private var poseAnalysisEnabled = true
     var onDiagnosticResult: ((UUID, Result<VisionDiagnosticManifest, Error>) -> Void)?
     private var diagnosticRecorder: VisionDiagnosticRecorder?
     private let queue = DispatchQueue(label: "fox.pose.camera", qos: .userInitiated)
@@ -53,6 +60,9 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private var lastProcessed = -Double.infinity
     private var orientation: AVCaptureVideoOrientation = .portrait
     private var observers: [NSObjectProtocol] = []
+
+    func setPoseAnalysisEnabled(_ enabled: Bool) { queue.async { [self] in poseAnalysisEnabled = enabled } }
+    func onCaptureQueue(_ work: @escaping () -> Void) { queue.async(execute: work) }
 
     func beginDiagnostic(context: VisionDiagnosticContext, root: URL) {
         queue.async { [self] in
@@ -208,11 +218,9 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let id = runID, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         // Duo's virtual front camera can switch lenses without changing this capture session.
         // Invalidate the old pose before delivering the first frame from a different physical camera.
-        if let device = activeDevice {
-            let source = device.activePrimaryConstituent ?? device
-            if sourceContinuity.changed(to: source.uniqueID) { breakContinuity(id: id) }
-        }
-        if let reason = diagnosticRecorder?.append(sampleBuffer) { finishDiagnostic(reason: reason) }
+        let source = activeDevice.map { $0.activePrimaryConstituent ?? $0 }
+        deliverRawSample(sampleBuffer, id: id, physicalSourceID: source?.uniqueID)
+        guard poseAnalysisEnabled else { return }
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
         guard time.isFinite, time - lastProcessed >= 1.0 / 12 else { return }
         lastProcessed = time
@@ -246,19 +254,29 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private func emit(_ state: PoseCameraState, id: UUID) {
         DispatchQueue.main.async { [weak self] in self?.onState?(id, state) }
     }
+    // Shared by the real delegate and synthetic transport tests. Queue ownership is unchanged.
+    func deliverRawSample(_ sample: CMSampleBuffer, id: UUID, physicalSourceID: String?) {
+        if rawOwnerID != id { rawOwnerID = id; sourceContinuity = CameraSourceContinuity() }
+        if let physicalSourceID, sourceContinuity.changed(to: physicalSourceID) { breakContinuity(id: id) }
+        if let reason = diagnosticRecorder?.append(sample) { finishDiagnostic(reason: reason) }
+        onRawSample?(id, sample)
+    }
     func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard diagnosticRecorder != nil else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
         let reason = CMGetAttachment(sampleBuffer, key: kCMSampleBufferAttachmentKey_DroppedFrameReason,
             attachmentModeOut: nil).map { String(describing: $0) }
+        if let id = runID { onRawDrop?(id, CMSampleBufferGetPresentationTimeStamp(sampleBuffer), reason ?? "captureDropped") }
+        guard diagnosticRecorder != nil else { return }
         diagnosticRecorder?.event(VisionDiagnosticEvent(kind: "captureDropped",
             lastCapturePTS: pts.isFinite ? pts : nil, detail: reason))
     }
     private func breakContinuity(id: UUID) {
+        // The raw owner must seal synchronously before a changed-source frame is delivered.
+        onRawDiscontinuity?(id)
         DispatchQueue.main.async { [weak self] in self?.onDiscontinuity?(id) }
     }
 
-    private static let joints: [(PoseJoint, VNHumanBodyPoseObservation.JointName)] = [
+    static let joints: [(PoseJoint, VNHumanBodyPoseObservation.JointName)] = [
         (.nose, .nose), (.neck, .neck), (.root, .root), (.leftEye, .leftEye), (.rightEye, .rightEye),
         (.leftEar, .leftEar), (.rightEar, .rightEar), (.leftShoulder, .leftShoulder), (.rightShoulder, .rightShoulder),
         (.leftElbow, .leftElbow), (.rightElbow, .rightElbow), (.leftWrist, .leftWrist), (.rightWrist, .rightWrist),

@@ -2557,6 +2557,222 @@
     {"id":"FoxAppTests/HomeTrainingDispatcherTests/testReviewRejectsOldAttemptWithoutChangingForegroundOrRevision","file":"apps/ipad/FoxAppTests/HomeTrainingDispatcherTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/HomeTrainingDispatcherTests/testResumeReturnsExactSessionInsteadOfCurrentForeground","file":"apps/ipad/FoxAppTests/HomeTrainingDispatcherTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/HomeTrainingDispatcherTests/testReviewReturnsExactUnconfirmedAttempt","file":"apps/ipad/FoxAppTests/HomeTrainingDispatcherTests.swift","scope":"public","surface":"ipad"},
-    {"id":"FoxAppTests/HomeTrainingDispatcherTests/testDismissReleasesSuccessfulStoreWithoutCreatingAnotherWriter","file":"apps/ipad/FoxAppTests/HomeTrainingDispatcherTests.swift","scope":"public","surface":"ipad"}
+    {"id":"FoxAppTests/HomeTrainingDispatcherTests/testDismissReleasesSuccessfulStoreWithoutCreatingAnotherWriter","file":"apps/ipad/FoxAppTests/HomeTrainingDispatcherTests.swift","scope":"public","surface":"ipad"},
+    {
+      "id": "FoxAppTests/FreeCaptureTests/testFreeCaptureStartsWithoutPersonExerciseOrCountingCallback",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureTests/testAnalysisErrorAndSensorDisconnectNeverStopRecordingOrBecomeZeroCount",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureTests/testOptionsStayIndependentAndCannotChangeDuringRecordingOrFinalization",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureTests/testOldCaptureCallbacksCannotFinishOrOverwriteNewCapture",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureTests/testCancelledExportAndAnotherCaptureNeverDeleteSavedOriginal",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureAnalysisTests/testBusyAnalysisDropsAdmissionWithoutBlockingVideoAndRejectsWrongCapture",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureAnalysisTests/testLateOrDuplicateCompletionCannotReleaseAnotherFrame",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureAnalysisTests/testClosingAnalysisRejectsNewWorkAndLateResultWithoutDiscardingVideo",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureVideoTests/testRawFramesEncodeWithoutAnyPoseAndPreserveExactPTSAndNoAudio",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureVideoTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureVideoTests/testDuplicatePTSIsRecordedAsDroppedAndCannotAdvanceOriginOrFrameCount",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureVideoTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureVideoTests/testGeometryChangePreservesExistingVideoAndDoesNotMixFormats",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureVideoTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureVideoTests/testZeroFramesAndDuplicateFinishNeverClaimPlayableVideo",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureVideoTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureVideoTests/testExistingVideoIsNeverOverwrittenAndDurationLimitKeepsFirstFrame",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureVideoTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/LabPose2DTests/testMissingPeopleAndRequestFailureAreDistinctAndRoundTripKeepsExactTime",
+      "file": "apps/ipad/FoxAppTests/LabPose2DTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/LabPose2DTests/testEmptySuccessNonfiniteJointAndSilentMirrorAreRejected",
+      "file": "apps/ipad/FoxAppTests/LabPose2DTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureArchiveTests/testUnknownActionSealsCanonicalPackageWithoutZeroCountsOrTrainingFiles",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureArchiveTests/testLegacyTTLQuantityAndCapacityPruningNeverTouchesPermanentOriginals",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureArchiveTests/testRecoverySkipsLiveCaptureAndKeepsOriginalPartialWithoutInventingFrameCount",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureIntegrationTests/testNoPeopleAndAnalysisErrorsStillSaveVideoAndLeaveExistingTrainingBytesUntouched",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureIntegrationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureIntegrationTests/testUnavailable3DDoesNotStopVideoOr2DAndBackgroundSealsAsInterrupted",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureIntegrationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxFreeCaptureUITests/testNoPersonCanRecordSaveCancelExportAndReopenOriginal",
+      "file": "apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxFreeCaptureUITests/testAnalysisFailureStillAllowsStopAndSavesVideo",
+      "file": "apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureArchiveTests/testRecoveryKeepsTruncatedRowsOpaqueAndPreservesOriginalBytes",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureArchiveTests/testMalformedPendingAndSealedFoldersNeverHideOtherSavedOriginals",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureIntegrationTests/testPhysicalCameraChangeStopsBeforeFirstNewSourceFrameCanEnterSavedVideo",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureIntegrationTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCapturePumpTests/testExplicitSelectionHasTwoStableAliasesWithoutAnatomicalAssumptions",
+      "file": "apps/ipad/FoxAppTests/FreeCapturePumpTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCapturePumpTests/testUnknownPeripheralCannotBeSelectedOrSilentlyReplaceADevice",
+      "file": "apps/ipad/FoxAppTests/FreeCapturePumpTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCapturePumpTests/testInterleavedDevicesKeepSeparateRawFilesAndDisconnectDoesNotEraseNotifications",
+      "file": "apps/ipad/FoxAppTests/FreeCapturePumpTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCapturePumpTests/testForeignCaptureOrClockIsRejectedWithoutAddingItToCurrentOriginals",
+      "file": "apps/ipad/FoxAppTests/FreeCapturePumpTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureVideoTests/testFinishingCannotPublishEmptyResultWhileFirstAdmittedFrameIsPaused",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureVideoTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureArchiveTests/testMissingChangedAndSymlinkedVideoCannotBeListedAsAnIntactSavedPackage",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureVideoTests/testRawCaptureOrderIsEnforcedIndependentlyOfEncoderBackpressure",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureVideoTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCaptureTests/testCameraPermissionFailureStaysDistinctFromUnknownPoseAfterMetadataIsSaved",
+      "file": "apps/ipad/FoxAppTests/FreeCaptureTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/FreeCapturePumpTests/testFailedAdapterReleasesItsSlotAndOldFailureCannotRemoveRetry",
+      "file": "apps/ipad/FoxAppTests/FreeCapturePumpTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxFreeCaptureUITests/testLandscapeKeepsPageNavigationDuringFreeRecording",
+      "file": "apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxFreeCaptureUITests/testHomeOpensFreeCaptureWithoutChoosingOrStartingATraining",
+      "file": "apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    }
   ]
 }

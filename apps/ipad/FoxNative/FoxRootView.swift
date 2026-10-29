@@ -111,7 +111,7 @@ struct FoxRootView: View {
                     }.accessibilityIdentifier("training-retry-switch")
                 }.padding().frame(maxWidth: 560, maxHeight: .infinity)
             } else if tab == "vision" {
-                VisionLabView(controller: vision, phoneLandscapeNavigation: AnyView(headerActions))
+                CaptureLabView(controller: vision, phoneLandscapeNavigation: AnyView(headerActions))
             } else if store.storageUnavailable {
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle").font(.system(size: 48)).foregroundStyle(FoxStyle.coral)

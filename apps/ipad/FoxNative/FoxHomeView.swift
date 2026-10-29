@@ -81,6 +81,7 @@ struct FoxHomeView: View {
     @State private var showingCapabilities = false
     @State private var showingBackup = false
     @State private var showingSync = false
+    @State private var showingCaptureLab = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var trainingSelection: HomeTrainingSelection?
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -168,6 +169,10 @@ struct FoxHomeView: View {
             .navigationTitle("Fox")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { editing = false; showingCaptureLab = true } label: { Image(systemName: "video") }
+                        .accessibilityLabel("采集与视觉实验").accessibilityIdentifier("home-capture-lab").help("采集与视觉实验")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button { editing = false; showingSync = true } label: { Image(systemName: "arrow.triangle.2.circlepath") }
                         .accessibilityLabel("同步资料库").accessibilityIdentifier("journal-sync").help("同步资料库")
                 }
@@ -216,6 +221,7 @@ struct FoxHomeView: View {
             }
             .sheet(isPresented: $showingBackup) { JournalBackupView(journal: journal) }
             .sheet(isPresented: $showingSync) { JournalSyncView(journal: journal) }
+            .fullScreenCover(isPresented: $showingCaptureLab) { CaptureLabDestination().foxReservedSpace() }
             .sheet(item: $trainingSelection) { selection in HomeTrainingDetail(selection: selection) { trainingSelection = nil } }
             .sheet(item: $selected) { record in
                 JournalRecordDetail(initial: record, journal: journal, close: { selected = nil })
