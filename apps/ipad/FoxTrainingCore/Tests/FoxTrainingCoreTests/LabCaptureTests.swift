@@ -126,6 +126,9 @@ final class LabCaptureTests: XCTestCase {
 
     func testPumpSubscriptionRefusesPreexistingOwnershipAndDoesNotReleaseIt() {
         var lease = PumpNotificationSubscription()
+        XCTAssertEqual(PumpNotificationSubscription.adoptionRejection(hasExistingDelegate: false, alreadyNotifying: true), "existing_subscription")
+        XCTAssertEqual(PumpNotificationSubscription.adoptionRejection(hasExistingDelegate: true, alreadyNotifying: false), "existing_delegate")
+        XCTAssertNil(PumpNotificationSubscription.adoptionRejection(hasExistingDelegate: false, alreadyNotifying: false))
         XCTAssertFalse(lease.requestNewSubscription(alreadyNotifying: true))
         XCTAssertFalse(lease.release())
     }

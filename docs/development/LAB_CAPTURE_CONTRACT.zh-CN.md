@@ -75,3 +75,5 @@ LAB-2 的 `fox.pose3d_frame.v1` 行使用其原有camelCase键，完整附件按
 3. PumpNotificationSubscription是无BLE纯状态边界，已通知特征拒绝接手，只有本adapter自己发出的订阅请求（包括等待应答）可在stop时取消；stop前未申请、拒绝既有订阅和重复stop均无unsubscribe。Native先拒绝缓存中的已通知特征，发现后再核对；不取消既有消费者通知。测试不访问外设。
 
 上述Python两组反例先实测失败8条断言；订阅与Native共享负例测试先写，但原生窗口属于客户端，本轮仅轻量验证，不声称Native新断言已经运行。旧5ba7eff原生结果不转作本次增量通过。
+
+订阅拒绝补充：begin在修改CBPeripheral之前，若已有delegate或缓存的FFE1已通知，使用纯adoptionRejection判定并通过onState记录failed/existing_delegate或existing_subscription，返回false且不设置delegate、不发现服务、不变更通知。调用方应只提供已连接且未被其他消费者占用的peripheral。若通知状态在发现后才可知，仍拒绝setNotify；结束时仅在delegate仍为本adapter时恢复，避免覆盖后来接管者。相应纯状态断言已补，Native执行仍待窗口。

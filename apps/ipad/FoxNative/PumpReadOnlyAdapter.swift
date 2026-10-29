@@ -28,11 +28,18 @@ final class PumpReadOnlyAdapter: NSObject, CBPeripheralDelegate {
     func begin(_ selected: CBPeripheral) -> Bool {
         guard peripheral == nil, selected.state == .connected else { return false }
         // Refuse cached preexisting telemetry before taking over its delegate.
-        guard selected.services?.contains(where: { service in
+        let alreadyNotifying = selected.services?.contains(where: { service in
             service.uuid == Self.service && (service.characteristics?.contains(where: {
                 $0.uuid == Self.notification && $0.isNotifying
             }) ?? false)
-        }) != true else { return false }
+        }) == true
+        if let reason = PumpNotificationSubscription.adoptionRejection(
+            hasExistingDelegate: selected.delegate != nil, alreadyNotifying: alreadyNotifying) {
+            // Rejection is observable without changing the selected peripheral or its delegate.
+            onState?(PumpConnectionEvent(captureID: captureID, deviceAlias: deviceAlias, connectionSegmentID: UUID().uuidString,
+                hostClockID: hostClockID, hostReceivedNS: now(), state: "failed", reason: reason))
+            return false
+        }
         peripheral = selected; segmentID = UUID().uuidString; sequence = 0
         previousDelegate = selected.delegate; selected.delegate = self
         emit("discovering", nil)
@@ -47,7 +54,7 @@ final class PumpReadOnlyAdapter: NSObject, CBPeripheralDelegate {
         emit("disconnected", reason)
         let mayUnsubscribe = subscription.release()
         if unsubscribe, mayUnsubscribe, p.state == .connected, let characteristic { p.setNotifyValue(false, for: characteristic) }
-        p.delegate = previousDelegate
+        if p.delegate === self { p.delegate = previousDelegate }
         previousDelegate = nil; characteristic = nil; segmentID = nil; peripheral = nil
     }
     private func emit(_ state: String, _ reason: String?) {

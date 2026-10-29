@@ -94,6 +94,12 @@ public struct PumpConnectionEvent: Codable, Equatable {
 public struct PumpNotificationSubscription {
     public private(set) var ownsSubscription = false
     public init() {}
+    /// Never take over an existing peripheral consumer or its notification state.
+    public static func adoptionRejection(hasExistingDelegate: Bool, alreadyNotifying: Bool) -> String? {
+        if alreadyNotifying { return "existing_subscription" }
+        if hasExistingDelegate { return "existing_delegate" }
+        return nil
+    }
     public mutating func requestNewSubscription(alreadyNotifying: Bool) -> Bool {
         guard !ownsSubscription, !alreadyNotifying else { return false }
         ownsSubscription = true
