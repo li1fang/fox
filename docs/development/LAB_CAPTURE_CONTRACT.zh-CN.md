@@ -48,7 +48,7 @@ Python等价纯解析在 scripts/pump_telemetry.py，未调用协议源中的查
 
 `tests/fixtures/lab-capture/synthetic-v1` 是完全合成的 Python producer 包；跨语言 XCTest `LabCaptureTests/testPythonExportIsNativeReadableAndNativeWireIsPythonVerified` 运行 scripts/lab_cross_language.py prepare，实际生成/验证 ZIP 后 Native 解码附件及 manifest，再编码新的 manifest/帧/通知，最后调用 verify-native 用独立 Python 校验。测试不读取真实包、不操作设备，只有原生窗口发放后执行；未执行前不能报告跨语言已通过。pose行格式仍待对应owner提供并另加消费者反例。实验封包值类型只负责 wire shape；原生持久化必须另验证状态、摘要与原件保留，不把 Codable roundtrip 当文件完整性通过。
 
-## 本候选执行边界
+## 初次2c655e9交付时的执行边界
 
 Python/Node轻量检查已执行：17项LAB/PUMP合成测试及既有training-store/archive共53项通过；接手10组合成向量按保守策略核对通过；Node22仓库契约登记通过。首轮缺实现、macOS临时目录别名夹具失败、PUMP事件未解析以及未定义分块顺序的失败均保留。没有运行Swift/Xcode/模拟器、BLE、服务器写入或真实媒体分析；新值类型、Swift解析器、Native适配器、跨语言golden仍待原生窗口和独立审查。不以Python等价解析通过代替Swift执行。JSON Schema是外层结构，跨字段/时间/摘要约束由离线校验器执行；本机未安装jsonschema，未用其声称完整schema验证。
 
@@ -57,3 +57,13 @@ Python/Node轻量检查已执行：17项LAB/PUMP合成测试及既有training-st
 LAB-2 的 `fox.pose3d_frame.v1` 行使用其原有camelCase键，完整附件按字节保存并在unparsed_streams列出；未复制其关节验证器，也不把完整摘要称为3D语义通过。source可选source_id标识同一相机来源，2D/3D descriptor引用同值，LAB-2 context.streamID绑定它；同PTS/同source不证明同人。LabRationalTime新增可选epoch，原value/timescale不重写；有epoch时原点和帧必须相同epoch才允许归一化，旧双方都缺epoch的v1输入继续可读，不补造epoch观测。
 
 冻结2c655e9原生测试首次5/6通过；跨语言因Foundation临时目录返回系统符号链接路径被安全导出器拒绝，SDK步骤未执行。修正仅为测试使用解析后的真实路径（支持FOX_LAB_CROSS_ROOT外盘根）及子进程失败立即抛出；未放宽导出路径或摘要断言。旧失败和租约释放回执保留。新的3D source_id和PTS epoch反例先观察到拒绝，再加窄可选字段，需以替代候选重新执行。
+
+## 5ba7eff原生窗口执行结果
+
+产品线明确交还原生窗口后，先核对RES free、无其他重型子进程，Xcode27.1（27A9275）、Node22/Python3.12、内盘约5GiB；所有缓存及日志外盘，运行时监测低于2GiB取消自有步骤。旧2c655e9失败未改写，替代实现候选 `5ba7eff85a5a9ea75ffdad4fa6a9be6734cc4e4f` 冻结干净后执行：
+
+- 同候选Python包含新增19项及既有training-store/archive，55/55通过，无skip；3D可选source_id/原PTS epoch的两个反例红转绿。3D附件保持unparsed，不伪装关节或同人语义验证。
+- `LabCaptureTests` 6/6通过，无skip；其中双向golden实际走Python导出ZIP→Native读取→Native编码manifest/帧/PUMP事件→Python独立验证，非各自roundtrip拼接。
+- FoxTrainingCore以 `arm64-apple-ios16.0` 和iphoneos SDK编译成功；随后的外部编排脚本误按旧SwiftPM路径找模块，报 `AssertionError: []`，该整批仍保留failed。实际新路径为SwiftPM的out/Products/Debug-iphoneos，修正的独立SDK步骤仅对新PumpReadOnlyAdapter作typecheck并通过，不重复已通过的Swift测试；默认最低iOS16未提高。
+- SDK typecheck使用同候选刚生成的核心模块；它不是完整App链接/运行、真实BLE、双外设、配对/后台稳定性或正式public验收。原始分批回执及状态保留，专项步骤结果不改写原批次失败。
+- 全部自有步骤结束、租约released，最终RES free；内盘最低约4.8GiB，无容量取消；未启动模拟器或访问真机。未推送/更新共享CURRENT；独立新上下文审查与客户端实际接线仍由协调者安排。
