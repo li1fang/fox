@@ -13,6 +13,42 @@ final class GuidanceTrainingFlowTests: XCTestCase {
         func stop() {}
     }
 
+    func testPreviewThenPrepareUsesCurrentOwnerAndStartsOnlyAfterPoseCountdown() throws {
+        for activity in [TrainingActivity.curl, .lateralRaise, .latPulldown] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("PreviewStart-\(UUID())")
+            defer { try? FileManager.default.removeItem(at: root) }
+            let store = TrainingStore(archiveURL: root.appendingPathComponent("training.json"), diagnosticRoot: root.appendingPathComponent("diagnostics"))
+            store.startTrial(activity)
+            let c = store.workoutVision.controller, clock = VisionReplayClock()
+            c.enableReplay(clock: clock)
+            let token = try XCTUnwrap(store.executionToken)
+            store.workoutVision.preview(token: token)
+            let previewID = try XCTUnwrap(c.replayCaptureID)
+            XCTAssertEqual(c.cameraState, .running)
+            XCTAssertNil(store.session?.currentObservationId)
+            XCTAssertFalse(c.isPreparing); XCTAssertFalse(c.isCounting)
+            store.workoutVision.prepare(arm: .left, token: token)
+            XCTAssertTrue(store.accepts(token))
+            XCTAssertNotEqual(c.replayCaptureID, previewID)
+            XCTAssertNotNil(store.session?.currentObservationId)
+            XCTAssertEqual(store.session?.stage, .ready)
+            XCTAssertTrue(c.isPreparing); XCTAssertFalse(c.isCounting)
+            c.camera.onState?(previewID, .stopped)
+            XCTAssertEqual(c.cameraState, .running, "An obsolete preview callback cannot cancel the armed observation")
+            let settings = try XCTUnwrap(store.session?.exercise.visualObservation)
+            let angle = settings.exercise == .lateralRaise ? 10.0 : settings.exercise == .curl ? 160 : 150
+            for index in 0..<36 {
+                let time = Double(index) * 0.1
+                clock.uptime = 1000 + time
+                c.replayFrame(CapturedPose(frame: frame(settings.exercise, side: .left, angle: angle, time: time), latencyMs: 1, revision: 1))
+            }
+            XCTAssertTrue(c.isCounting, "\(activity)")
+            XCTAssertEqual(store.session?.stage, .active, store.errorMessage ?? "")
+            XCTAssertEqual(store.session?.currentVisualEvidence?.automaticCount, 0)
+            store.workoutVision.stop()
+        }
+    }
+
     func testThreeActionsWithGuidanceConfirmPersistAndReopenWithoutChangingMotionFacts() async throws {
         var results: [[[CurlRepetition]]] = []
         for enabled in [false, true] {

@@ -49,7 +49,9 @@ struct ReturnIntervalView: View {
                             .multilineTextAlignment(.trailing)
                     }.font(.body).monospacedDigit().accessibilityElement(children: .combine)
                 }
-            }.accessibilityIdentifier("return-interval-summary")
+            }
+            // Bind the identifier to the group, not to each flattened heading and row.
+            .accessibilityElement(children: .contain).accessibilityIdentifier("return-interval-summary")
         }
     }
     private func reason(_ value: String?) -> String {

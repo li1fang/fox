@@ -38,18 +38,41 @@ final class FoxD1FeedbackUITests: XCTestCase {
         XCTAssertFalse(app.buttons["begin-set"].exists)
     }
 
+    private func beginVisibleSet(_ app: XCUIApplication) {
+        let begin = app.buttons["begin-set"]
+        XCTAssertTrue(begin.waitForExistence(timeout: 5))
+        XCTAssertTrue(begin.isEnabled); XCTAssertTrue(begin.isHittable)
+        XCTAssertEqual(begin.label, "开始本组")
+        begin.tap()
+    }
+
     private func assertUnknownTerminalReturn(_ app: XCUIApplication) {
-        let summary = app.descendants(matching: .any).matching(identifier: "return-interval-summary").firstMatch
+        let summaries = app.descendants(matching: .any).matching(identifier: "return-interval-summary")
+        let summary = summaries.firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertEqual(summaries.count, 1, "The identifier must select one container, not flattened headings or rows")
         let terminal = summary.descendants(matching: .any).matching(NSPredicate(
             format: "label CONTAINS %@ AND label CONTAINS %@", "第 2 次", "本观察段末次 · 不统计返回"))
+        if terminal.count != 1 { print("D1_RETURN_SUMMARY_AX\n\(summary.debugDescription)\nD1_RETURN_APP_AX\n\(app.debugDescription)") }
         XCTAssertEqual(terminal.count, 1)
+    }
+
+    func testBeginSetArmsPreparationFromVisibleUnarmedPreview() {
+        let app = launch(fixture: "normal")
+        app.openTrainingCapability("home-try-latPulldown")
+        XCTAssertEqual(app.staticTexts["workout-automatic-count"].label, "0")
+        beginVisibleSet(app)
+        waitFor {
+            if app.buttons["pause-set"].exists { return true }
+            let begin = app.buttons["begin-set"]
+            return begin.exists && begin.label == "取消就位"
+        }
     }
 
     func testCountingWithoutUsableObservationRequiresExplicitZeroAndPreservesIt() {
         let app = launch(fixture: "low_confidence")
         app.buttons["home-prepare-curl"].tap()
-        app.buttons["begin-set"].tap()
+        beginVisibleSet(app)
         waitFor { app.buttons["pause-set"].exists && app.staticTexts["workout-automatic-count"].label == "0" }
         app.buttons["complete-set"].tap()
         let count = app.textFields["actual-left-reps"]
@@ -70,7 +93,7 @@ final class FoxD1FeedbackUITests: XCTestCase {
     func testAcceptedNonzeroAndManualOverrideKeepUnknownTerminalReturn() {
         let app = launch(fixture: "normal")
         app.openTrainingCapability("home-try-latPulldown")
-        app.buttons["begin-set"].tap()
+        beginVisibleSet(app)
         waitFor { app.staticTexts["workout-automatic-count"].label == "2" }
         app.buttons["complete-set"].tap()
         let count = app.textFields["actual-reps"]
