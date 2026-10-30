@@ -1,10 +1,81 @@
 import XCTest
 import AVFoundation
 import FoxTrainingCore
+import Combine
+import SwiftUI
 @testable import Fox
 
 @MainActor
 final class FreeCaptureIntegrationTests: XCTestCase {
+    func testInjectedPreviewKeepsSessionAndAspectFitAcrossPresentationUpdates() async throws {
+        let session = AVCaptureSession()
+        let host = UIHostingController(rootView: FreeCapturePreview(session: session, mirrored: false))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.layoutIfNeeded()
+        func layer(_ view: UIView) -> AVCaptureVideoPreviewLayer? {
+            if let preview = view.layer as? AVCaptureVideoPreviewLayer { return preview }
+            return view.subviews.compactMap { layer($0) }.first
+        }
+        try await waitUntil { layer(host.view) != nil }
+        let preview = try XCTUnwrap(layer(host.view))
+        XCTAssertTrue(preview.session === session)
+        XCTAssertEqual(preview.videoGravity, .resizeAspect)
+        host.rootView = FreeCapturePreview(session: session, mirrored: true)
+        host.view.layoutIfNeeded()
+        XCTAssertTrue(layer(host.view) === preview)
+        XCTAssertTrue(preview.session === session)
+        XCTAssertFalse(session.isRunning)
+    }
+    func testSavedLibraryReadsAndExportsWithoutCaptureOrDeletingOriginals() async throws {
+        let base = try root(), backend = FreeCaptureNativeBackend(root: base, fixture: "no_people")
+        let runtime = FreeCaptureRuntime(backend: backend)
+        XCTAssertTrue(runtime.backend === backend)
+        var changes = 0
+        let subscription = runtime.objectWillChange.sink { changes += 1 }
+        defer { subscription.cancel(); runtime.controller.stop(reason: "testCleanup") }
+        runtime.controller.start()
+        try await waitUntil { runtime.controller.encodedFrames >= 2 }
+        XCTAssertTrue(runtime.controller.selectionLocked)
+        XCTAssertGreaterThan(changes, 0)
+        runtime.controller.stop(reason: "userStopped")
+        try await waitUntil { runtime.controller.phase == .finished }
+        XCTAssertFalse(runtime.controller.selectionLocked)
+        let package = try XCTUnwrap(runtime.controller.latest)
+        let bytes = try Data(contentsOf: package.folder.appendingPathComponent("manifest.json"))
+        let reader = SavedCaptureBackend(root: base), library = FreeCaptureController(backend: reader)
+        try await waitUntil { !library.libraryLoading && library.packages.count == 1 }
+        XCTAssertEqual(library.packages.first?.id, package.id)
+        let reopened = try XCTUnwrap(library.packages.first)
+        XCTAssertTrue(reopened.videoAvailable)
+        XCTAssertEqual(library.exportURL(for: reopened)?.standardizedFileURL.path, package.folder.standardizedFileURL.path)
+        library.exportFinished(success: false)
+        reader.remove(id: package.id)
+        XCTAssertThrowsError(try reader.start(id: UUID(), options: .init()))
+        XCTAssertEqual(try Data(contentsOf: package.folder.appendingPathComponent("manifest.json")), bytes)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: package.folder.appendingPathComponent("video.mp4").path))
+        let reportFile = base.appendingPathComponent("vision-trials.v1.json")
+        let reportBytes = Data("{\"schemaVersion\":1,\"trials\":[]}".utf8)
+        try reportBytes.write(to: reportFile)
+        XCTAssertTrue(try VisionTrialRepository(fileURL: reportFile).trials.isEmpty)
+        let exported = try SavedVisionReports.exportCopy(from: reportFile)
+        defer { try? FileManager.default.removeItem(at: exported) }
+        XCTAssertEqual(try Data(contentsOf: exported), reportBytes)
+        XCTAssertEqual(try Data(contentsOf: reportFile), reportBytes)
+        var context = VisionDiagnosticContext(source: .fixture, device: "test", appVersion: "test", appBuild: "test",
+            camera: "front", exercise: .curl, arm: .left, bodyView: .side, screenOrientation: .portrait,
+            configuration: .standard, runtimePolicy: .standard)
+        context.processToken = UUID()
+        XCTAssertNotEqual(context.processToken, VisionDiagnosticArchive.processToken)
+        let diagnostics = base.appendingPathComponent("Diagnostics")
+        let draft = try VisionDiagnosticArchive.prepare(context, root: diagnostics)
+        let originalContext = try Data(contentsOf: draft.appendingPathComponent("context.json"))
+        XCTAssertTrue(try SavedDiagnostics.read(root: diagnostics).isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: draft.appendingPathComponent("manifest.json").path))
+        XCTAssertEqual(try Data(contentsOf: draft.appendingPathComponent("context.json")), originalContext)
+    }
     private func root() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("FreeCaptureIntegration-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

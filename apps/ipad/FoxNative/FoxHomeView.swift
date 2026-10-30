@@ -170,7 +170,7 @@ struct FoxHomeView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { editing = false; showingCaptureLab = true } label: { Image(systemName: "video") }
-                        .accessibilityLabel("采集与视觉实验").accessibilityIdentifier("home-capture-lab").help("采集与视觉实验")
+                        .accessibilityLabel(CaptureLabAccess.current.title).accessibilityIdentifier("home-capture-lab").help(CaptureLabAccess.current.title)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { editing = false; showingSync = true } label: { Image(systemName: "arrow.triangle.2.circlepath") }

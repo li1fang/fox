@@ -2,13 +2,6 @@ import CoreBluetooth
 import Foundation
 import FoxTrainingCore
 
-struct FreeCapturePumpDevice: Identifiable, Equatable {
-    var id: UUID
-    var name: String
-    var alias: String?
-    var state = "未连接"
-    var canReconnect = false
-}
 struct FreeCapturePumpSelection {
     private(set) var aliases: [UUID: String] = [:]
     mutating func toggle(_ id: UUID, available: Set<UUID>? = nil) -> Bool {

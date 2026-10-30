@@ -2,6 +2,12 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxUITests/FoxFreeCaptureUITests/testPhoneSavedLibraryKeepsTrainingNavigationAfterRotation","file":"apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift","scope":"public","surface":"iphone"},
+    {"id":"FoxUITests/FoxFreeCaptureUITests/testPhoneLaunchKeepsSavedExperimentsAccessibleWithoutCapture","file":"apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift","scope":"public","surface":"iphone"},
+    {"id":"FoxAppTests/FreeCaptureIntegrationTests/testInjectedPreviewKeepsSessionAndAspectFitAcrossPresentationUpdates","file":"apps/ipad/FoxAppTests/FreeCaptureIntegrationTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/FreeCaptureTests/testDevelopmentCaptureIsPadOnlyButEveryDeviceKeepsLibraryAccess","file":"apps/ipad/FoxAppTests/FreeCaptureTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/FreeCaptureIntegrationTests/testSavedLibraryReadsAndExportsWithoutCaptureOrDeletingOriginals","file":"apps/ipad/FoxAppTests/FreeCaptureIntegrationTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxUITests/FoxFreeCaptureUITests/testPadModeLocksDuringRecordingAndUnlocksAfterSave","file":"apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/FreeCaptureArchiveTests/testUnknownManifestObjectKeysNeverBecomeIntactLibraryEntries","file":"apps/ipad/FoxAppTests/FreeCaptureArchiveTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/FreeCaptureAnalysisTests/testWorkerCompletionReleasesQuotaButStillReportsUndeliveredResultAtStop","file":"apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/FreeCaptureAnalysisTests/testStoppedQueuedAnalysisStartsNeitherRequestAndReleasesOnlyItsOwnSlot","file":"apps/ipad/FoxAppTests/FreeCaptureAnalysisTests.swift","scope":"public","surface":"ipad"},

@@ -1,6 +1,5 @@
-import AVFoundation
 import Foundation
-import SwiftUI
+import Combine
 
 enum FreeCaptureEvent {
     case started(UUID)
@@ -20,7 +19,6 @@ enum FreeCaptureEvent {
 @MainActor
 protocol FreeCaptureBackend: AnyObject {
     var onEvent: ((FreeCaptureEvent) -> Void)? { get set }
-    var previewSession: AVCaptureSession? { get }
     var sourceLabel: String { get }
     func start(id: UUID, options: FreeCaptureOptions) throws
     func stop(id: UUID, reason: String)
@@ -65,9 +63,13 @@ final class FreeCaptureController: ObservableObject {
         backend.onEvent = { [weak self] in self?.receive($0) }
         backend.refresh()
     }
-    var previewSession: AVCaptureSession? { backend.previewSession }
     var sourceLabel: String { backend.sourceLabel }
-    var selectionLocked: Bool { [.starting, .recording, .finishing].contains(phase) }
+    var selectionLocked: Bool {
+        switch phase {
+        case .starting, .recording, .finishing: return true
+        case .idle, .finished, .failed: return false
+        }
+    }
     var evaluationStatus: String { "未评测" }
     var frameStatus: String {
         phase == .finished ? (latest?.frameSummary ?? "帧数未完整统计") : "\(encodedFrames) 帧已编码 · \(droppedFrames) 帧未编码"

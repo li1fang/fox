@@ -73,6 +73,7 @@
     "ipad:smoke": "node scripts/ipad.mjs smoke",
     "test:native": "node scripts/ipad.mjs test-core",
     "test:journal": "node scripts/test-journal.mjs",
+    "test:capture-presentation": "node scripts/test-capture-presentation.mjs",
     "test:native:all": "npm run test:native && npm run test:journal",
     "test:trial": "node scripts/trial-suite.mjs",
     "vision:replay": "node scripts/native-resource.mjs run -- xcrun swift run --package-path apps/ipad/FoxTrainingCore --scratch-path .tmp/native-core-build --jobs 2 fox-pose-replay",

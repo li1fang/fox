@@ -79,8 +79,8 @@ struct FoxRootView: View {
     private var phoneFocus: Bool { isPhone && (tab == "vision" || (tab == "training" && store.session != nil)) }
     private var trainingFocus: Bool { tab == "vision" || (tab == "training" && store.session != nil) }
     private var phoneLandscapeFocus: Bool {
-        isPhone && FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) && (tab == "vision" ||
-            (tab == "training" && store.session.map { [.ready, .active, .paused, .rest].contains($0.stage) } == true))
+        isPhone && FoxAdaptiveLayout.sideBySide(horizontal: sizeClass, vertical: verticalSizeClass) &&
+            tab == "training" && store.session.map { [.ready, .active, .paused, .rest].contains($0.stage) } == true
     }
 
     var body: some View {
@@ -111,7 +111,9 @@ struct FoxRootView: View {
                     }.accessibilityIdentifier("training-retry-switch")
                 }.padding().frame(maxWidth: 560, maxHeight: .infinity)
             } else if tab == "vision" {
-                CaptureLabView(controller: vision, phoneLandscapeNavigation: AnyView(headerActions))
+                if CaptureLabAccess.current.allowsCapture {
+                    CaptureLabView(controller: vision, phoneLandscapeNavigation: AnyView(headerActions))
+                } else { SavedCaptureDestination() }
             } else if store.storageUnavailable {
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle").font(.system(size: 48)).foregroundStyle(FoxStyle.coral)
@@ -188,7 +190,7 @@ struct FoxRootView: View {
             Button("计划") { tab = "plan" }
             Button("训练") { tab = store.session == nil ? "plan" : "training" }
             Button("记录") { showingHistory = true }
-            Button("视觉实验") { tab = "vision" }
+            Button(CaptureLabAccess.current.allowsCapture ? "视觉实验" : "已保存实验") { tab = "vision" }
             Button("取消", role: .cancel) {}
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
@@ -251,7 +253,7 @@ struct FoxRootView: View {
                 Menu {
                     Button { importing = true } label: { Label("导入计划", systemImage: "square.and.arrow.down") }
                     Section("实验与试用") {
-                        Button { tab = "vision" } label: { Label("视觉实验", systemImage: "viewfinder") }
+                        Button { tab = "vision" } label: { Label(CaptureLabAccess.current.allowsCapture ? "视觉实验" : "已保存实验", systemImage: "viewfinder") }
                         Button { store.prepareDay1Draft() } label: { Label("准备 Day 1 草稿", systemImage: "calendar.badge.plus") }
                             .accessibilityIdentifier("prepare-day1").disabled(store.session != nil)
                         Button { store.prepareNextTrialDraft() } label: { Label("准备下次试用草稿", systemImage: "list.bullet.clipboard") }

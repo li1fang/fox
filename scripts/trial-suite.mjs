@@ -79,8 +79,7 @@ export function suiteSteps(directory, devices, inputs = [], {scope = 'private', 
     {id: 'native-build', resource: 'mac-native', command: 'node', args: ['scripts/ipad.mjs', 'build-simulator']},
     ui('app-host', selected('FoxAppTests', 'ipad').join(','), devices.ipad),
     ui('ipad-ui', selected('FoxUITests', 'ipad').join(','), devices.ipad),
-    ui('iphone-ui', [...selected('FoxAppTests', 'iphone'), ...selected('FoxUITests', 'iphone'),
-      'FoxUITests/FoxVisionUITests/testGuidanceOverlayAndMuteRemainAvailableAcrossRotation'].join(','), devices.iphone));
+    ui('iphone-ui', [...selected('FoxAppTests', 'iphone'), ...selected('FoxUITests', 'iphone')].join(','), devices.iphone));
   if (privateScope) steps.push(ui('real-speech', catalogue.filter(x => x.scope === 'real-speech').map(x => x.id).join(','), devices.ipad));
   auditNativeSelection(catalogue, steps, {scope, component});
   return steps;

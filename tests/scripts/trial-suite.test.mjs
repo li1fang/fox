@@ -10,6 +10,18 @@ import * as suiteModule from '../../scripts/trial-suite.mjs';
 import {runSuite, checkXCTestLog, suiteSteps, compareHistory} from '../../scripts/trial-suite.mjs';
 import {auditReceipt} from '../../scripts/verification-contracts.mjs';
 
+test('device UI selection follows the catalogue without forcing pad experiments onto phone', () => {
+  const lab = 'FoxUITests/FoxVisionUITests/testGuidanceOverlayAndMuteRemainAvailableAcrossRotation';
+  const phone = 'FoxUITests/FoxFreeCaptureUITests/testPhoneLaunchKeepsSavedExperimentsAccessibleWithoutCapture';
+  const steps = suiteSteps('/run', {ipad: 'pad', iphone: 'phone'}, [], {scope: 'public', catalogue: [
+    {id: 'FoxAppTests/Example/testHost', file: 'apps/ipad/FoxAppTests/Example.swift', scope: 'public', surface: 'ipad'},
+    {id: lab, file: 'apps/ipad/FoxUITests/FoxVisionUITests.swift', scope: 'public', surface: 'ipad'},
+    {id: phone, file: 'apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift', scope: 'public', surface: 'iphone'}
+  ]});
+  assert.equal(steps.find(x => x.id === 'ipad-ui').env.FOX_IOS_UI_TEST, lab);
+  assert.equal(steps.find(x => x.id === 'iphone-ui').env.FOX_IOS_UI_TEST, phone);
+});
+
 test('unresponsive process inventory is killed and detached from the observer within its budget', {timeout: 1000}, async () => {
   const child = new EventEmitter(), signals = [];
   child.stdout = new PassThrough(); child.stderr = new PassThrough();
@@ -121,6 +133,7 @@ test('preflight resource waiting receives cancellation and cannot create devices
 
 test('suite has actual controller, phone/pad UI, real speech, wire and per-event history gates', () => {
   const steps = suiteSteps('/run', {ipad: 'pad', iphone: 'phone'}, [], {catalogue: [
+    {id: 'FoxUITests/Phone/testTraining', file: 'apps/ipad/FoxUITests/Phone.swift', scope: 'public', surface: 'iphone'},
     {id: 'FoxSyncCoreTests/Sync/testTransport', file: 'apps/ipad/FoxSyncCore/Tests/FoxSyncCoreTests/Sync.swift', scope: 'public', surface: 'host'},
     {id: 'FoxAppTests/Example/testOne', file: 'apps/ipad/FoxAppTests/Example.swift', scope: 'public', surface: 'ipad'},
     {id: 'FoxAppTests/NativeSpeechTests/testSpeech', file: 'apps/ipad/FoxAppTests/NativeSpeechTests.swift', scope: 'real-speech', surface: 'ipad'},

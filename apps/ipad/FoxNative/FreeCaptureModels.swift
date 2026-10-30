@@ -1,5 +1,21 @@
 import Foundation
 
+enum CaptureLabAccess {
+    case pad, phone, other
+    var allowsCapture: Bool { self == .pad }
+    var allowsLibrary: Bool { true }
+    var title: String { allowsCapture ? "采集与视觉实验" : "已保存实验" }
+}
+
+// Discovery presentation only; no Bluetooth objects cross the page boundary.
+struct FreeCapturePumpDevice: Identifiable, Equatable {
+    var id: UUID
+    var name: String
+    var alias: String?
+    var state = "未连接"
+    var canReconnect = false
+}
+
 // Presentation/runtime types only. The persisted lab package belongs to the shared data contract.
 enum FreeCaptureAnalysis: String, CaseIterable, Identifiable {
     case twoD, comparison, none

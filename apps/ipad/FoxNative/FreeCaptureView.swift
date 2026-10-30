@@ -5,6 +5,7 @@ import SwiftUI
 struct FreeCaptureView: View {
     @ObservedObject var controller: FreeCaptureController
     var phoneLandscapeNavigation: AnyView? = nil
+    var previewSession: () -> AVCaptureSession? = { nil }
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -40,7 +41,7 @@ struct FreeCaptureView: View {
                         }
                     }
                 }
-                if let session = controller.previewSession {
+                if let session = previewSession() {
                     FreeCapturePreview(session: session, mirrored: controller.options.frontCamera)
                         .frame(height: verticalSizeClass == .compact ? 180 : 300).clipShape(RoundedRectangle(cornerRadius: 12))
                 }
@@ -118,7 +119,7 @@ private struct FreeCapturePumpPicker: View {
     }
 }
 
-private struct FreeCapturePreview: UIViewRepresentable {
+struct FreeCapturePreview: UIViewRepresentable {
     var session: AVCaptureSession
     var mirrored: Bool
     func makeUIView(context: Context) -> Surface {
@@ -139,8 +140,12 @@ private struct FreeCapturePreview: UIViewRepresentable {
     }
 }
 
-private struct FreeCaptureLibrary: View {
+struct FreeCaptureLibrary: View {
     @ObservedObject var controller: FreeCaptureController
+    var allowsDeletion = true
+    var includesLegacy = false
+    @State private var showingReports = false
+    @State private var showingDiagnostics = false
     @Environment(\.dismiss) private var dismiss
     @State private var viewing: FreeCapturePackageSummary?
     @State private var exporting: FreeCapturePackageSummary?
@@ -167,14 +172,26 @@ private struct FreeCaptureLibrary: View {
                             Button { exporting = package } label: { Label("导出副本", systemImage: "square.and.arrow.up") }
                                 .buttonStyle(.borderless).accessibilityIdentifier("free-capture-export-\(package.id.uuidString)")
                             Spacer()
-                            Button(role: .destructive) { deleting = package } label: { Image(systemName: "trash").frame(width: 44, height: 44) }
+                            if allowsDeletion { Button(role: .destructive) { deleting = package } label: { Image(systemName: "trash").frame(width: 44, height: 44) }
                                 .buttonStyle(.borderless).accessibilityLabel("删除这份实验原件")
+                            }
                         }
                     }.padding(.vertical, 8)
                 }
             }.disabled(controller.libraryLoading).navigationTitle("已保存实验")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
                 .sheet(item: $viewing) { FreeCapturePlayback(package: $0) }
+                .safeAreaInset(edge: .bottom) {
+                    if includesLegacy {
+                        HStack {
+                            Button("验证报告") { showingReports = true }
+                            Spacer()
+                            Button("诊断录像") { showingDiagnostics = true }
+                        }.padding().background(.bar)
+                    }
+                }
+                .sheet(isPresented: $showingReports) { SavedVisionReports() }
+                .sheet(isPresented: $showingDiagnostics) { SavedDiagnostics() }
                 .fullScreenCover(item: $exporting) { package in
                     if let url = controller.exportURL(for: package) {
                         FolderExporter(url: url) { success in controller.exportFinished(success: success); exporting = nil }

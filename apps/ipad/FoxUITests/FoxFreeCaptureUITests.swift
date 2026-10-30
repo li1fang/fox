@@ -1,6 +1,53 @@
 import XCTest
 
 final class FoxFreeCaptureUITests: XCTestCase {
+    func testPhoneSavedLibraryKeepsTrainingNavigationAfterRotation() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_POSE_FIXTURE": "no_person"]
+        app.launchArguments = ["--ui-testing-reset"]
+        app.launch()
+        let entry = app.buttons["home-prepare-curl"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 8)); entry.tap()
+        XCTAssertTrue(app.buttons["begin-set"].waitForExistence(timeout: 5))
+        app.buttons["training-page-menu"].tap()
+        app.sheets["训练页面"].buttons["已保存实验"].tap()
+        XCTAssertTrue(app.navigationBars["已保存实验"].waitForExistence(timeout: 5))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 8), .completed)
+        let menu = app.buttons["training-page-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5)); XCTAssertTrue(menu.isHittable)
+        XCTAssertTrue(app.frame.contains(menu.frame))
+        XCTAssertFalse(app.buttons["free-capture-start"].exists)
+        XCTAssertFalse(app.buttons["vision-start"].exists)
+        let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        image.name = "saved-library-landscape-navigation"; image.lifetime = .keepAlways; add(image)
+        menu.tap(); app.sheets["训练页面"].buttons["训练"].tap()
+        XCTAssertTrue(app.buttons["begin-set"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["workout-automatic-count"].label, "0")
+    }
+    func testPhoneLaunchKeepsSavedExperimentsAccessibleWithoutCapture() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_POSE_FIXTURE": "no_person"]
+        app.launchArguments = ["--ui-testing-reset"]
+        app.launch()
+        let entry = app.buttons["home-capture-lab"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 8))
+        XCTAssertEqual(entry.label, "已保存实验")
+        entry.tap()
+        XCTAssertTrue(app.navigationBars["已保存实验"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["验证报告"].exists)
+        XCTAssertTrue(app.buttons["诊断录像"].exists)
+        XCTAssertFalse(app.buttons["free-capture-start"].exists)
+        XCTAssertFalse(app.buttons["vision-start"].exists)
+        XCTAssertFalse(app.segmentedControls["capture-lab-mode"].exists)
+        app.navigationBars["已保存实验"].buttons["完成"].tap()
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+    }
     private func launch(_ fixture: String) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
@@ -61,6 +108,22 @@ final class FoxFreeCaptureUITests: XCTestCase {
         let package = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "free-capture-package-")).firstMatch
         XCTAssertTrue(package.waitForExistence(timeout: 5))
         XCTAssertTrue(package.label.contains("视频与实验资料已保存"))
+    }
+
+    func testPadModeLocksDuringRecordingAndUnlocksAfterSave() {
+        let app = launch("no_people")
+        let mode = app.segmentedControls["capture-lab-mode"]
+        start(app)
+        XCTAssertFalse(mode.isEnabled)
+        XCTAssertTrue(app.buttons["free-capture-stop"].isHittable)
+        stop(app)
+        XCTAssertTrue(mode.isEnabled)
+        mode.buttons["动作评测"].tap()
+        XCTAssertTrue(app.buttons["vision-start"].waitForExistence(timeout: 5))
+        mode.buttons["自由采集"].tap()
+        XCTAssertTrue(app.buttons["free-capture-start"].waitForExistence(timeout: 5))
+        app.buttons["free-capture-library"].tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "free-capture-package-")).count, 1)
     }
     func testLandscapeKeepsPageNavigationDuringFreeRecording() {
         let app = launch("no_people")

@@ -1,12 +1,14 @@
-import AVFoundation
 import XCTest
+#if SWIFT_PACKAGE
+@testable import FoxCapturePresentation
+#else
 @testable import Fox
+#endif
 
 @MainActor
 final class FreeCaptureTests: XCTestCase {
     private final class Backend: FreeCaptureBackend {
         var onEvent: ((FreeCaptureEvent) -> Void)?
-        var previewSession: AVCaptureSession? { nil }
         var starts: [(UUID, FreeCaptureOptions)] = []
         var stops: [(UUID, String)] = []
         var removed: [UUID] = []
@@ -35,6 +37,16 @@ final class FreeCaptureTests: XCTestCase {
         controller.stop(reason: "userStopped")
         XCTAssertEqual(backend.stops.map(\.0), [id])
         XCTAssertEqual(controller.phase, .finishing)
+    }
+
+    func testDevelopmentCaptureIsPadOnlyButEveryDeviceKeepsLibraryAccess() {
+        XCTAssertTrue(CaptureLabAccess.pad.allowsCapture)
+        XCTAssertFalse(CaptureLabAccess.phone.allowsCapture)
+        XCTAssertFalse(CaptureLabAccess.other.allowsCapture)
+        XCTAssertEqual(CaptureLabAccess.pad.title, "采集与视觉实验")
+        XCTAssertEqual(CaptureLabAccess.phone.title, "已保存实验")
+        XCTAssertTrue(CaptureLabAccess.phone.allowsLibrary)
+        XCTAssertTrue(CaptureLabAccess.other.allowsLibrary)
     }
 
     func testAnalysisErrorAndSensorDisconnectNeverStopRecordingOrBecomeZeroCount() throws {

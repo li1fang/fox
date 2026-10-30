@@ -1,5 +1,9 @@
 import XCTest
+#if SWIFT_PACKAGE
+@testable import FoxCapturePresentation
+#else
 @testable import Fox
+#endif
 
 final class FreeCaptureAnalysisTests: XCTestCase {
     func testClosingAnOldCaptureDoesNotAdmitAnotherBackendUntilSlowAnalysisReturns() throws {
