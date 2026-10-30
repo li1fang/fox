@@ -1,49 +1,40 @@
 # Fox Agent Entry
 
-Read [current state](docs/development/CURRENT.md) first. This file is a routing guide, not a substitute for source or runtime evidence.
+Read [current state](docs/development/CURRENT.md) for the active task and candidate. Follow only the routes relevant to the change; history is reference, not new authorization.
 
-## Collaboration
+## Work
 
-- Use [module ownership and handoff](docs/development/MODULES.md#协作入口与职责) and the existing task ledger. One task has one owner who may finish cross-module work within its authorization; workstreams are not approval gates.
-- Keep a single writer per working tree for code, documentation, the ledger, test registration and project generation. Separate worktrees do not isolate simulators, devices or heavy build/test resources; reuse existing ownership/lease rules.
-- Initial workstream intake is read-only. Return a receipt in that chat; the coordinator reads it and records the shared state. A candidate task is not an assignment. Do not start work or message another chat without user authorization.
-- Verify project membership, actual default working directory, Git root and guidance provenance separately. Explicit workdir and manually reading this file do not prove that an existing chat changed its default context.
+- State the intended outcome and relevant checks briefly. Use the [task contract](docs/development/task-contract.example.json) for substantial cross-module work, not every small edit.
+- Within an authorized task, carry reversible local edits, diagnosis, focused tests and coherent local commits through completion without step-by-step approval. Ask when scope or an irreversible external effect changes.
+- Prefer existing code and standard tools. Do not add speculative abstractions, monitoring or governance to complete a one-off task.
+- Reproduce bugs with existing evidence or a focused failing regression, then fix and verify the affected behavior. Tests should check outcomes, not mirror trivial implementation or document wording.
+- Keep one writer per tree, including docs and generated projects. A task owner may work across modules; workstreams are not approval gates. Use [module ownership](docs/development/MODULES.md#协作入口与职责) for handoff.
+- Preserve unrelated edits, originals and device records. Device install/uninstall, signing, networking, destructive data changes, spending and publishing require explicit authorization.
 
-## Work Contract
+## Verification
 
-- State outcome, non-goals, invariants, affected modules, acceptance tests and stop conditions before editing. Use [the task contract](docs/development/task-contract.example.json) for substantial work.
-- Read existing code and focused tests; add a failing regression before changing behavior.
-- Preserve dirty changes, private originals and on-device records. Do not reset, uninstall, deploy, renew signing or change device networking without explicit authorization for that operation.
-- A passed replay is not new camera accuracy. A system speech callback is not audibility. A screenshot is not usability. Software green is not trial readiness.
-- Never manufacture an unobserved return/eccentric duration, count from a voice cue, or promote manual correction into visual evidence.
+- Iterate with affected tests or `npm run verify:workstream -- <client|vision|data|storage|tooling> --list`. Broaden coverage for changed shared contracts or concrete unresolved risk; do not repeat passing checks without a reason.
+- Check `npm run resources` before native builds/tests and hold the existing lease. Worktrees do not isolate simulators. Never steal a stale claim, edit a tree under verification or stop another owner's resources.
+- If orchestration blocks a test, classify the failure and prefer an authorized direct tool path with the same assertions, bounded runtime and owned-resource cleanup. Pause only the affected group on repeated failure; fixing the whole harness is not a prerequisite for unrelated work.
+- For formal candidate acceptance, freeze a clean commit and use `npm run verify:candidate -- public --commit <full-sha>` (or `private`). Scoped/direct results are scoped results, not full acceptance. Existing matching receipts may be reused through `npm run verify:receipt`; different-commit results remain diagnostic.
+- New repository tests belong in `tests/verification/catalogue.json`. Do not weaken assertions or silently skip failures. Private verification requires `FOX_PRIVATE_INPUT_MANIFEST`; Linux runs only the web component.
+- See [verification](docs/development/VERIFICATION.md) for command details. Do not load the whole procedure for routine edits.
 
-## Route By Change
+## Evidence And Delivery
 
-| Area | Read | Implementation |
+- Keep raw media, health records, identifiers, credentials and local receipts outside Git. Retain failed attempts; check each commit for disclosure and scope.
+- Review a coherent delivery with fresh context, covering its commits. Routine patch revisions do not each require a separate agent or human approval; review high-risk migrations/control before execution.
+- Distinguish installed version, source candidate, scoped tests and real-world behavior. Never invent counts/durations, infer motion from speech, or present manual correction as visual evidence.
+- Push/PR/merge and device delivery follow their own authorization. Do not request real exercise to validate tooling-only changes.
+
+## Routes
+
+| Change | Read | Code |
 | --- | --- | --- |
 | Counting / phase / recovery | [motion strategy](docs/fitness/VISION_STRATEGY_AND_EVIDENCE_V1.zh-CN.md) | `apps/ipad/FoxTrainingCore` |
-| Native camera / training / guidance | [module boundaries](docs/development/MODULES.md) | `apps/ipad/FoxNative` |
-| Local text / photos / backup | [storage contract](docs/journal/RECORD_STORAGE_V1.zh-CN.md) | `apps/ipad/FoxJournalCore` |
-| Layout | [UI constraints](docs/design/UI_INTENT_AND_REVIEW.zh-CN.md) | SwiftUI + phone/pad UI tests |
+| Camera / training / guidance | [modules](docs/development/MODULES.md) | `apps/ipad/FoxNative` |
+| Text / photos / backup | [storage](docs/journal/RECORD_STORAGE_V1.zh-CN.md) | `apps/ipad/FoxJournalCore` |
+| Layout | [UI constraints](docs/design/UI_INTENT_AND_REVIEW.zh-CN.md) | SwiftUI + affected phone/pad tests |
 | Web / Fox Say | [architecture](docs/architecture.md) | `apps/api`, `apps/web-runtime`, `packages` |
-| Verification / delivery | [verification](docs/development/VERIFICATION.md) | existing `scripts/trial-suite.mjs` and tier adapters |
 
-## Commands
-
-- Use Node 22, Python 3.12 and XcodeGen 2.45.x. Local defaults require Xcode 27.1 (27A9275), profile `xcode-27.1`, and the general iOS 27.0 runtime. iOS 27.1 is Duo-only: choose its runtime and model explicitly, never as an iPad fallback. CI retains an explicit `xcode-26.3` (17C529) compatibility lane. Select `DEVELOPER_DIR` per process; no global selection is changed. See [transition](docs/development/TOOLCHAIN_TRANSITION.zh-CN.md) for installation, acceptance and removal gates.
-- `npm run bootstrap`, then `npm run doctor`. No Apple account or physical device is needed for simulator verification.
-- `npm run verify:fast` for local iteration; `npm run verify:public` for complete public software coverage.
-- Before expensive acceptance, finish known blockers, focused tests and review; freeze a clean commit. Use `npm run verify:candidate -- public --commit <full-sha>` (or `private`). A component run is not whole-product acceptance. Keep evidence in ignored output directories, not candidate source files.
-- Classify failures with evidence before rerunning: product, test/fixture, environment, orchestration/budget, cancellation/superseded, or unknown. Record the next hypothesis; do not retry to green or require human approval for routine diagnosis.
-- Reuse matching receipts through `npm run verify:receipt`; check the required environment separately. Old/different-commit results are diagnostic evidence, not current acceptance. See [workflow and acceptance rules](docs/development/VERIFICATION.md#开发流程与候选验收).
-- `npm run verify:private` requires `FOX_PRIVATE_INPUT_MANIFEST`; missing or changed inputs fail. `npm run test:trial -- <fresh-directory>` is the strict compatibility entry, not a shortcut.
-- On Linux, use `npm run verify:public -- --component web`. Native verification is a separate macOS job.
-- New tests must appear in `tests/verification/catalogue.json`; do not weaken assertions or add silent skips to obtain green.
-
-## Publish / Stop
-
-- Raw media, health/training records, local receipts, device/account identifiers and credentials stay outside Git. No private artifacts in CI uploads or PR attachments. Third-party documents need redistribution permission.
-- Review every new commit, not only the final tree. Stop on uncertain disclosure rights, changed baselines, data loss, missing toolchain or conflicting concurrent edits.
-- Commit coherent changes and require a fresh-context review. Push/PR only within user authorization; never merge automatically. Record failed/cancelled attempts, not only the last success.
-- Freeze the candidate, not all work: other worktrees may progress, but never edit the tree under verification. If a new blocker requires replacement, retain old receipts and explain cancellation. CI triggers are unchanged; a draft PR still runs checks on updates.
-- The installed trial candidate is distinct from this development branch. Do not ask the user to repeat exercise to validate a tooling-only change.
+Use Node 22, Python 3.12, XcodeGen 2.45.x and per-process Xcode 27.1 (27A9275), profile `xcode-27.1`, general iOS 27.0. iOS 27.1 is Duo-only, selected explicitly. CI retains its Xcode 26.3 compatibility lane; do not change global xcode-select. See [toolchain](docs/development/TOOLCHAIN_TRANSITION.zh-CN.md).

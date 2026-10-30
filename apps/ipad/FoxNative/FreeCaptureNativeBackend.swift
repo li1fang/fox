@@ -315,12 +315,16 @@ private final class FreeCaptureRecording {
     private func analyze2D(_ sample: CMSampleBuffer, index: Int, host: UInt64) -> Analysis {
         var result = Analysis()
         let began = DispatchTime.now().uptimeNanoseconds
-        let request = VNDetectHumanBodyPoseRequest()
         let twoD: LabPose2DFrame
         do {
             if fixture == "analysis_error" { throw NSError(domain: "fox.synthetic_analysis", code: 1) }
-            if fixture == nil { try VNImageRequestHandler(cmSampleBuffer: sample, orientation: .up).perform([request]) }
-            let observations: [VNHumanBodyPoseObservation] = request.results ?? []
+            // Synthetic outcomes must not initialize a real Vision request.
+            var observations: [VNHumanBodyPoseObservation] = []
+            if fixture == nil {
+                let request = VNDetectHumanBodyPoseRequest()
+                try VNImageRequestHandler(cmSampleBuffer: sample, orientation: .up).perform([request])
+                observations = request.results ?? []
+            }
             var people: [[LabPose2DFrame.Joint]] = []
             for observation in observations {
                 let points = try observation.recognizedPoints(.all).filter { $0.value.confidence > 0 }
@@ -375,7 +379,8 @@ private final class FreeCaptureRecording {
         return .init(captureID: id.uuidString, sourceID: archive.sourceID, seq: index,
             pts: .init(value: String(pts.value), timescale: pts.timescale, epoch: String(pts.epoch)), hostReceivedNS: String(host),
             width: pixels.map(CVPixelBufferGetWidth) ?? 0, height: pixels.map(CVPixelBufferGetHeight) ?? 0,
-            requestRevision: VNDetectHumanBodyPoseRequest.currentRevision, state: state, reason: reason, people: people, inferenceNS: String(elapsed))
+            requestRevision: fixture == nil ? VNDetectHumanBodyPoseRequest.currentRevision : 1,
+            state: state, reason: reason, people: people, inferenceNS: String(elapsed))
     }
     #if canImport(FoxVision3D)
     private func context(_ sample: CMSampleBuffer, index: Int) -> Pose3DFrameContext {
