@@ -2,6 +2,8 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxAppTests/D1FeedbackTests/testFailedConfirmationRetainsNonzeroFactsAndNotesAndRetryConfirmsOnce","file":"apps/ipad/FoxAppTests/D1FeedbackTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/D1FeedbackTests/testCrossDayHistoryKeepsSessionAndSetNotesWithDistinctObservedAndConfirmedCounts","file":"apps/ipad/FoxAppTests/D1FeedbackTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxUITests/FoxFreeCaptureUITests/testPhoneSavedLibraryKeepsTrainingNavigationAfterRotation","file":"apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift","scope":"public","surface":"iphone"},
     {"id":"FoxUITests/FoxFreeCaptureUITests/testPhoneLaunchKeepsSavedExperimentsAccessibleWithoutCapture","file":"apps/ipad/FoxUITests/FoxFreeCaptureUITests.swift","scope":"public","surface":"iphone"},
     {"id":"FoxAppTests/FreeCaptureIntegrationTests/testInjectedPreviewKeepsSessionAndAspectFitAcrossPresentationUpdates","file":"apps/ipad/FoxAppTests/FreeCaptureIntegrationTests.swift","scope":"public","surface":"ipad"},

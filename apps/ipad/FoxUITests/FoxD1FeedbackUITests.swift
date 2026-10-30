@@ -13,7 +13,14 @@ final class FoxD1FeedbackUITests: XCTestCase {
 
     private func waitFor(_ predicate: @escaping () -> Bool, timeout: TimeInterval = 20) {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in predicate() }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed)
+        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
+        if result != .completed {
+            let app = XCUIApplication()
+            print("D1_WAIT_FAILURE_AX\n\(app.debugDescription)")
+            let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            image.name = "d1-original-wait-failure"; image.lifetime = .keepAlways; add(image)
+        }
+        XCTAssertEqual(result, .completed)
     }
 
     private func reopen(_ app: XCUIApplication) {
