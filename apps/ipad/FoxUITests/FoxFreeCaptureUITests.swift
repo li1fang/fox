@@ -70,7 +70,10 @@ final class FoxFreeCaptureUITests: XCTestCase {
         start(app)
         XCTAssertTrue(menu.isHittable); menu.tap()
         XCTAssertTrue(app.buttons["视觉实验"].waitForExistence(timeout: 5))
-        app.buttons["取消"].tap()
+        // Landscape popovers may omit Cancel; selecting this page must keep recording.
+        app.buttons["视觉实验"].tap()
+        XCTAssertEqual(app.staticTexts["free-capture-status"].label, "录像中")
+        XCTAssertTrue(app.buttons["free-capture-stop"].isHittable)
         XCTAssertTrue(app.buttons["free-capture-stop"].isEnabled)
         stop(app)
     }
