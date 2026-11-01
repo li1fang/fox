@@ -36,7 +36,7 @@ struct TrainingActivityPicker: View {
                 Text("下一动作：\(next.label)").font(.callout).accessibilityIdentifier("activity-next")
             }
             if canReplace, let chooseSquat {
-                Button("侧面徒手深蹲 · 辅助计数",action:chooseSquat).accessibilityIdentifier("choose-development-squat")
+                Button("侧面深蹲 · 辅助计数",action:chooseSquat).accessibilityIdentifier("choose-development-squat")
             }
             ForEach(TrainingActivity.allCases) { activity in
                 Button { choose(activity) } label: {

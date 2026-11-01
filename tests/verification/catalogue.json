@@ -2,6 +2,17 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxTrainingCoreTests/VisionWorkflowTests/testResetIsNotHiddenBySameFrameValidGeometryAndOriginalClockIsRequired","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionWorkflowTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxAppTests/CountOnlyReplayBatchTests/testWorkflowSquatBindingPreservesFixedPreludeAndExplicitSkippedFrameFacts","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/CountOnlyReplayBatchTests/testWorkflowOriginalCurlUsesActualStoreAndNeverEnablesFrontalCountOnly","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxAppTests/CountOnlyReplayBatchTests/testWorkflowWrongStrategyOrDetachedOriginalClockFailsBeforeProducingRecord","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},
+    {"id":"tests/scripts/test_coverage_period_eval.py","file":"tests/scripts/test_coverage_period_eval.py","scope":"public","surface":"host"},
+
+    {"id":"tests/scripts/vision-workflow.test.mjs","file":"tests/scripts/vision-workflow.test.mjs","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/VisionWorkflowTests/testActionRegistryUsesOriginalSideCurlAndFrozenSquatWithoutEnablingCapability","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionWorkflowTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/VisionWorkflowTests/testTouchScreenPartialAndNearScreenMissingLegsDoNotCountOrLockTheFirstWholeCycle","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionWorkflowTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/VisionWorkflowTests/testRawPTSOrderingAndCompleteInputBoundaryRemainRequired","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionWorkflowTests.swift","scope":"public","surface":"host"},
+
     {"id":"FoxUITests/FoxCountOnlyUITests/testPhoneSquatCountOnlyUnknownAndZeroSurviveReopenAcrossRotation","file":"apps/ipad/FoxUITests/FoxCountOnlyUITests.swift","scope":"public","surface":"iphone"},
     {"id":"FoxUITests/FoxCountOnlyUITests/testPadSquatCountOnlyUnknownAndZeroSurviveReopenAcrossRotation","file":"apps/ipad/FoxUITests/FoxCountOnlyUITests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/CountOnlyReplayBatchTests/testDiagnosticRejectsUnadmittedPrivateOrNonMonotonicInputsAndCannotOverwriteRun","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},

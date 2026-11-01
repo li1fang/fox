@@ -72,7 +72,8 @@ enum CountOnlyReplayConsumer {
                 controller.replayFrame(.init(frame:frame,latencyMs:0,revision:revision))
             }
             trace.append(.init(sourcePTSSeconds:frame.timestamp,admitted:accepted,formal:frame.timestamp>=formal,
-                automaticCount:store.session?.observedAutomaticCount ?? 0,reason:started ? controller.assistedReason:"preview_only"))
+                automaticCount:store.session?.observedAutomaticCount ?? 0,
+                reason:!accepted ? "cadence_not_admitted" : started ? controller.assistedReason:"preview_only"))
             try progress(index+1)
         }
         guard started, store.workoutVision.flush() else {throw VisionDiagnosticArchive.error(store.errorMessage ?? "Count-only snapshot not saved")}

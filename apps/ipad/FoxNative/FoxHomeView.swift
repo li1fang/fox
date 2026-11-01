@@ -306,7 +306,7 @@ struct FoxHomeView: View {
                 .frame(minHeight: 44).accessibilityIdentifier("home-prepare-curl")
                 .disabled(trainingDispatcher.pendingRequestID != nil)
             if CountOnlyAvailability.admittedActions.contains(.squat) {
-                Button("内测 · 侧面徒手深蹲") { editing = false; trainingRoute = .squat(.left, UUID()) }
+                Button("内测 · 侧面深蹲") { editing = false; trainingRoute = .squat(.left, UUID()) }
                     .frame(minHeight: 44).accessibilityIdentifier("home-prepare-squat-assisted")
                     .disabled(trainingDispatcher.pendingRequestID != nil)
                 Text("辅助计数，结束后核对；开始前在本组设置选择近侧腿。")

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { digestFile } from './vision-diagnostics.mjs';
 import { selectPairedDevice } from './ios-device-selection.mjs';
+import { workflowBinding, validateWorkflow, workflowFrames, replayWorkflow, evaluateWorkflow, evaluateWorkflowCohort } from './vision-workflow.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const uuid = /^[A-F0-9]{8}(-[A-F0-9]{4}){3}-[A-F0-9]{12}$/;
@@ -49,6 +50,7 @@ export async function validateBatchJob(folder) {
   const url = path.join(folder,'job.json'), info = await lstat(url);
   if (!info.isFile() || info.isSymbolicLink() || info.size > 128*1024) throw Error('Unsafe batch job file');
   const bytes = await readFile(url), job = JSON.parse(bytes); validate(job);
+  await validateWorkflow(job);
   for (const file of job.files) {
     const actual = await digestFile(path.join(folder,file.path));
     if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256) throw Error(`Batch input checksum mismatch: ${file.path}`);
@@ -56,10 +58,33 @@ export async function validateBatchJob(folder) {
   return { job, jobSHA256:digest(bytes) };
 }
 
-export async function prepareBatch({source,kind,cases,settings,destination,mode = 'controller',assets = []}) {
+export async function prepareBatch({source,kind,cases,settings,destination,mode,assets = [],action,provenance,clock}) {
+  const workflow=action==null?undefined:await workflowBinding(action);
+  if(workflow) {
+    if(mode!=null&&mode!==workflow.consumerMode) throw Error('Workflow mode binding mismatch');
+    mode=workflow.consumerMode;
+    cases=cases.map(c=>{
+      if((c.exercise!=null&&c.exercise!==action)||(c.countOnlyAction!=null&&c.countOnlyAction!==action)) throw Error('Workflow action binding mismatch');
+      return {...c,...(mode==='controller'?{exercise:action}:{countOnlyAction:action}),
+        strategyID:workflow.strategyID,bodyView:workflow.bodyView,formalStartSeconds:c.startSeconds+workflow.formalOffsetSeconds};
+    });
+  }
+  mode??='controller';
   const id = randomUUID().toUpperCase(), directory = path.join(destination,id);
   const files = [], input = kind === 'video' ? 'manifest.json' : 'input.jsonl';
   const sourceAssets = [{source:path.resolve(source),path:input}];
+  if(workflow) {
+    if(!clock)throw Error('Workflow requires the frozen original --clock JSONL asset');
+    sourceAssets.push({source:path.resolve(clock),path:path.basename(clock)});
+  }
+  let annotated;
+  if(provenance) {
+    if(!workflow||kind!=='cache')throw Error('Source provenance requires a cache workflow action');
+    const original=await readFile(source),first=JSON.parse(original.toString('utf8').split('\n')[0]);
+    if(first.seconds==null||!Array.isArray(first.people))throw Error('Provenance annotation requires original headerless pose rows');
+    annotated=Buffer.concat([Buffer.from(JSON.stringify(provenance)+'\n'),original]);
+    sourceAssets.push({source:path.resolve(source),path:'original-pose.jsonl'});
+  }
   if (!Array.isArray(assets) || assets.length > 3) throw Error('Too many additional batch assets');
   for (const asset of assets) sourceAssets.push({source:path.resolve(asset),path:path.basename(asset)});
   if (kind === 'video') {
@@ -70,11 +95,17 @@ export async function prepareBatch({source,kind,cases,settings,destination,mode 
     if (actual.sha256 !== manifest.sha256) throw Error('Video checksum mismatch');
     sourceAssets.push({source:video,path:manifest.asset});
   }
-  for (const file of sourceAssets) files.push({path:file.path,...await digestFile(file.source)});
-  const job = {schema:'fox.vision_batch_job.v1',id,kind,mode,input,files,cases, ...(settings ? {settings} : {})};
+  for (const file of sourceAssets) files.push({path:file.path,...(annotated&&file.path===input
+    ?{bytes:annotated.length,sha256:digest(annotated)}:await digestFile(file.source))});
+  const job = {schema:'fox.vision_batch_job.v1',id,kind,mode,input,files,cases, ...(settings ? {settings} : {}),
+    ...(workflow?{workflow,sourceClock:{path:path.basename(clock),timebase:'original_cmtime_jsonl',role:'observer_input'}}:{})};
   validate(job);
+  await validateWorkflow(job);
   await mkdir(directory,{recursive:true,mode:0o700});
-  for (const asset of sourceAssets) await copyFile(asset.source,path.join(directory,asset.path));
+  for (const asset of sourceAssets) {
+    if(annotated&&asset.path===input)await writeFile(path.join(directory,input),annotated,{flag:'wx',mode:0o600});
+    else await copyFile(asset.source,path.join(directory,asset.path));
+  }
   await writeFile(path.join(directory,'job.json'),JSON.stringify(job,null,2)+'\n',{flag:'wx',mode:0o600});
   await validateBatchJob(directory);
   return {id,directory};
@@ -163,7 +194,22 @@ export async function verifyBatchResult(folder, expectedJobSHA256) {
   if (result.mode === 'observations' && (result.controllerVersion !== 'not-run' || result.cases?.length !== 0
       || !Number.isSafeInteger(result.observationFrameCount) || result.observationFrameCount < 2
       || Object.keys(result.algorithms ?? {}).length !== 0)) throw Error('Invalid observations-only result');
+  if(result.workflow)await validateWorkflow({workflow:result.workflow,mode:result.mode,kind:'cache',cases:(result.mode==='countOnly'?result.countOnlyCases:result.cases).map(c=>c.specification)},{requireClock:false});
   if (result.mode === 'countOnly') await verifyCountOnly(folder,result,status);
+  else if(result.workflow) {
+    const claimed=new Set(['result.json','settings.json']);
+    if(result.workflow.action!=='curl'||result.algorithms?.curl!==result.workflow.algorithm||result.inferencePerformed!==false)throw Error('Invalid original-side workflow result');
+    for(const c of result.cases) {
+      const main=`${c.specification.id}.training.json`;
+      if(c.archiveAssets?.length!==1||c.archiveAssets[0].path!==main||!isDeepStrictEqual(status.files.find(f=>f.path===main),c.archiveAssets[0])
+        ||!Array.isArray(c.workflowTrace)||!c.record||c.record.assistedEvidence!=null||c.record.reps!=null||c.record.sideRepetitions!=null
+        ||c.record.countingMethod!=='unconfirmed')throw Error('Missing legacy actual archive or unknown manual confirmation');
+      const archive=await json(path.join(folder,main)),saved=archive.sessions?.flatMap(s=>s.records??[]).filter(r=>r.id===c.record.id);
+      if(archive.schemaVersion!==2||saved?.length!==1||!isDeepStrictEqual(saved[0],c.record))throw Error('Actual original-side archive does not match record');
+      claimed.add(main);
+    }
+    if(status.files.some(f=>!claimed.has(f.path)))throw Error('Unclaimed workflow result asset');
+  }
   else if (status.files.length > 3 || status.files.some(f=>isCountOnlyArchiveName(f.path))) throw Error('Unexpected count-only archive in legacy result');
   return {status,result};
 }
@@ -198,20 +244,46 @@ export function batchCounts(result) { return result.mode === 'countOnly' ? resul
 async function cli() {
   const [command,...args] = process.argv.slice(2);
   const option = key => { const i = args.indexOf(key); return i < 0 ? undefined : args[i+1]; };
+  if(command==='evaluate'&&args.includes('--cohort')) {
+    if(!args[0]||!option('--reference')||!option('--output'))throw Error('evaluate <frozen-run-index.json> --cohort --reference <full-reference.json> --output <fresh.json>');
+    return evaluateWorkflowCohort({indexFile:path.resolve(args[0]),referenceFile:path.resolve(option('--reference')),output:path.resolve(option('--output')),
+      python:option('--python')??'python3',validateJob:validateBatchJob,verifyAppResult:verifyBatchResult});
+  }
   if (command === 'prepare') {
-    const mode = option('--mode') ?? 'controller';
+    const mode = option('--mode');
     if (!args[0] || (mode !== 'observations' && !option('--cases'))) throw Error('prepare <source> --kind cache|diagnostic|video [--mode controller|observations|countOnly] [--cases <json>] [--asset <frozen-clock-or-index>] [--settings <json>]');
     return prepareBatch({source:path.resolve(args[0]), kind:option('--kind') ?? 'cache', mode,
       cases:option('--cases') ? await json(option('--cases')) : [],
       settings:option('--settings') ? await json(option('--settings')) : undefined,
-      assets:args.flatMap((v,i)=>v === '--asset' ? [args[i+1]] : []),
+      assets:args.flatMap((v,i)=>v === '--asset' ? [args[i+1]] : []),action:option('--action'),
+      provenance:option('--source-provenance')?await json(option('--source-provenance')):undefined,
+      clock:option('--clock'),
       destination:path.resolve(option('--destination') ?? path.join(root,'.data/vision-replay/jobs'))});
   }
-  if (!['run','pull','verify'].includes(command) || !args[0]) throw Error('Expected prepare, run <job-folder>, pull <job-folder>, or verify <result-folder> --job <job-folder>');
-  const jobFolder = path.resolve(command === 'verify' ? option('--job') ?? '' : args[0]);
+  if (!['run','pull','verify','replay','evaluate','inspect'].includes(command) || !args[0]) throw Error('Expected prepare --action, inspect, replay <job> --executable <binary> --output <fresh-folder>, evaluate <result.json> --job <job> --reference <frozen.json> --output <fresh.json>, run, pull or verify');
+  const jobFolder = path.resolve(['verify','evaluate'].includes(command) ? option('--job') ?? '' : args[0]);
   const {job,jobSHA256} = await validateBatchJob(jobFolder);
+  if(command==='inspect') {
+    if(!job.workflow)throw Error('inspect requires an action-bound workflow');
+    const {header,frames}=await workflowFrames(jobFolder,job);
+    return {schema:'fox.vision_workflow_preflight.v1',jobID:job.id,jobSHA256,workflow:job.workflow,
+      boundary:'schema_clock_preflight_only_no_inference_or_counts',inputProvenance:header,frames:frames.length,
+      first20SourcePTSSeconds:frames.slice(0,20).map(f=>f.seconds)};
+  }
+  if(command==='replay')return replayWorkflow({jobFolder,job,jobSHA256,executable:option('--executable'),destination:path.resolve(option('--output')??'')});
+  if(command==='evaluate') {
+    if(!option('--reference')||!option('--output'))throw Error('evaluate requires frozen --reference and fresh --output');
+    const resultFile=path.resolve(args[0]);
+    if((await json(resultFile)).schema==='fox.vision_batch_result.v1') {
+      if(path.basename(resultFile)!=='result.json')throw Error('Actual App evaluation requires the intact result directory');
+      await verifyBatchResult(path.dirname(resultFile),jobSHA256);
+    }
+    return evaluateWorkflow({jobFolder,job,jobSHA256,resultFile,referenceFile:path.resolve(option('--reference')),
+      output:path.resolve(option('--output')),witnessFile:option('--witness'),python:option('--python')??'python3'});
+  }
   if (command === 'verify') {
     const value = await verifyBatchResult(path.resolve(args[0]),jobSHA256);
+    if(job.workflow&&!isDeepStrictEqual(value.result.workflow,job.workflow))throw Error('Result workflow differs from submitted job');
     return {status:'verified',jobID:job.id,mode:value.result.mode ?? 'controller',observationFrameCount:value.result.observationFrameCount,
       counts:batchCounts(value.result)};
   }

@@ -45,10 +45,11 @@ enum TrainingCapabilities {
         return plan
     }
     static func squatTrial() -> TrainingPlan {
-        var item=Exercise(id:"bodyweight_squat",name:"徒手深蹲（开发辅助）",
+        // Preserve the saved identifier; held equipment is not a separate movement.
+        var item=Exercise(id:"bodyweight_squat",name:"深蹲（开发辅助）",
             sets:[SetTarget(setIndex:1,reps:5)],notes:"侧面固定近侧髋、膝、踝入镜；组后人工核对次数。阶段未提供。")
         item.targetSets[0].weightUnit="bodyweight";item.repetitionBasis = .total
-        var plan=TrainingPlan(focus:"开发辅助 · 侧面徒手深蹲",exercises:[item]);plan.isQuickPractice=true
+        var plan=TrainingPlan(focus:"开发辅助 · 侧面深蹲",exercises:[item]);plan.isQuickPractice=true
         return plan
     }
 

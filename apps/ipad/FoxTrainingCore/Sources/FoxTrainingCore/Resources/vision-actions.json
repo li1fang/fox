@@ -1,0 +1,81 @@
+{
+  "schema": "fox.vision_actions.v1",
+  "version": 1,
+  "formalOffsetSeconds": 2,
+  "actions": [
+    {
+      "action": "squat",
+      "label": "深蹲",
+      "strategyID": "squat-side-selected-b587-v1",
+      "strategyVersion": 1,
+      "algorithm": "squat-selected-count-only-v1",
+      "consumerMode": "countOnly",
+      "bodyView": "side",
+      "phaseStatus": "not_provided",
+      "eventTimeMeaning": "count_confirmation_not_anatomical_return_endpoint",
+      "implementation": [
+        {
+          "path": "SquatSelectedCounter.swift",
+          "sha256": "8781f2bf97e30bff63d860a37f7828723fa73b1c2d30cd92addca95b31eba588"
+        },
+        {
+          "path": "SquatCountOnly.swift",
+          "sha256": "835fc68a49a664f893684bc018d071c2102a66d4fed803d696aabbbcdfc03d6a"
+        },
+        {
+          "path": "PoseRuntimePolicy.swift",
+          "sha256": "816ba0ce2a4fea23c4b58a5ce2335e5b00117c73fa22998a3ceba0aa2e853e45"
+        },
+        {
+          "path": "Resources/pose-runtime-defaults.json",
+          "sha256": "65ee310f23cbd5c7d32586b0cd5c081973d3507fae61e96768ce80a6702c6232"
+        }
+      ]
+    },
+    {
+      "action": "curl",
+      "label": "弯举",
+      "strategyID": "curl-side",
+      "strategyVersion": 1,
+      "algorithm": "curl_2d_v4",
+      "consumerMode": "controller",
+      "bodyView": "side",
+      "phaseStatus": "existing_observed_fields_only",
+      "eventTimeMeaning": "count_confirmation_not_anatomical_return_endpoint",
+      "implementation": [
+        {
+          "path": "PoseTracking.swift",
+          "sha256": "08ad90a601e074f14a845181f5580fd097cc6d52e0447269ff0845cc86388ab1"
+        },
+        {
+          "path": "LatPulldown.swift",
+          "sha256": "8f126dc835782bd58419d985230cf0e95a89f263bf21c4440a6bb85cbc7dc071"
+        },
+        {
+          "path": "PoseRuntimePolicy.swift",
+          "sha256": "816ba0ce2a4fea23c4b58a5ce2335e5b00117c73fa22998a3ceba0aa2e853e45"
+        },
+        {
+          "path": "Resources/pose-runtime-defaults.json",
+          "sha256": "65ee310f23cbd5c7d32586b0cd5c081973d3507fae61e96768ce80a6702c6232"
+        },
+        {
+          "path": "PoseCounterConfiguration.swift",
+          "sha256": "dcf20dff38d17d2c595a5abd1bb9fa5de48c04ee0b6c272fe92dc47ecb18df38"
+        },
+        {
+          "path": "Resources/pose-counter-defaults.json",
+          "sha256": "dd58bfbc00c5fc9e348aeb37e9451500427b33b49c398587d8f1eca12b8cb1eb"
+        },
+        {
+          "path": "Resources/motion-strategy-curl.json",
+          "sha256": "ce0ffd9a5a36abd759590fe5019205de67290da0ca8afcb5c5edd654d4f25258"
+        },
+        {
+          "path": "PoseStartGate.swift",
+          "sha256": "61c84ffe05c6b5a42772be75a765e36cc49d719046ad9e4bea9d0948045177a3"
+        }
+      ]
+    }
+  ]
+}

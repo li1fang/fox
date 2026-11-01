@@ -3,7 +3,7 @@ import Foundation
 public enum CountOnlyAction: String, Codable {
     case curl, squat
     public var algorithm: String { self == .curl ? "central-continuous-curl-v1" : "squat-selected-count-only-v1" }
-    public var label: String { self == .curl ? "近正面弯举辅助" : "侧面徒手深蹲辅助" }
+    public var label: String { self == .curl ? "近正面弯举辅助" : "侧面深蹲辅助" }
 }
 
 /// Count gates are not anatomical phase endpoints. No period/rhythm is inferred here.

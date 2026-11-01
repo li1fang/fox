@@ -30,6 +30,10 @@ struct VisionBatchJob: Codable {
         var startSeconds: Double
         var endSeconds: Double
         var rebindAtSeconds: [Double]
+        var strategyID: String? = nil
+        var formalStartSeconds: Double? = nil
+        var personID: String? = nil
+        var bodyView: String? = nil
     }
     var schema: String
     var id: UUID
@@ -40,6 +44,8 @@ struct VisionBatchJob: Codable {
     var files: [VisionDiagnosticManifest.Asset]
     var cases: [Case]
     var settings: PoseSessionSettings?
+    var workflow: VisionWorkflowBinding? = nil
+    var sourceClock: VisionWorkflowCache.ClockAsset? = nil
 
     static func safeName(_ name: String) -> Bool {
         !name.isEmpty && name.count <= 100 && name != "." && name != ".." &&
@@ -57,7 +63,18 @@ struct VisionBatchJob: Codable {
             }
         }
         try settings?.validate()
+        if let workflow {
+            try workflow.validate()
+            guard kind == .cache, settings == nil, effectiveMode.rawValue == workflow.consumerMode,
+                  let sourceClock,sourceClock.timebase=="original_cmtime_jsonl",sourceClock.role=="observer_input",files.contains(where:{$0.path==sourceClock.path}) else {throw VisionDiagnosticArchive.error("Workflow mode/clock binding mismatch")}
+        }
         for c in cases {
+            if let workflow {
+                guard c.strategyID == workflow.strategyID,c.formalStartSeconds == c.startSeconds+workflow.formalOffsetSeconds,
+                      c.bodyView == workflow.bodyView,c.personID.map({!$0.isEmpty && $0.count<=200}) ?? true,
+                      c.endSeconds>c.startSeconds+workflow.formalOffsetSeconds,c.rebindAtSeconds.isEmpty,
+                      (c.exercise?.rawValue ?? c.countOnlyAction?.rawValue)==workflow.action else {throw VisionDiagnosticArchive.error("Workflow case strategy binding mismatch")}
+            }
             guard effectiveMode == .countOnly ? (c.countOnlyAction != nil && c.exercise == nil && c.rebindAtSeconds.isEmpty) : (c.exercise != nil && c.countOnlyAction == nil) else {
                 throw VisionDiagnosticArchive.error("Diagnostic action/mode mismatch")
             }
@@ -96,6 +113,9 @@ struct VisionBatchCaseResult: Codable {
     let resetCounts: [String: Int]
     let trace: [VisionBatchTrace]
     var validatedReport: VisionTrial? = nil
+    var workflowTrace: [VisionWorkflowTrace]? = nil
+    var record: LocalSetRecord? = nil
+    var archiveAssets: [VisionDiagnosticManifest.Asset]? = nil
 }
 struct VisionBatchResult: Codable {
     var schema = "fox.vision_batch_result.v1"
@@ -119,6 +139,7 @@ struct VisionBatchResult: Codable {
     var motionStrategies: [MotionStrategy]? = nil
     var countOnlyCases: [CountOnlyBatchCaseResult]? = nil
     var settingsScope: String? = nil
+    var workflow: VisionWorkflowBinding? = nil
     var evidenceBoundary = "offline-observations-through-real-controller-not-live-camera-or-new-human-acceptance"
 }
 struct VisionBatchStatus: Codable {
@@ -192,7 +213,9 @@ enum VisionReplayBatch {
                 }
             } else {
                 let header = try JSONDecoder().decode([String: String].self, from: Data(lines[0].utf8))
-                if job.effectiveMode == .countOnly {
+                if job.workflow != nil {
+                    try VisionWorkflowCache.validateHeader(header)
+                } else if job.effectiveMode == .countOnly {
                     guard header["schema"] == "fox.count_only_pose_input.v1", header["visionRevision"] == "1",
                           header["timebase"] == "source_pts_seconds", header["coordinateConvention"] == "vision-normalized-bottom-left-pixel-up-v1",
                           ["unknown","known_unmirrored","known_mirrored"].contains(header["pixelMirror"] ?? ""),
@@ -210,6 +233,9 @@ enum VisionReplayBatch {
             }
             guard frames.count >= 2, zip(frames, frames.dropFirst()).allSatisfy({ $0.timestamp < $1.timestamp }),
                   frames.last!.timestamp - frames.first!.timestamp <= 600.1 else { throw VisionDiagnosticArchive.error("Empty, non-monotonic or oversized cache timeline") }
+            if job.workflow != nil,let clock=job.sourceClock {
+                try VisionWorkflowCache.validateClock(Data(contentsOf:input.appendingPathComponent(clock.path)),frames:frames)
+            }
             status.phase = job.effectiveMode == .observations ? "observing" : "replaying"
             if job.effectiveMode == .observations { status.processedFrames = frames.count }
             try saveStatus()
@@ -227,6 +253,14 @@ enum VisionReplayBatch {
                         if count%20 == 0 {try saveStatus()}
                     }
                     countOnlyResults.append(result);continue
+                }
+                if job.workflow != nil {
+                    let base=status.processedFrames
+                    let value=try await WorkflowReplayConsumer.runLegacy(item,frames:selected,output:output,control:control) {count in
+                        status.processedFrames=base+count
+                        if count%20 == 0 {try saveStatus()}
+                    }
+                    results.append(value);continue
                 }
                 guard let exercise=item.exercise else {throw VisionDiagnosticArchive.error("Missing legacy exercise")}
                 let directory = work.appendingPathComponent(item.id)
@@ -272,7 +306,7 @@ enum VisionReplayBatch {
                     resetCounts: controller.diagnostics.resetCounts, trace: trace, validatedReport: report))
             }
             try control.check(); try Task.checkCancellation()
-            if job.effectiveMode == .countOnly {try job.validate(id:id,folder:input,countOnlyDiagnosticEnabled:countOnlyDiagnosticEnabled ?? (ProcessInfo.processInfo.environment["FOX_COUNT_ONLY_DIAGNOSTIC"] == "1"))}
+            if job.effectiveMode == .countOnly || job.workflow != nil {try job.validate(id:id,folder:input,countOnlyDiagnosticEnabled:countOnlyDiagnosticEnabled ?? (ProcessInfo.processInfo.environment["FOX_COUNT_ONLY_DIAGNOSTIC"] == "1"))}
             var result = VisionBatchResult(jobID: id, jobSHA256: status.jobSHA256!, inputAssets: job.files,
                 inferencePerformed: job.kind == .video, mode: job.effectiveMode, observationFrameCount: frames.count, inputProvenance: provenance,
                 controllerVersion: job.effectiveMode == .controller ? VisionLabController.preparationFlowVersion : "not-run",
@@ -283,6 +317,8 @@ enum VisionReplayBatch {
                 algorithms: job.effectiveMode == .controller ? Dictionary(uniqueKeysWithValues: VisionExercise.allCases.map { ($0.rawValue, $0.algorithm(runtimePolicy: settings.runtimePolicy)) }) : [:], cases: results)
             result.motionStrategies = try VisionExercise.allCases.map { try MotionStrategy.load($0) }
                 .filter { result.algorithms[$0.exercise.rawValue] == $0.algorithm }
+            result.workflow=job.workflow
+            if job.workflow != nil {result.evidenceBoundary="public-raw-through-actual-app-consumer-and-persistence-not-live-camera-or-human-accuracy-acceptance"}
             if job.effectiveMode == .observations { result.evidenceBoundary = "raw-video-observations-only-no-controller-no-counts-no-exercise-adaptation" }
             if job.effectiveMode == .countOnly {
                 result.countOnlyCases=countOnlyResults
@@ -293,12 +329,13 @@ enum VisionReplayBatch {
             }
             let resultURL = output.appendingPathComponent("result.json")
             // Count-only embeds a real saved record: preserve its repository millisecond dates.
-            let resultBytes = job.effectiveMode == .countOnly ? try LocalTrainingRepository.encoder().encode(result) : try VisionDiagnosticArchive.encode(result)
+            let resultBytes = job.effectiveMode == .countOnly || job.workflow != nil ? try LocalTrainingRepository.encoder().encode(result) : try VisionDiagnosticArchive.encode(result)
             try resultBytes.write(to: resultURL, options: .atomic)
             let settingsURL = output.appendingPathComponent("settings.json")
             try VisionDiagnosticArchive.encode(settings).write(to: settingsURL, options: .atomic)
             status.files = [try VisionDiagnosticArchive.asset(resultURL), try VisionDiagnosticArchive.asset(settingsURL)]
             status.files.append(contentsOf:countOnlyResults.flatMap(\.archiveAssets))
+            status.files.append(contentsOf:results.flatMap{$0.archiveAssets ?? []})
             if job.kind == .video { status.files.append(try VisionDiagnosticArchive.asset(cache)) }
             try control.check(); try Task.checkCancellation()
             status.phase = "completed"; try saveStatus()

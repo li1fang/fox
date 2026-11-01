@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { validateBatchJob, verifyBatchResult, isCountOnlyArchiveName } from './vision-batch.mjs';
+import { workflowFrames,normalizeWorkflowResult } from './vision-workflow.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -26,6 +27,7 @@ function derive(jobBytes, statusBytes, resultBytes, settingsBytes) {
   if (!Array.isArray(job.cases) || !Array.isArray(job.files)) throw Error('Invalid job');
   const completed = status.phase === 'completed';
   const countOnly = job.mode === 'countOnly';
+  if(completed&&!isDeepStrictEqual(result?.workflow,job.workflow))throw Error('Workflow result/job strategy association mismatch');
   if (completed && (status.error != null || !result || result.schema !== 'fox.vision_batch_result.v1' || result.jobID !== job.id
       || result.jobSHA256 !== digest(jobBytes) || result.settingsSHA256 !== digest(settingsBytes)
       || !isDeepStrictEqual(result.settings,json(settingsBytes)) || !isDeepStrictEqual(result.inputAssets,job.files)
@@ -65,10 +67,14 @@ function derive(jobBytes, statusBytes, resultBytes, settingsBytes) {
     jobSHA256:digest(jobBytes),inputAssets:job.files,settingsSHA256:result?.settingsSHA256 ?? null,
     execution:{appVersion:result?.appVersion ?? null,appBuild:result?.appBuild ?? null,controllerVersion:result?.controllerVersion ?? null,
       device:result?.device ?? null,platform:result?.platform ?? null,sourceSHA256:null},
-    motionStrategies:strategies,cases};
+    motionStrategies:strategies,cases,...(result?.workflow?{workflow:result.workflow}:{})};
 }
 
 export async function archiveBatch({resultFolder,jobFolder,archiveRoot}) {
+  if(await exists(path.join(resultFolder,'workflow-status.json'))) {
+    if(await exists(path.join(resultFolder,'status.json')))throw Error('Mixed App/portable receipts');
+    return archivePortable({resultFolder,jobFolder,archiveRoot});
+  }
   const {job,jobSHA256} = await validateBatchJob(jobFolder);
   const jobBytes = await regular(path.join(jobFolder,'job.json'),128*1024);
   const statusBytes = await regular(path.join(resultFolder,'status.json'),128*1024), status = json(statusBytes);
@@ -77,7 +83,7 @@ export async function archiveBatch({resultFolder,jobFolder,archiveRoot}) {
   if (status.phase === 'completed') await verifyBatchResult(resultFolder,jobSHA256);
   const sources = [['job.json',path.join(jobFolder,'job.json')],['status.json',path.join(resultFolder,'status.json')]];
   if (status.phase === 'completed') sources.push(['result.json',path.join(resultFolder,'result.json')],['settings.json',path.join(resultFolder,'settings.json')]);
-  if (status.phase === 'completed' && job.mode === 'countOnly') {
+  if (status.phase === 'completed' && (job.mode === 'countOnly'||job.workflow)) {
     for (const asset of status.files.filter(f=>isCountOnlyArchiveName(f.path))) sources.push([asset.path,path.join(resultFolder,asset.path)]);
   }
   const buffers = new Map();
@@ -103,10 +109,66 @@ export async function archiveBatch({resultFolder,jobFolder,archiveRoot}) {
   return {id:job.id,directory};
 }
 
+function derivePortable(jobBytes,statusBytes,resultBytes) {
+  const job=json(jobBytes),status=json(statusBytes),result=json(resultBytes);
+  if(job.schema!=='fox.vision_batch_job.v1'||!job.workflow||status.schema!=='fox.vision_workflow_status.v1'
+    ||status.phase!=='completed'||status.jobID!==job.id||status.jobSHA256!==digest(jobBytes)
+    ||result.schema!=='fox.vision_workflow_result.v1'||result.jobID!==job.id||result.jobSHA256!==digest(jobBytes)
+    ||!isDeepStrictEqual(result.workflow,job.workflow)||result.inferencePerformed!==false||result.acceptance!=='not_assessed'
+    ||result.execution!=='portable_core_replay_not_actual_app'||status.execution!==result.execution
+    ||status.result?.path!=='workflow-result.json'||status.result.sha256!==digest(resultBytes)||status.result.bytes!==resultBytes.length
+    ||!/^[a-f0-9]{64}$/.test(status.producer?.sha256??''))throw Error('Invalid portable workflow identity/checksum/boundary');
+  if(result.cases?.length!==job.cases.length)throw Error('Portable case count mismatch');
+  const cases=job.cases.map((spec,i)=>{
+    const c=result.cases[i];
+    if(c.specification?.id!==spec.id||c.specification.arm!==spec.arm||c.replay?.binding?.algorithm!==job.workflow.algorithm
+      ||!Array.isArray(c.replay.events)||c.replay.events.length>10000)throw Error('Portable case mismatch');
+    return {id:spec.id,exercise:job.workflow.action,arm:spec.arm,startSeconds:spec.startSeconds,endSeconds:spec.endSeconds,
+      automaticCount:c.replay.events.length,referenceCount:null,countError:null,returnIntervals:null,resets:null};
+  });
+  return {schema:'fox.vision_run.v1',id:job.id,status:'completed',acceptance:'not_assessed',evidenceKind:'portable_core_cache',
+    evidenceBoundary:'public-raw-through-existing-core-not-actual-app-or-new-camera-accuracy',jobSHA256:digest(jobBytes),
+    inputAssets:job.files,settingsSHA256:null,execution:{appVersion:null,appBuild:null,controllerVersion:null,device:null,
+      platform:'portable_core',sourceSHA256:status.producer.sha256},motionStrategies:[],workflow:job.workflow,cases};
+}
+
+async function archivePortable({resultFolder,jobFolder,archiveRoot}) {
+  const {job,jobSHA256}=await validateBatchJob(jobFolder);
+  const names=['job.json','workflow-status.json','workflow-result.json'];
+  const buffers=await Promise.all(names.map((n,i)=>regular(path.join(i===0?jobFolder:resultFolder,n))));
+  const {frames}=await workflowFrames(jobFolder,job);
+  normalizeWorkflowResult(job,json(buffers[2]),{jobSHA256,frames});
+  const base=derivePortable(...buffers),artifacts=names.map((p,i)=>({path:p,bytes:buffers[i].length,sha256:digest(buffers[i])}));
+  const directory=path.join(archiveRoot,job.id);
+  if(await exists(directory)) {
+    const {manifest}=await verifyRun(directory),{archivedAt:_,artifacts:prior,...previous}=manifest;
+    if(!isDeepStrictEqual(previous,base)||!isDeepStrictEqual(prior,artifacts))throw Error('Existing run ID conflict; not overwritten');
+    return {id:job.id,directory};
+  }
+  await mkdir(archiveRoot,{recursive:true,mode:0o700});
+  const staging=path.join(archiveRoot,`.partial-${randomUUID()}`);await mkdir(staging,{mode:0o700});
+  try {
+    for(let i=0;i<names.length;i++)await writeFile(path.join(staging,names[i]),buffers[i],{flag:'wx',mode:0o600});
+    await writeFile(path.join(staging,'run.json'),JSON.stringify({...base,archivedAt:new Date().toISOString(),artifacts},null,2)+'\n',{flag:'wx',mode:0o600});
+    await verifyRun(staging);await rename(staging,directory);
+  } catch(error){await rm(staging,{recursive:true,force:true});throw error;}
+  return {id:job.id,directory};
+}
+
 export async function verifyRun(directory) {
   const dirInfo = await lstat(directory);
   if (!dirInfo.isDirectory() || dirInfo.isSymbolicLink()) throw Error('Unsafe run directory');
   const bytes = await regular(path.join(directory,'run.json'),2*1024*1024), manifest = json(bytes);
+  if(manifest.evidenceKind==='portable_core_cache') {
+    const names=['job.json','workflow-status.json','workflow-result.json'];
+    if(manifest.schema!=='fox.vision_run.v1'||!Number.isFinite(Date.parse(manifest.archivedAt))
+      ||manifest.artifacts?.length!==3||!isDeepStrictEqual(manifest.artifacts.map(a=>a.path),names))throw Error('Invalid portable artifact manifest');
+    const buffers=await Promise.all(names.map(n=>regular(path.join(directory,n))));
+    if(buffers.some((b,i)=>b.length!==manifest.artifacts[i].bytes||digest(b)!==manifest.artifacts[i].sha256))throw Error('Portable artifact checksum mismatch');
+    const derived=derivePortable(...buffers),{archivedAt:_,artifacts:__,...base}=manifest;
+    if(!isDeepStrictEqual(base,derived))throw Error('Portable derived manifest mismatch');
+    return {manifest,manifestSHA256:digest(bytes)};
+  }
   if (manifest.schema !== 'fox.vision_run.v1' || !Number.isFinite(Date.parse(manifest.archivedAt)) || !Array.isArray(manifest.artifacts)
       || manifest.artifacts.length < 2 || manifest.artifacts.length > 68
       || new Set(manifest.artifacts.map(f=>f.path)).size !== manifest.artifacts.length) throw Error('Invalid run manifest');
@@ -123,10 +185,10 @@ export async function verifyRun(directory) {
   if (!isDeepStrictEqual(base,derived)) throw Error('Derived manifest differs from source result');
   const status = json(buffers.get('status.json'));
   if (status.phase === 'completed') {
-    const countOnly=json(buffers.get('job.json')).mode === 'countOnly';
-    if (countOnly) await verifyBatchResult(directory,status.jobSHA256);
+    const job=json(buffers.get('job.json')),countOnly=job.mode === 'countOnly',archivedConsumer=countOnly||job.workflow!=null;
+    if (archivedConsumer) await verifyBatchResult(directory,status.jobSHA256);
     else if (buffers.size !== 4) throw Error('Unexpected legacy run artifacts');
-    for (const name of ['result.json','settings.json',...(countOnly ? status.files.filter(f=>isCountOnlyArchiveName(f.path)).map(f=>f.path) : [])]) {
+    for (const name of ['result.json','settings.json',...(archivedConsumer ? status.files.filter(f=>isCountOnlyArchiveName(f.path)).map(f=>f.path) : [])]) {
       const asset = status.files?.find(f=>f.path === name), data = buffers.get(name);
       if (!asset || !data || asset.bytes !== data.length || asset.sha256 !== digest(data)) throw Error('Source receipt checksum mismatch');
     }
