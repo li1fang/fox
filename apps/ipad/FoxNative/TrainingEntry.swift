@@ -4,12 +4,13 @@ import Foundation
 enum TrainingEntry: Identifiable {
     enum Intent { case preparation, resume, review, unknown }
     case plan
+    case squat(ArmSide, UUID)
     case prepare(TrainingActivity, ArmSide, UUID)
     case session(UUID, Intent, UUID, expectedAttemptID: UUID? = nil)
     var id: String {
         switch self {
         case .plan: return "plan"
-        case .prepare(_, _, let request), .session(_, _, let request, _): return request.uuidString
+        case .squat(_, let request), .prepare(_, _, let request), .session(_, _, let request, _): return request.uuidString
         }
     }
     static func open(_ session: TrainingSession) -> Self {
@@ -29,6 +30,7 @@ extension TrainingStore {
     func enter(_ entry: TrainingEntry) -> Bool {
         switch entry {
         case .plan: return true
+        case .squat(let side, let request): return prepareSquatPractice(side: side, requestID: request)
         case .prepare(let activity, let arm, let request): return preparePractice(activity, arm: arm, requestID: request)
         case .session(let id, let intent, let request, let expectedAttempt):
             guard let target = archive.sessions.first(where: { $0.id == id && !$0.isFinished }) else {

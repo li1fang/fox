@@ -116,13 +116,14 @@ final class GuidanceSession: ObservableObject {
                 observationID: session.currentObservationId?.uuidString ?? session.currentVisualEvidence?.segments.last?.id.uuidString ?? "manual",
                 executionGeneration: store.executionGeneration.uuidString)
             output.update(.init(context: context, time: time, stage: stage, exercise: session.exercise.visualObservation?.exercise,
-                mode: visual || mode == .off ? mode : .planned, count: session.currentVisualEvidence?.automaticCount ?? 0,
-                targetReps: session.target.targetReps, motion: visual ? motion : nil,
+                mode: visual || mode == .off ? mode : .planned, count: session.observedAutomaticCount,
+                targetReps: session.target.targetReps, motion: visual && !store.countOnlySelected ? motion : nil,
                 tempo: session.exercise.tempo, elapsed: session.elapsed(at: vision.wallTime), countdown: countdown,
                 remainingSets: max(0, session.plan.totalSets - session.records.count),
                 restRemainingSeconds: session.stage == .rest ? session.restRemaining(at: vision.wallTime) : nil,
                 requiresWeightConfirmation: session.target.weightUnit != "bodyweight",
-                plannedCycleLimit: session.exercise.exerciseId == "kegel" ? session.target.targetReps : nil))
+                plannedCycleLimit: session.exercise.exerciseId == "kegel" ? session.target.targetReps : nil,
+                countOnly:(store.countOnlySelected || session.currentAssistedEvidence != nil) ? true:nil))
         } else {
             let stage: GuidanceStage = vision.isPreparing ? (countdown == nil ? .preparing : .countdown) :
                 vision.isCounting ? .active : vision.trialFinished ? .feedback : vision.trialActive ? .paused : .idle

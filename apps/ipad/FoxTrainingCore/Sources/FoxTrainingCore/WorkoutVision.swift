@@ -244,6 +244,9 @@ public struct WorkoutVisualEvidence: Codable, Equatable {
 
 extension LocalSetRecord {
     var resolvedCountingMethod: String {
+        if let evidence=assistedEvidence {
+            return (sideRepetitions?.count(for:evidence.side) ?? reps) == nil ? "unconfirmed" : "manual_with_assisted"
+        }
         guard let evidence = visualEvidence, evidence.hasObservedFrames else { return "manual" }
         guard let actual = sideRepetitions?.count(for: evidence.settings.arm) ?? reps else { return "unconfirmed" }
         if evidence.fallbackReason != nil || (countingEvidenceVersion == 1 && evidence.suggestedCount == nil) {

@@ -57,7 +57,7 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private var runID: UUID?
     private var activeDevice: AVCaptureDevice?
     private var sourceContinuity = CameraSourceContinuity()
-    private var lastProcessed = -Double.infinity
+    private var poseFrameCadence=PoseFrameCadenceGate()
     private var orientation: AVCaptureVideoOrientation = .portrait
     private var observers: [NSObjectProtocol] = []
 
@@ -199,7 +199,7 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             session.commitConfiguration()
             activeDevice = device
             sourceContinuity = CameraSourceContinuity()
-            lastProcessed = -Double.infinity
+            poseFrameCadence.resetSourceClock()
             session.startRunning()
             emit(.running, id: id)
         } catch { emit(.failed(error.localizedDescription), id: id) }
@@ -222,8 +222,7 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         deliverRawSample(sampleBuffer, id: id, physicalSourceID: source?.uniqueID)
         guard poseAnalysisEnabled else { return }
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
-        guard time.isFinite, time - lastProcessed >= 1.0 / 12 else { return }
-        lastProcessed = time
+        guard admitPosePTS(time) else {return}
         autoreleasepool {
             let started = ProcessInfo.processInfo.systemUptime
             do {
@@ -270,7 +269,10 @@ final class PoseCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         diagnosticRecorder?.event(VisionDiagnosticEvent(kind: "captureDropped",
             lastCapturePTS: pts.isFinite ? pts : nil, detail: reason))
     }
+    // Used by the real pre-Vision delegate and public no-camera transport regressions.
+    func admitPosePTS(_ time: Double) -> Bool {poseFrameCadence.accepts(time)}
     private func breakContinuity(id: UUID) {
+        poseFrameCadence.resetSourceClock()
         // The raw owner must seal synchronously before a changed-source frame is delivered.
         onRawDiscontinuity?(id)
         DispatchQueue.main.async { [weak self] in self?.onDiscontinuity?(id) }

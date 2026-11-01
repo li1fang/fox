@@ -28,7 +28,7 @@ public struct GuidancePolicy {
         if let lastTime, input.time - lastTime > 0.35 { stableSince = nil }
         lastTime = input.time
         let presentation = present(input)
-        if input.mode == .observed && input.stage == .active {
+        if input.countOnly != true && input.mode == .observed && input.stage == .active {
             if input.motion?.isFresh(at: input.time) != true && unavailableSince == nil { unavailableSince = input.time }
             if input.motion?.isFresh(at: input.time) == true && !reportedLoss { unavailableSince = nil }
         } else { unavailableSince = nil; reportedLoss = false }
@@ -100,6 +100,10 @@ public struct GuidancePolicy {
     }
 
     private mutating func present(_ input: GuidanceInput) -> GuidancePresentation {
+        if input.countOnly == true {
+            stableSince=nil
+            return .init(source:.unavailable,label:"辅助计数 · 阶段未提供",scale:0.8,isMoving:false)
+        }
         if input.stage == .countdown && input.mode != .off {
             stableSince = nil
             // A lifecycle stage alone cannot invalidate a previous countdown digit.

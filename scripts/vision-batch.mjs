@@ -3,6 +3,7 @@ import { copyFile, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { digestFile } from './vision-diagnostics.mjs';
 import { selectPairedDevice } from './ios-device-selection.mjs';
 
@@ -23,18 +24,21 @@ function archiveEvidence(resultFolder, jobFolder) {
 function validate(job) {
   const mode = job.mode ?? 'controller';
   if (job.schema !== 'fox.vision_batch_job.v1' || !uuid.test(job.id ?? '') || !['cache','diagnostic','video'].includes(job.kind)
-      || !['controller','observations'].includes(mode)
+      || !['controller','observations','countOnly'].includes(mode)
       || !name(job.input) || !Array.isArray(job.files) || job.files.length < 1 || job.files.length > 4
-      || !Array.isArray(job.cases) || (mode === 'controller' ? job.cases.length < 1 || job.cases.length > 16
+      || !Array.isArray(job.cases) || (mode !== 'observations' ? job.cases.length < 1 || job.cases.length > 16
         : job.cases.length !== 0 || job.kind === 'diagnostic')
       || new Set(job.files.map(f=>f.path)).size !== job.files.length || !job.files.some(f=>f.path === job.input)
       || new Set(job.cases.map(c=>c.id)).size !== job.cases.length) throw Error('Invalid batch job');
+  if (mode === 'countOnly' && (job.kind !== 'cache' || job.settings != null)) throw Error('Count-only requires frozen cache runtime');
   for (const f of job.files) {
     if (!name(f.path) || !Number.isSafeInteger(f.bytes) || f.bytes <= 0 || f.bytes > 512*1024*1024
         || !/^[a-f0-9]{64}$/.test(f.sha256 ?? '')) throw Error('Invalid batch asset');
   }
   for (const c of job.cases) {
-    if (!name(c.id) || !['curl','lateralRaise','latPulldown'].includes(c.exercise) || !['left','right'].includes(c.arm)
+    const actionOK = mode === 'countOnly' ? ['curl','squat'].includes(c.countOnlyAction) && c.exercise == null
+      && c.rebindAtSeconds?.length === 0 : ['curl','lateralRaise','latPulldown'].includes(c.exercise) && c.countOnlyAction == null;
+    if (!name(c.id) || !actionOK || !['left','right'].includes(c.arm)
         || !Number.isFinite(c.startSeconds) || !Number.isFinite(c.endSeconds) || c.startSeconds < 0
         || c.endSeconds <= c.startSeconds || c.endSeconds-c.startSeconds > 600 || !Array.isArray(c.rebindAtSeconds)
         || c.rebindAtSeconds.length > 50 || c.rebindAtSeconds.some((v,i,a)=>!Number.isFinite(v)
@@ -52,10 +56,12 @@ export async function validateBatchJob(folder) {
   return { job, jobSHA256:digest(bytes) };
 }
 
-export async function prepareBatch({source,kind,cases,settings,destination,mode = 'controller'}) {
+export async function prepareBatch({source,kind,cases,settings,destination,mode = 'controller',assets = []}) {
   const id = randomUUID().toUpperCase(), directory = path.join(destination,id);
   const files = [], input = kind === 'video' ? 'manifest.json' : 'input.jsonl';
   const sourceAssets = [{source:path.resolve(source),path:input}];
+  if (!Array.isArray(assets) || assets.length > 3) throw Error('Too many additional batch assets');
+  for (const asset of assets) sourceAssets.push({source:path.resolve(asset),path:path.basename(asset)});
   if (kind === 'video') {
     const manifest = await json(source);
     if (!name(manifest.asset) || !Number.isFinite(manifest.duration_seconds) || manifest.duration_seconds <= 0
@@ -74,15 +80,72 @@ export async function prepareBatch({source,kind,cases,settings,destination,mode 
   return {id,directory};
 }
 
+export function isCountOnlyArchiveName(value) {
+  return typeof value === 'string' && value.length <= 240
+    && /^[a-zA-Z0-9_.-]{1,100}\.training\.json(?:\.pre-assisted-v[12]-[a-f0-9]{64}-original)?$/.test(value);
+}
 function validateStatus(status, expectedJobSHA256) {
   if (status.schema !== 'fox.vision_batch_status.v1' || status.phase !== 'completed' || status.error != null) throw Error('Batch is not completed');
   if (!uuid.test(status.jobID ?? '') || status.jobSHA256 !== expectedJobSHA256) throw Error('Unexpected batch job digest');
   if (!Array.isArray(status.files) || !status.files.some(f=>f.path==='result.json') || !status.files.some(f=>f.path==='settings.json')
-      || status.files.length > 3 || new Set(status.files.map(f=>f.path)).size !== status.files.length) throw Error('Missing or duplicate batch result');
+      || status.files.length > 66 || new Set(status.files.map(f=>f.path)).size !== status.files.length) throw Error('Missing or duplicate batch result');
   for (const f of status.files) {
-    if (!['result.json','settings.json','vision.jsonl'].includes(f.path) || !Number.isSafeInteger(f.bytes)
+    if ((!['result.json','settings.json','vision.jsonl'].includes(f.path) && !isCountOnlyArchiveName(f.path)) || !Number.isSafeInteger(f.bytes)
         || f.bytes <= 0 || f.bytes > 64*1024*1024 || !/^[a-f0-9]{64}$/.test(f.sha256 ?? '')) throw Error('Unsafe batch result asset');
   }
+}
+async function verifyCountOnly(folder, result, status) {
+  const algorithms = {curl:'central-continuous-curl-v1',squat:'squat-selected-count-only-v1'};
+  if (result.controllerVersion !== 'workout-coordinator-count-only-v1' || result.inferencePerformed !== false
+      || result.settingsScope !== 'legacy_settings_not_used_by_count_only' || result.cases?.length !== 0
+      || !Array.isArray(result.countOnlyCases) || result.countOnlyCases.length < 1 || result.countOnlyCases.length > 16
+      || new Set(result.countOnlyCases.map(c=>c.specification?.id)).size !== result.countOnlyCases.length) throw Error('Invalid count-only result');
+  const claimed = new Set(['result.json','settings.json']);
+  for (const c of result.countOnlyCases) {
+    const spec = c.specification, record = c.record, evidence = record?.assistedEvidence;
+    if (!name(spec?.id) || !algorithms[spec.countOnlyAction] || !['left','right'].includes(spec.arm)
+        || result.algorithms?.[spec.countOnlyAction] !== algorithms[spec.countOnlyAction]
+        || c.manualConfirmation !== 'unknown' || c.phaseStatus !== 'not_provided'
+        || c.sourceTimebase !== 'original_source_pts_seconds_double_not_complete_cmtime'
+        || c.eventTimeMeaning !== 'count_confirmation_not_anatomical_return_endpoint'
+        || !Number.isFinite(c.sourceOriginSeconds) || c.sourceOriginSeconds !== spec.startSeconds
+        || !Number.isFinite(c.formalStartSeconds) || Math.abs(c.formalStartSeconds-c.sourceOriginSeconds-2) > 1e-9
+        || !Number.isSafeInteger(c.automaticCount) || c.automaticCount < 0
+        || !Array.isArray(c.events) || c.events.length !== c.automaticCount
+        || record.countingMethod !== 'unconfirmed' || record.reps != null || record.sideRepetitions != null
+        || record.visualEvidence != null || record.rhythmAssessment != null || record.formAssessment != null
+        || evidence?.schema !== 'fox.workout_count_only.v1' || evidence.action !== spec.countOnlyAction || evidence.side !== spec.arm
+        || !Array.isArray(evidence.runs)) throw Error('Invalid count-only facts/unknown confirmation');
+    const expected = evidence.runs.flatMap(run => {
+      const value = run.evidence;
+      if (value == null) return [];
+      if (value.phaseStatus !== 'not_provided' || value.action !== spec.countOnlyAction || value.side !== spec.arm
+          || value.algorithm !== algorithms[spec.countOnlyAction] || !Array.isArray(value.events)) throw Error('Invalid count-only observation run');
+      return value.events.map(e=>({completedAtSourcePTSSeconds:value.inputOriginSeconds+e.completedAtSeconds,
+        observationRunID:run.id,segmentID:e.segmentID}));
+    });
+    if (!isDeepStrictEqual(expected,c.events) || c.events.some((e,i,a)=>!Number.isFinite(e.completedAtSourcePTSSeconds)
+        || e.completedAtSourcePTSSeconds < c.formalStartSeconds || e.completedAtSourcePTSSeconds >= spec.endSeconds
+        || i > 0 && e.completedAtSourcePTSSeconds <= a[i-1].completedAtSourcePTSSeconds)) throw Error('Detached count-only events');
+    if (!Array.isArray(c.admittedFramePTSSeconds) || c.admittedFramePTSSeconds.some((v,i,a)=>!Number.isFinite(v)
+        || v < spec.startSeconds || v >= spec.endSeconds || i > 0 && v <= a[i-1])) throw Error('Invalid source PTS seconds');
+    if (c.events.some(e=>!c.admittedFramePTSSeconds.some(t=>Math.abs(t-e.completedAtSourcePTSSeconds)<=1e-9))) throw Error('Confirmation absent from admitted source PTS seconds');
+    const main = `${spec.id}.training.json`;
+    if (!Array.isArray(c.archiveAssets) || c.archiveAssets.length !== 2
+        || !c.archiveAssets.some(f=>f.path === main)
+        || !c.archiveAssets.some(f=>f.path.startsWith(main+'.pre-assisted-v2-'))) throw Error('Missing count-only archive or original v2 backup');
+    for (const asset of c.archiveAssets) {
+      if (!isCountOnlyArchiveName(asset.path) || !(asset.path === main || asset.path.startsWith(main+'.'))
+          || asset.path !== main && !asset.path.endsWith(`-${asset.sha256}-original`)
+          || claimed.has(asset.path) || !isDeepStrictEqual(status.files.find(f=>f.path === asset.path),asset)) throw Error('Detached count-only archive asset');
+      claimed.add(asset.path);
+      if (asset.path !== main && (await json(path.join(folder,asset.path))).schemaVersion !== 2) throw Error('Count-only original backup is not v2');
+    }
+    const archive = await json(path.join(folder,main));
+    const saved = archive.sessions?.flatMap(s=>s.records ?? []).filter(r=>r.id === record.id);
+    if (archive.schemaVersion !== 3 || saved?.length !== 1 || !isDeepStrictEqual(saved[0],record)) throw Error('Actual count-only archive does not match record');
+  }
+  if (status.files.some(f=>!claimed.has(f.path))) throw Error('Unclaimed count-only result asset');
 }
 export async function verifyBatchResult(folder, expectedJobSHA256) {
   const info = await lstat(path.join(folder,'status.json'));
@@ -100,6 +163,8 @@ export async function verifyBatchResult(folder, expectedJobSHA256) {
   if (result.mode === 'observations' && (result.controllerVersion !== 'not-run' || result.cases?.length !== 0
       || !Number.isSafeInteger(result.observationFrameCount) || result.observationFrameCount < 2
       || Object.keys(result.algorithms ?? {}).length !== 0)) throw Error('Invalid observations-only result');
+  if (result.mode === 'countOnly') await verifyCountOnly(folder,result,status);
+  else if (status.files.length > 3 || status.files.some(f=>isCountOnlyArchiveName(f.path))) throw Error('Unexpected count-only archive in legacy result');
   return {status,result};
 }
 
@@ -126,15 +191,20 @@ export async function importBatchResult(source, destination, expectedJobSHA256) 
   return verified;
 }
 
+export function batchLaunchEnvironment(job) { return {FOX_POSE_BATCH_JOB:job.id,...(job.mode === 'countOnly' ? {FOX_COUNT_ONLY_DIAGNOSTIC:'1'} : {})}; }
+export function batchCounts(result) { return result.mode === 'countOnly' ? result.countOnlyCases.map(c=>({id:c.specification.id,count:c.automaticCount}))
+  : result.cases.map(c=>({id:c.specification.id,count:c.repetitions.length})); }
+
 async function cli() {
   const [command,...args] = process.argv.slice(2);
   const option = key => { const i = args.indexOf(key); return i < 0 ? undefined : args[i+1]; };
   if (command === 'prepare') {
     const mode = option('--mode') ?? 'controller';
-    if (!args[0] || (mode !== 'observations' && !option('--cases'))) throw Error('prepare <source> --kind cache|diagnostic|video [--mode observations | --cases <json>] [--settings <json>]');
+    if (!args[0] || (mode !== 'observations' && !option('--cases'))) throw Error('prepare <source> --kind cache|diagnostic|video [--mode controller|observations|countOnly] [--cases <json>] [--asset <frozen-clock-or-index>] [--settings <json>]');
     return prepareBatch({source:path.resolve(args[0]), kind:option('--kind') ?? 'cache', mode,
       cases:option('--cases') ? await json(option('--cases')) : [],
       settings:option('--settings') ? await json(option('--settings')) : undefined,
+      assets:args.flatMap((v,i)=>v === '--asset' ? [args[i+1]] : []),
       destination:path.resolve(option('--destination') ?? path.join(root,'.data/vision-replay/jobs'))});
   }
   if (!['run','pull','verify'].includes(command) || !args[0]) throw Error('Expected prepare, run <job-folder>, pull <job-folder>, or verify <result-folder> --job <job-folder>');
@@ -143,7 +213,7 @@ async function cli() {
   if (command === 'verify') {
     const value = await verifyBatchResult(path.resolve(args[0]),jobSHA256);
     return {status:'verified',jobID:job.id,mode:value.result.mode ?? 'controller',observationFrameCount:value.result.observationFrameCount,
-      counts:value.result.cases.map(c=>({id:c.specification.id,count:c.repetitions.length}))};
+      counts:batchCounts(value.result)};
   }
   const work = path.join(root,'.tmp/vision-batch',randomUUID()); await mkdir(work,{recursive:true,mode:0o700});
   let sequence = 0;
@@ -173,7 +243,7 @@ async function cli() {
     }
     await tool(['device','copy','to',...domain,'--source',jobFolder,'--destination',`Documents/FoxReplay/Jobs/${job.id}`]);
     await tool(['device','process','launch','--device',device,...(args.includes('--replace-running') ? ['--terminate-existing'] : []),
-      '--environment-variables',JSON.stringify({FOX_POSE_BATCH_JOB:job.id}),'com.whipa.fox']);
+      '--environment-variables',JSON.stringify(batchLaunchEnvironment(job)),'com.whipa.fox']);
   }
   const staging = path.join(work,'result'); await mkdir(staging,{mode:0o700});
   const statusFile = path.join(staging,'status.json');
@@ -212,7 +282,7 @@ async function cli() {
   return {status:'device-completed-and-verified',jobID:job.id,directory:destination,
     evidenceDirectory:evidence.directory,
     mode:verified.result.mode ?? 'controller',observationFrameCount:verified.result.observationFrameCount,
-    inferencePerformed:verified.result.inferencePerformed,counts:verified.result.cases.map(c=>({id:c.specification.id,count:c.repetitions.length}))};
+    inferencePerformed:verified.result.inferencePerformed,counts:batchCounts(verified.result)};
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { console.log(JSON.stringify(await cli(),null,2)); }

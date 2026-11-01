@@ -407,6 +407,11 @@ struct SessionSummary: View {
                         Text(weightText(record.weight, unit: record.target.weightUnit))
                         Text(durationText(record.durationSeconds))
                     }.font(.system(size: detailSize)).monospacedDigit()
+                    if let evidence=record.assistedEvidence {
+                        Text(evidence.action == .squat ? "辅助观测：\(evidence.automaticCount) 次 · 近侧：\(evidence.side.nearLegSideLabel) · 人工确认独立" : "辅助观测：\(evidence.side.label) \(evidence.automaticCount) 次 · 人工确认独立")
+                            .font(.system(size:observationSize)).accessibilityIdentifier("saved-assisted-observation")
+                        Text("阶段、节奏与动作质量：未提供").foregroundStyle(.secondary)
+                    }
                     if let evidence = record.visualEvidence {
                         Text("视觉观测：\(evidence.settings.arm.label) \(evidence.automaticCount) 次").font(.system(size: observationSize))
                         if evidence.hasIncompleteCoverage { Text("观测不完整").foregroundStyle(.secondary) }

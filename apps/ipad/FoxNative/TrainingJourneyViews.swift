@@ -7,14 +7,14 @@ struct TrainingArmChoice {
     let arm: ArmSide
 
     static func current(_ choice: Self?, session: TrainingSession) -> ArmSide {
-        if let evidence = session.currentVisualEvidence { return evidence.settings.arm }
+        if let side=session.observedSide { return side }
         if let side = session.exercise.targetSide { return side }
         if let choice, choice.attemptID == session.currentSetAttemptId { return choice.arm }
         return session.exercise.visualObservation?.arm ?? .left
     }
 
     static func canChange(session: TrainingSession) -> Bool {
-        guard session.currentVisualEvidence == nil, session.stage == .ready else { return false }
+        guard session.currentVisualEvidence == nil, session.currentAssistedEvidence == nil, session.stage == .ready else { return false }
         return session.plan.isQuickPractice == true ? session.canReplaceQuickPractice : session.exercise.targetSide == nil
     }
 }
@@ -23,6 +23,7 @@ struct TrainingActivityPicker: View {
     let current: TrainingActivity?
     let next: TrainingActivity?
     let canReplace: Bool
+    var chooseSquat: (() -> Void)? = nil
     let choose: (TrainingActivity) -> Void
 
     var body: some View {
@@ -33,6 +34,9 @@ struct TrainingActivityPicker: View {
             }
             if let next {
                 Text("下一动作：\(next.label)").font(.callout).accessibilityIdentifier("activity-next")
+            }
+            if canReplace, let chooseSquat {
+                Button("侧面徒手深蹲 · 辅助计数",action:chooseSquat).accessibilityIdentifier("choose-development-squat")
             }
             ForEach(TrainingActivity.allCases) { activity in
                 Button { choose(activity) } label: {

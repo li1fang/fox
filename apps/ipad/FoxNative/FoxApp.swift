@@ -12,7 +12,9 @@ struct FoxApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            if let raw = ProcessInfo.processInfo.environment["FOX_POSE_BATCH_JOB"], let id = UUID(uuidString: raw) {
+            if ProcessInfo.processInfo.environment["FOX_COUNT_ONLY_DIAGNOSTIC"] == "1", ProcessInfo.processInfo.environment["FOX_POSE_BATCH_JOB"].flatMap(UUID.init(uuidString:)) == nil {
+                Text("诊断runID无效").accessibilityIdentifier("batch-invalid-run-id")
+            } else if let raw = ProcessInfo.processInfo.environment["FOX_POSE_BATCH_JOB"], let id = UUID(uuidString: raw) {
                 VisionReplayBatchView(id: id)
             } else { normalRoot.foxReservedSpace() }
             #else

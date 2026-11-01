@@ -11,6 +11,8 @@ public struct TrainingFeedbackDraft: Codable, Equatable {
 
 public struct TrainingClientState: Codable, Equatable {
     public var manual = false
+    /// nil is the old side-view mode. Only development UI may currently set true.
+    public var assistedCurl: Bool? = nil
     public var summary = ""
     public var nextActivity: String?
     public var selectedArms: [String: ArmSide] = [:]
@@ -46,10 +48,11 @@ extension TrainingSession {
     }
     // Legacy creation/skip timestamps and preparation frames are not execution evidence.
     public var evidencedExecutionStart: Date? {
-        ([actualStartedAt, setStartedAt].compactMap { $0 }
-         + records.filter { $0.status != "skipped" }.compactMap(\.startedAt)
-         + (currentVisualEvidence?.segments.compactMap(\.startedAt) ?? [])
-         + records.flatMap { $0.visualEvidence?.segments.compactMap(\.startedAt) ?? [] }).min()
+        var dates: [Date] = [actualStartedAt, setStartedAt].compactMap { $0 }
+        dates.append(contentsOf: records.filter { $0.status != "skipped" }.compactMap(\.startedAt))
+        dates.append(contentsOf: currentVisualEvidence?.segments.compactMap(\.startedAt) ?? [])
+        dates.append(contentsOf: records.flatMap { $0.visualEvidence?.segments.compactMap(\.startedAt) ?? [] })
+        return dates.min()
     }
     public var entryTitle: String {
         if stage == .feedback || stage == .summary { return "核对训练记录" }

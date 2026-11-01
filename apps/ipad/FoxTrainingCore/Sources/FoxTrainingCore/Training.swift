@@ -147,6 +147,7 @@ public struct LocalSetRecord: Codable, Equatable, Identifiable {
     public var targetSide: ArmSide? = nil
     public var sideRepetitions: SideRepetitions? = nil
     public var visualEvidence: WorkoutVisualEvidence? = nil
+    public var assistedEvidence: WorkoutCountOnlyEvidence? = nil
     public var correctionReason: String? = nil
     public var rhythmAssessment: WorkoutRhythmAssessment? = nil
     public var formAssessment: WorkoutFormAssessment? = nil
@@ -194,6 +195,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
     public private(set) var currentSetAttemptId: UUID? = UUID()
     public private(set) var currentObservationId: UUID? = nil
     public private(set) var currentVisualEvidence: WorkoutVisualEvidence? = nil
+    public private(set) var currentAssistedEvidence: WorkoutCountOnlyEvidence? = nil
     public var currentSetBinding: WorkoutSetBinding? {
         currentSetAttemptId.map { WorkoutSetBinding(sessionId: id, exerciseId: exercise.exerciseId,
             setIndex: target.setIndex, attemptId: $0) }
@@ -206,7 +208,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
 
     public var canReplaceQuickPractice: Bool {
         plan.isQuickPractice == true && stage == .ready && records.isEmpty && setStartedAt == nil &&
-            currentVisualEvidence == nil && currentObservationId == nil && currentWeightConfirmation == nil
+            currentVisualEvidence == nil && currentAssistedEvidence == nil && currentObservationId == nil && currentWeightConfirmation == nil
     }
 
     public mutating func replaceQuickPractice(with plan: TrainingPlan, at now: Date) throws {
@@ -272,7 +274,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
     @discardableResult
     public mutating func prepareVisual(settings: WorkoutObservationSettings, configuration: PoseCounterConfiguration,
                                        runtimePolicy: PoseRuntimePolicy, source: VisionInputSource, at now: Date) throws -> UUID {
-        guard stage == .ready || stage == .paused, currentObservationId == nil,
+        guard stage == .ready || stage == .paused, currentObservationId == nil, currentAssistedEvidence == nil,
               exercise.visualObservation?.exercise == settings.exercise, target.targetReps != nil,
               exercise.targetSide == nil || exercise.targetSide == settings.arm else {
             throw TrainingError.invalidTransition
@@ -292,6 +294,47 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         next.currentObservationId = id
         self = next
         return id
+    }
+
+    /// User starts training independently of camera/pose readiness. Observation is best effort.
+    @discardableResult
+    public mutating func beginAssistedCurl(side: ArmSide, source: VisionInputSource, at now: Date) throws -> UUID {
+        try beginCountOnly(action:.curl,side:side,source:source,at:now)
+    }
+    @discardableResult
+    public mutating func beginCountOnly(action: CountOnlyAction, side: ArmSide, source: VisionInputSource, at now: Date) throws -> UUID {
+        guard [.ready, .paused].contains(stage), currentObservationId == nil, currentVisualEvidence == nil,
+              action.isCompatible(with:exercise), target.targetReps != nil,
+              exercise.targetSide == nil || exercise.targetSide == side else { throw TrainingError.invalidTransition }
+        var next=self
+        if let old=next.currentAssistedEvidence {
+            guard old.binding == next.currentSetBinding, old.side == side, old.source == source, old.action == action else { throw TrainingError.invalidTransition }
+        } else {
+            next.currentAssistedEvidence=WorkoutCountOnlyEvidence(binding:next.currentSetBinding!,side:side,source:source,action:action)
+        }
+        let id=try next.currentAssistedEvidence!.begin(at:now)
+        try next.startTimedSet(at:now);next.currentObservationId=id;self=next;return id
+    }
+    /// Presentation/camera restart rotates observation identity without pausing the user's set.
+    @discardableResult
+    public mutating func renewCountOnlyObservation(at now: Date) throws -> UUID {
+        guard stage == .active, currentAssistedEvidence != nil, currentVisualEvidence == nil,
+              now.timeIntervalSince1970.isFinite, now >= lastCheckpointAt else { throw TrainingError.invalidTransition }
+        var next=self
+        next.currentAssistedEvidence!.end(.cameraInterrupted,at:now)
+        let id=try next.currentAssistedEvidence!.begin(at:now)
+        next.currentObservationId=id;next.lastCheckpointAt=now;self=next;return id
+    }
+    public mutating func updateAssistedCurl(binding: WorkoutSetBinding, observationId: UUID,
+                                           evidence: AssistedCurlEvidence, appleRevision: Int, at now: Date) throws {
+        try updateCountOnly(binding:binding,observationId:observationId,evidence:CountOnlyEvidence(evidence),appleRevision:appleRevision,at:now)
+    }
+    public mutating func updateCountOnly(binding: WorkoutSetBinding, observationId: UUID,
+                                        evidence: CountOnlyEvidence, appleRevision: Int, at now: Date) throws {
+        guard stage == .active, binding == currentSetBinding, observationId == currentObservationId,
+              currentAssistedEvidence?.binding == binding, now.timeIntervalSince1970.isFinite else { throw TrainingError.invalidTransition }
+        try currentAssistedEvidence!.update(id:observationId,evidence:evidence,revision:appleRevision,at:now)
+        lastCheckpointAt=now
     }
 
     public mutating func beginVisual(observationId: UUID, at now: Date) throws {
@@ -315,17 +358,20 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
     public mutating func useManualCounting(reason: WorkoutManualReason, at now: Date) throws {
         guard stage == .ready || stage == .active || stage == .paused else { throw TrainingError.invalidTransition }
         currentVisualEvidence?.useManual(reason: reason, at: now)
+        currentAssistedEvidence?.end(.cameraInterrupted, at: now)
         currentObservationId = nil
     }
 
     public mutating func cancelVisualPreparation(at now: Date) throws {
         guard stage == .ready || stage == .paused, currentObservationId != nil else { throw TrainingError.invalidTransition }
         currentVisualEvidence?.end(reason: .pause, at: now)
+        currentAssistedEvidence?.end(.pause, at: now)
         currentObservationId = nil
     }
 
     mutating func invalidateVisualAfterRestart() {
         currentVisualEvidence?.end(reason: .restart, at: lastCheckpointAt)
+        currentAssistedEvidence?.end(.restart, at: lastCheckpointAt)
         currentObservationId = nil
     }
 
@@ -340,6 +386,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         lastCheckpointAt = now
         stage = .paused
         currentVisualEvidence?.end(reason: .pause, at: now)
+        currentAssistedEvidence?.end(.pause, at: now)
         currentObservationId = nil
     }
 
@@ -350,6 +397,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         lastCheckpointAt = now
         stage = .feedback
         currentVisualEvidence?.end(reason: .userFinished, at: now)
+        currentAssistedEvidence?.end(.userFinished, at: now)
         currentObservationId = nil
     }
 
@@ -439,6 +487,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
             accumulatedSeconds = elapsed(at: now)
             segmentStartedAt = nil
             currentVisualEvidence?.end(reason: .userFinished, at: now)
+        currentAssistedEvidence?.end(.userFinished, at: now)
             appendRecord(reps: nil, feedback: [], notes: "提前结束；实际次数未确认", status: "partial", at: now)
         }
         endedEarly = true
@@ -454,6 +503,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
 
     private mutating func appendRecord(reps: Int?, sides: SideRepetitions? = nil, feedback: [SetFeedback], notes: String, status: String, at now: Date) {
         currentVisualEvidence?.end(reason: .userFinished, at: now)
+        currentAssistedEvidence?.end(.userFinished, at: now)
         var record = LocalSetRecord(id: currentSetAttemptId ?? UUID(), exerciseId: exercise.exerciseId, exerciseName: exercise.name,
             target: target, status: status, reps: reps, weight: status == "skipped" ? nil : currentWeightConfirmation?.weight, durationSeconds: accumulatedSeconds,
             feedback: Set(feedback).sorted { $0.rawValue < $1.rawValue }, notes: notes,
@@ -462,18 +512,24 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         record.targetSide = exercise.targetSide
         record.weightConfirmation = status == "skipped" ? nil : currentWeightConfirmation
         record.visualEvidence = currentVisualEvidence
-        record.countingEvidenceVersion = currentVisualEvidence == nil ? nil : 1
+        record.assistedEvidence = currentAssistedEvidence
+        record.countingEvidenceVersion = currentAssistedEvidence != nil ? 2 : (currentVisualEvidence == nil ? nil : 1)
         if let evidence = currentVisualEvidence {
             record.rhythmAssessment = WorkoutRhythmAssessment.assess(repetitions: evidence.repetitions, tempo: exercise.tempo)
             record.formAssessment = WorkoutFormAssessment()
         }
         applyCountingSource(to: &record)
         records.append(record)
-        currentVisualEvidence = nil; currentObservationId = nil
+        currentVisualEvidence = nil; currentAssistedEvidence = nil; currentObservationId = nil
     }
 
     private func applyCountingSource(to record: inout LocalSetRecord) {
         record.countingMethod = record.resolvedCountingMethod
+        if let evidence=record.assistedEvidence {
+            let actual=record.sideRepetitions?.count(for:evidence.side) ?? record.reps
+            record.correctionReason=actual == nil || actual == evidence.automaticCount ? nil : (record.notes.isEmpty ? "人工核对" : record.notes)
+            return
+        }
         guard let evidence = record.visualEvidence, evidence.hasObservedFrames else { return }
         guard let actual = record.sideRepetitions?.count(for: evidence.settings.arm) ?? record.reps else {
             return
@@ -486,6 +542,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         restDeadline = nil
         stage = .summary
         currentVisualEvidence?.end(reason: .userFinished, at: now)
+        currentAssistedEvidence?.end(.userFinished, at: now)
         currentObservationId = nil
     }
 
@@ -533,11 +590,11 @@ public struct TrainingArchive: Codable, Equatable {
     }
 
     public func validate() throws {
-        guard [1, 2].contains(schemaVersion) else { throw TrainingError.unsupportedVersion }
+        guard [1, 2, 3].contains(schemaVersion) else { throw TrainingError.unsupportedVersion }
         try plan.validate()
-        guard (schemaVersion == 2 || sessions.filter({ !$0.isFinished }).count <= 1),
+        guard (schemaVersion >= 2 || sessions.filter({ !$0.isFinished }).count <= 1),
               Set(sessions.map(\.id)).count == sessions.count else { throw TrainingError.corruptArchive }
-        if schemaVersion == 2 {
+        if schemaVersion >= 2 {
             guard (revision ?? -1) >= 0,
                   foregroundSessionID == nil || currentSession != nil,
                   sessions.allSatisfy({ $0.id == foregroundSessionID || ($0.stage != .active && $0.currentObservationId == nil && $0.segmentStartedAt == nil) }),
@@ -571,13 +628,22 @@ public struct TrainingArchive: Codable, Equatable {
                       session.currentObservationId == nil || (evidence.segments.last?.id == session.currentObservationId && evidence.segments.last?.endedAt == nil) else {
                     throw TrainingError.corruptArchive
                 }
-            } else if session.currentObservationId != nil { throw TrainingError.corruptArchive }
+            } else if session.currentObservationId != nil && session.currentAssistedEvidence == nil { throw TrainingError.corruptArchive }
+            if let evidence=session.currentAssistedEvidence {
+                try evidence.validate()
+                guard schemaVersion == 3, session.currentVisualEvidence == nil,
+                      evidence.binding == session.currentSetBinding,
+                      evidence.action.isCompatible(with:session.exercise),
+                      session.exercise.targetSide == nil || evidence.side == session.exercise.targetSide,
+                      session.currentObservationId == nil || (session.stage == .active && evidence.runs.last?.id == session.currentObservationId && evidence.runs.last?.endedAt == nil),
+                      evidence.runs.last?.endedAt != nil || evidence.runs.isEmpty || session.currentObservationId != nil else { throw TrainingError.corruptArchive }
+            }
             if let confirmation = session.currentWeightConfirmation {
                 guard let attemptID = session.currentSetAttemptId else { throw TrainingError.corruptArchive }
                 try confirmation.validate(attemptID: attemptID, weight: session.currentWeight, unit: session.target.weightUnit)
             }
             for record in session.records {
-                guard (record.countingEvidenceVersion == nil || record.countingEvidenceVersion == 1),
+                guard (record.countingEvidenceVersion == nil || record.countingEvidenceVersion == 1 || record.countingEvidenceVersion == 2),
                       ["completed", "partial", "skipped"].contains(record.status),
                       record.durationSeconds.isFinite, record.durationSeconds >= 0,
                       record.reps.map({ (0...1000).contains($0) }) ?? true,
@@ -592,6 +658,16 @@ public struct TrainingArchive: Codable, Equatable {
                 guard record.sideRepetitions == nil || (record.repetitionBasis == .perSide && record.reps == record.sideRepetitions?.commonCount) else {
                     throw TrainingError.corruptArchive
                 }
+                if let evidence=record.assistedEvidence {
+                    try evidence.validate()
+                    guard schemaVersion == 3, record.visualEvidence == nil, record.countingEvidenceVersion == 2,
+                          evidence.binding.sessionId == session.id, evidence.binding.attemptId == record.id,
+                          evidence.binding.exerciseId == record.exerciseId, evidence.binding.setIndex == record.target.setIndex,
+                          session.plan.exercises.contains(where: { $0.exerciseId == record.exerciseId && evidence.action.isCompatible(with:$0) }),
+                          record.targetSide == nil || record.targetSide == evidence.side,
+                          evidence.runs.allSatisfy({ $0.endedAt != nil }), record.rhythmAssessment == nil, record.formAssessment == nil,
+                          record.countingMethod == record.resolvedCountingMethod else { throw TrainingError.corruptArchive }
+                } else if record.countingEvidenceVersion == 2 { throw TrainingError.corruptArchive }
                 if let evidence = record.visualEvidence {
                     try evidence.validate()
                     guard let exercise = session.plan.exercises.first(where: { $0.exerciseId == record.exerciseId }),
@@ -681,6 +757,7 @@ public final class LocalTrainingRepository {
         var next = archive
         next.promote()
         try mutate(&next)
+        if next.sessions.contains(where: { $0.currentAssistedEvidence != nil || $0.records.contains(where: { $0.assistedEvidence != nil }) }) { next.schemaVersion=3 }
         if next.sessions.first(where: { $0.id == next.foregroundSessionID })?.isFinished == true { next.foregroundSessionID = nil }
         next.revision = revision + 1
         try next.validate()
@@ -698,6 +775,11 @@ public final class LocalTrainingRepository {
                 guard try Data(contentsOf: legacyBackupURL) == original else { throw TrainingError.corruptArchive }
             } else { try original.write(to: legacyBackupURL, options: .withoutOverwriting) }
             guard try Data(contentsOf: legacyBackupURL) == original else { throw TrainingError.corruptArchive }
+        }
+        if archive.schemaVersion < 3, next.schemaVersion == 3, let original=loadedBytes {
+            let backup=fileURL.appendingPathExtension("pre-assisted-v\(archive.schemaVersion)-\(TrainingArchiveDigest.sha256(original))-original")
+            if !FileManager.default.fileExists(atPath:backup.path) { try original.write(to:backup,options:.withoutOverwriting) }
+            guard try Data(contentsOf:backup) == original else { throw TrainingError.corruptArchive }
         }
         let data = try Self.encoder().encode(next)
         try writer(data, fileURL)

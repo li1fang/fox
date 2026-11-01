@@ -21,10 +21,11 @@ struct VisionBatchCancelled: LocalizedError {
 
 struct VisionBatchJob: Codable {
     enum Kind: String, Codable { case cache, diagnostic, video }
-    enum Mode: String, Codable { case controller, observations }
+    enum Mode: String, Codable { case controller, observations, countOnly }
     struct Case: Codable {
         var id: String
-        var exercise: VisionExercise
+        var exercise: VisionExercise?
+        var countOnlyAction: CountOnlyAction? = nil
         var arm: ArmSide
         var startSeconds: Double
         var endSeconds: Double
@@ -44,14 +45,22 @@ struct VisionBatchJob: Codable {
         !name.isEmpty && name.count <= 100 && name != "." && name != ".." &&
             name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == ".") }
     }
-    func validate(id expectedID: UUID, folder: URL) throws {
+    func validate(id expectedID: UUID, folder: URL, countOnlyDiagnosticEnabled: Bool = ProcessInfo.processInfo.environment["FOX_COUNT_ONLY_DIAGNOSTIC"] == "1") throws {
         guard schema == "fox.vision_batch_job.v1", id == expectedID, Self.safeName(input),
               (1...4).contains(files.count), Set(files.map(\.path)).count == files.count,
               files.contains(where: { $0.path == input }),
-              (effectiveMode == .controller ? (1...16).contains(cases.count) : cases.isEmpty && kind != .diagnostic),
+              (effectiveMode != .observations ? (1...16).contains(cases.count) : cases.isEmpty && kind != .diagnostic),
               Set(cases.map(\.id)).count == cases.count else { throw VisionDiagnosticArchive.error("Invalid batch manifest") }
+        if effectiveMode == .countOnly {
+            guard countOnlyDiagnosticEnabled, kind == .cache, settings == nil else {
+                throw VisionDiagnosticArchive.error("Count-only diagnostics require explicit admission, public raw cache and frozen runtime")
+            }
+        }
         try settings?.validate()
         for c in cases {
+            guard effectiveMode == .countOnly ? (c.countOnlyAction != nil && c.exercise == nil && c.rebindAtSeconds.isEmpty) : (c.exercise != nil && c.countOnlyAction == nil) else {
+                throw VisionDiagnosticArchive.error("Diagnostic action/mode mismatch")
+            }
             guard Self.safeName(c.id), c.startSeconds.isFinite, c.endSeconds.isFinite,
                   c.startSeconds >= 0, c.endSeconds > c.startSeconds, c.endSeconds - c.startSeconds <= 600,
                   c.rebindAtSeconds.count <= 50, c.rebindAtSeconds == c.rebindAtSeconds.sorted(),
@@ -97,17 +106,19 @@ struct VisionBatchResult: Codable {
     let mode: VisionBatchJob.Mode
     let observationFrameCount: Int
     let inputProvenance: [String: String]
-    let controllerVersion: String
+    var controllerVersion: String
     let appVersion: String
     let appBuild: String
     let device: String
     let platform: String
     let settings: PoseSessionSettings
     let settingsSHA256: String
-    let algorithms: [String: String]
+    var algorithms: [String: String]
     let cases: [VisionBatchCaseResult]
     // Captured from the executing app bundle, not inferred from the developer's later checkout.
     var motionStrategies: [MotionStrategy]? = nil
+    var countOnlyCases: [CountOnlyBatchCaseResult]? = nil
+    var settingsScope: String? = nil
     var evidenceBoundary = "offline-observations-through-real-controller-not-live-camera-or-new-human-acceptance"
 }
 struct VisionBatchStatus: Codable {
@@ -124,7 +135,7 @@ struct VisionBatchStatus: Codable {
 enum VisionReplayBatch {
     static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
-    static func run(id: UUID, documents: URL, control: VisionBatchControl = .init(),
+    static func run(id: UUID, documents: URL, control: VisionBatchControl = .init(), countOnlyDiagnosticEnabled: Bool? = nil,
                     progress: @escaping @MainActor (String, Int) -> Void = { _, _ in }) async throws -> VisionBatchResult {
         let manager = FileManager.default, root = documents.appendingPathComponent("FoxReplay")
         // CoreDevice owns uploaded directories; App-owned output must be outside that read-only inbox.
@@ -140,11 +151,13 @@ enum VisionReplayBatch {
         }
         do {
             try saveStatus(); try control.check(); try Task.checkCancellation()
+            let folderInfo=try input.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey])
+            guard folderInfo.isDirectory == true, folderInfo.isSymbolicLink != true else {throw VisionDiagnosticArchive.error("Invalid batch input directory")}
             let jobURL = input.appendingPathComponent("job.json")
             guard try VisionDiagnosticArchive.asset(jobURL).bytes <= 128 * 1024 else { throw VisionDiagnosticArchive.error("Batch manifest too large") }
             let bytes = try Data(contentsOf: jobURL), job = try JSONDecoder().decode(VisionBatchJob.self, from: bytes)
             status.jobSHA256 = digest(bytes)
-            try job.validate(id: id, folder: input)
+            try job.validate(id: id, folder: input, countOnlyDiagnosticEnabled: countOnlyDiagnosticEnabled ?? (ProcessInfo.processInfo.environment["FOX_COUNT_ONLY_DIAGNOSTIC"] == "1"))
             let settings = job.settings ?? PoseSessionSettings(configuration: .standard, runtimePolicy: .standard)
             let cache: URL
             if job.kind == .video {
@@ -179,29 +192,49 @@ enum VisionReplayBatch {
                 }
             } else {
                 let header = try JSONDecoder().decode([String: String].self, from: Data(lines[0].utf8))
+                if job.effectiveMode == .countOnly {
+                    guard header["schema"] == "fox.count_only_pose_input.v1", header["visionRevision"] == "1",
+                          header["timebase"] == "source_pts_seconds", header["coordinateConvention"] == "vision-normalized-bottom-left-pixel-up-v1",
+                          ["unknown","known_unmirrored","known_mirrored"].contains(header["pixelMirror"] ?? ""),
+                          (header["inputClass"] == "public" && header["source"] == "apple_vision_2d" || header["inputClass"] == "public_synthetic" && header["source"] == "synthetic_fixture"),
+                          let sha=header["sourceSHA256"], sha.count == 64, sha.allSatisfy({$0.isHexDigit && !$0.isUppercase}) else {
+                        throw VisionDiagnosticArchive.error("Count-only replay accepts declared public Apple observations or public synthetic controls only")
+                    }
+                } else {
                 guard header["schema"] == "fox.pose_comparison_cache.v1", header["visionRevision"] == "1",
                       header["sampledHz"] == "10", header["videoSHA256"]?.count == 64,
                       header["source"] != nil else { throw VisionDiagnosticArchive.error("Unsupported pose cache provenance") }
+                }
                 provenance = header
                 frames = try lines.dropFirst().map { try JSONDecoder().decode(PoseVideoRow.self, from: Data($0.utf8)).frame() }
             }
             guard frames.count >= 2, zip(frames, frames.dropFirst()).allSatisfy({ $0.timestamp < $1.timestamp }),
                   frames.last!.timestamp - frames.first!.timestamp <= 600.1 else { throw VisionDiagnosticArchive.error("Empty, non-monotonic or oversized cache timeline") }
-            status.phase = job.effectiveMode == .controller ? "replaying" : "observing"
+            status.phase = job.effectiveMode == .observations ? "observing" : "replaying"
             if job.effectiveMode == .observations { status.processedFrames = frames.count }
             try saveStatus()
             var results: [VisionBatchCaseResult] = []
+            var countOnlyResults: [CountOnlyBatchCaseResult] = []
             let work = output.appendingPathComponent("work")
             defer { try? manager.removeItem(at: work) }
             for item in job.cases {
                 let selected = frames.filter { $0.timestamp >= item.startSeconds && $0.timestamp < item.endSeconds }
                 guard selected.count >= 2 else { throw VisionDiagnosticArchive.error("Empty batch segment: \(item.id)") }
+                if job.effectiveMode == .countOnly {
+                    let base=status.processedFrames
+                    let result=try await CountOnlyReplayConsumer.run(item,frames:selected,revision:1,output:output,control:control) {count in
+                        status.processedFrames=base+count
+                        if count%20 == 0 {try saveStatus()}
+                    }
+                    countOnlyResults.append(result);continue
+                }
+                guard let exercise=item.exercise else {throw VisionDiagnosticArchive.error("Missing legacy exercise")}
                 let directory = work.appendingPathComponent(item.id)
                 let controller = VisionLabController(diagnosticRoot: directory.appendingPathComponent("diagnostics"), storageDirectory: directory)
                 let clock = VisionReplayClock(origin: Date(timeIntervalSince1970: 0))
                 controller.enableReplay(clock: clock)
                 try controller.applyConfiguration(settings.configuration, runtimePolicy: settings.runtimePolicy)
-                controller.changeExercise(item.exercise); controller.changeArm(item.arm)
+                controller.changeExercise(exercise); controller.changeArm(item.arm)
                 controller.startCamera(); controller.startCounting()
                 defer { controller.stopCamera() }
                 var trace: [VisionBatchTrace] = [], origin: Double?, rebinds = item.rebindAtSeconds[...]
@@ -228,7 +261,7 @@ enum VisionReplayBatch {
                 }
                 guard rebinds.isEmpty else { throw VisionDiagnosticArchive.error("Rebind command lies outside observed frames") }
                 var report: VisionTrial?
-                if item.exercise == .latPulldown {
+                if exercise == .latPulldown {
                     controller.finishCounting()
                     guard controller.saveReport(referenceCount: nil, notes: "Private replay; not live-camera acceptance", bodyView: .back) else {
                         throw VisionDiagnosticArchive.error(controller.errorMessage ?? "Pulldown report not saved")
@@ -239,6 +272,7 @@ enum VisionReplayBatch {
                     resetCounts: controller.diagnostics.resetCounts, trace: trace, validatedReport: report))
             }
             try control.check(); try Task.checkCancellation()
+            if job.effectiveMode == .countOnly {try job.validate(id:id,folder:input,countOnlyDiagnosticEnabled:countOnlyDiagnosticEnabled ?? (ProcessInfo.processInfo.environment["FOX_COUNT_ONLY_DIAGNOSTIC"] == "1"))}
             var result = VisionBatchResult(jobID: id, jobSHA256: status.jobSHA256!, inputAssets: job.files,
                 inferencePerformed: job.kind == .video, mode: job.effectiveMode, observationFrameCount: frames.count, inputProvenance: provenance,
                 controllerVersion: job.effectiveMode == .controller ? VisionLabController.preparationFlowVersion : "not-run",
@@ -250,11 +284,21 @@ enum VisionReplayBatch {
             result.motionStrategies = try VisionExercise.allCases.map { try MotionStrategy.load($0) }
                 .filter { result.algorithms[$0.exercise.rawValue] == $0.algorithm }
             if job.effectiveMode == .observations { result.evidenceBoundary = "raw-video-observations-only-no-controller-no-counts-no-exercise-adaptation" }
+            if job.effectiveMode == .countOnly {
+                result.countOnlyCases=countOnlyResults
+                result.settingsScope="legacy_settings_not_used_by_count_only"
+                result.controllerVersion="workout-coordinator-count-only-v1"
+                result.algorithms=Dictionary(job.cases.compactMap {item in item.countOnlyAction.map {($0.rawValue,$0.algorithm)}},uniquingKeysWith:{_,b in b})
+                result.evidenceBoundary="public-raw-through-actual-app-consumer-and-persistence-not-live-camera-or-human-accuracy-acceptance"
+            }
             let resultURL = output.appendingPathComponent("result.json")
-            try VisionDiagnosticArchive.encode(result).write(to: resultURL, options: .atomic)
+            // Count-only embeds a real saved record: preserve its repository millisecond dates.
+            let resultBytes = job.effectiveMode == .countOnly ? try LocalTrainingRepository.encoder().encode(result) : try VisionDiagnosticArchive.encode(result)
+            try resultBytes.write(to: resultURL, options: .atomic)
             let settingsURL = output.appendingPathComponent("settings.json")
             try VisionDiagnosticArchive.encode(settings).write(to: settingsURL, options: .atomic)
             status.files = [try VisionDiagnosticArchive.asset(resultURL), try VisionDiagnosticArchive.asset(settingsURL)]
+            status.files.append(contentsOf:countOnlyResults.flatMap(\.archiveAssets))
             if job.kind == .video { status.files.append(try VisionDiagnosticArchive.asset(cache)) }
             try control.check(); try Task.checkCancellation()
             status.phase = "completed"; try saveStatus()

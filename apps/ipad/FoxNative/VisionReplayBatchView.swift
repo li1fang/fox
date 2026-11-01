@@ -19,6 +19,11 @@ struct VisionReplayBatchView: View {
             if !finished { ProgressView() }
             if let result {
                 if result.mode == .observations { Text("姿态观测已导出").accessibilityIdentifier("batch-observations-complete") }
+                if let cases=result.countOnlyCases {
+                    ForEach(cases,id:\.specification.id) {item in
+                        LabeledContent(item.specification.id,value:"辅助观测 \(item.automaticCount) 次 · 人工未知")
+                    }
+                }
                 ForEach(result.cases, id: \.specification.id) { item in
                     LabeledContent(item.specification.id, value: "\(item.repetitions.count) 次")
                 }

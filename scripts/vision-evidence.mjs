@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import { validateBatchJob, verifyBatchResult } from './vision-batch.mjs';
+import { validateBatchJob, verifyBatchResult, isCountOnlyArchiveName } from './vision-batch.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -25,14 +25,21 @@ function derive(jobBytes, statusBytes, resultBytes, settingsBytes) {
   if (!['completed','failed','cancelled'].includes(status.phase)) throw Error('Only terminal runs may be archived');
   if (!Array.isArray(job.cases) || !Array.isArray(job.files)) throw Error('Invalid job');
   const completed = status.phase === 'completed';
+  const countOnly = job.mode === 'countOnly';
   if (completed && (status.error != null || !result || result.schema !== 'fox.vision_batch_result.v1' || result.jobID !== job.id
       || result.jobSHA256 !== digest(jobBytes) || result.settingsSHA256 !== digest(settingsBytes)
       || !isDeepStrictEqual(result.settings,json(settingsBytes)) || !isDeepStrictEqual(result.inputAssets,job.files)
       || (result.mode ?? 'controller') !== (job.mode ?? 'controller') || result.inferencePerformed !== (job.kind === 'video')
       || (result.observationFrameCount !== undefined && !integer(result.observationFrameCount))
-      || !Array.isArray(result.cases) || result.cases.length !== job.cases.length)) throw Error('Result identity/settings mismatch');
+      || !Array.isArray(countOnly ? result.countOnlyCases : result.cases)
+      || (countOnly ? result.countOnlyCases : result.cases).length !== job.cases.length)) throw Error('Result identity/settings mismatch');
   const cases = job.cases.map((spec, index) => {
-    const c = result?.cases[index];
+    const c = countOnly ? result?.countOnlyCases[index] : result?.cases[index];
+    if (countOnly) {
+      if (completed && (!isDeepStrictEqual(c?.specification,spec) || !integer(c.automaticCount))) throw Error('Count-only case specification mismatch');
+      return {id:spec.id,exercise:spec.countOnlyAction,arm:spec.arm,startSeconds:spec.startSeconds,endSeconds:spec.endSeconds,
+        automaticCount:c?.automaticCount ?? null,referenceCount:null,countError:null,returnIntervals:null,resets:null};
+    }
     if (completed && (!isDeepStrictEqual(c?.specification,spec) || !Array.isArray(c.repetitions) || c.repetitions.length > 10000)) throw Error('Case specification mismatch');
     let previous = -1;
     for (const rep of c?.repetitions ?? []) {
@@ -53,7 +60,7 @@ function derive(jobBytes, statusBytes, resultBytes, settingsBytes) {
   if (!Array.isArray(strategies) || strategies.some(s=>s.schema !== 'fox.motion_strategy.v1' || !integer(s.version) || s.version < 1
       || result.algorithms?.[s.exercise] !== s.algorithm)) throw Error('Invalid strategy association');
   return {schema:'fox.vision_run.v1',id:job.id,status:status.phase,acceptance:'not_assessed',
-    evidenceKind:`${job.mode === 'observations' ? 'observations' : 'controller'}_${job.kind === 'video' ? 'video' : 'cache'}`,
+    evidenceKind:`${countOnly ? 'countOnly' : job.mode === 'observations' ? 'observations' : 'controller'}_${job.kind === 'video' ? 'video' : 'cache'}`,
     evidenceBoundary:result?.evidenceBoundary ?? 'processing-did-not-complete-not-acceptance',
     jobSHA256:digest(jobBytes),inputAssets:job.files,settingsSHA256:result?.settingsSHA256 ?? null,
     execution:{appVersion:result?.appVersion ?? null,appBuild:result?.appBuild ?? null,controllerVersion:result?.controllerVersion ?? null,
@@ -70,6 +77,9 @@ export async function archiveBatch({resultFolder,jobFolder,archiveRoot}) {
   if (status.phase === 'completed') await verifyBatchResult(resultFolder,jobSHA256);
   const sources = [['job.json',path.join(jobFolder,'job.json')],['status.json',path.join(resultFolder,'status.json')]];
   if (status.phase === 'completed') sources.push(['result.json',path.join(resultFolder,'result.json')],['settings.json',path.join(resultFolder,'settings.json')]);
+  if (status.phase === 'completed' && job.mode === 'countOnly') {
+    for (const asset of status.files.filter(f=>isCountOnlyArchiveName(f.path))) sources.push([asset.path,path.join(resultFolder,asset.path)]);
+  }
   const buffers = new Map();
   for (const [name,file] of sources) buffers.set(name,await regular(file));
   const base = derive(jobBytes,statusBytes,buffers.get('result.json'),buffers.get('settings.json'));
@@ -98,10 +108,11 @@ export async function verifyRun(directory) {
   if (!dirInfo.isDirectory() || dirInfo.isSymbolicLink()) throw Error('Unsafe run directory');
   const bytes = await regular(path.join(directory,'run.json'),2*1024*1024), manifest = json(bytes);
   if (manifest.schema !== 'fox.vision_run.v1' || !Number.isFinite(Date.parse(manifest.archivedAt)) || !Array.isArray(manifest.artifacts)
-      || ![2,4].includes(manifest.artifacts.length) || new Set(manifest.artifacts.map(f=>f.path)).size !== manifest.artifacts.length) throw Error('Invalid run manifest');
+      || manifest.artifacts.length < 2 || manifest.artifacts.length > 68
+      || new Set(manifest.artifacts.map(f=>f.path)).size !== manifest.artifacts.length) throw Error('Invalid run manifest');
   const buffers = new Map();
   for (const f of manifest.artifacts) {
-    if (!allowed.has(f.path)) throw Error('Unsafe artifact name');
+    if (!allowed.has(f.path) && !isCountOnlyArchiveName(f.path)) throw Error('Unsafe artifact name');
     const data = await regular(path.join(directory,f.path));
     if (data.length !== f.bytes || digest(data) !== f.sha256) throw Error(`Artifact checksum mismatch: ${f.path}`);
     buffers.set(f.path,data);
@@ -112,7 +123,10 @@ export async function verifyRun(directory) {
   if (!isDeepStrictEqual(base,derived)) throw Error('Derived manifest differs from source result');
   const status = json(buffers.get('status.json'));
   if (status.phase === 'completed') {
-    for (const name of ['result.json','settings.json']) {
+    const countOnly=json(buffers.get('job.json')).mode === 'countOnly';
+    if (countOnly) await verifyBatchResult(directory,status.jobSHA256);
+    else if (buffers.size !== 4) throw Error('Unexpected legacy run artifacts');
+    for (const name of ['result.json','settings.json',...(countOnly ? status.files.filter(f=>isCountOnlyArchiveName(f.path)).map(f=>f.path) : [])]) {
       const asset = status.files?.find(f=>f.path === name), data = buffers.get(name);
       if (!asset || !data || asset.bytes !== data.length || asset.sha256 !== digest(data)) throw Error('Source receipt checksum mismatch');
     }

@@ -40,6 +40,16 @@ final class VisionLabController: ObservableObject {
     var observationReceivedUptime: Double { lastReceivedAt }
     var trialFinished: Bool { trialEndedAt != nil }
     private var tracker = CurlTracker(side: .left)
+    @Published private(set) var countOnlyAction: CountOnlyAction?
+    var assistedCurlEnabled: Bool { countOnlyAction != nil }
+    @Published private(set) var assistedReason = "waiting_for_observation"
+    private var assistedRuntime: CountOnlySession?
+    private var countOnlySourceWindow: (origin: Double, formal: Double)?
+    private(set) var assistedAppleRevision: Int?
+    var assistedEvidence: CountOnlyEvidence? { assistedRuntime?.evidence }
+    var assistedObservationAvailable: Bool {
+        assistedCurlEnabled && isCounting && assistedReason == "observed" && cameraState == .running && uptime-lastReceivedAt <= 0.35
+    }
     private var startGate = PoseStartGate(lossTolerance: PoseRuntimePolicy.standard.countdownLossTolerance)
     private var captureID: UUID?
     private var wantsCamera = false
@@ -90,6 +100,8 @@ final class VisionLabController: ObservableObject {
     var onCountingBegan: (() -> Bool)?
     var onCountingUpdated: (() -> Void)?
     var onCountingPaused: (() -> Void)?
+    var onCountOnlySourceChanged: (() -> Bool)?
+    private var countOnlySourceResetPending=false
     var attempts: [PoseAttemptEvent] { tracker.attempts }
     var droppedAttempts: Int { tracker.droppedAttempts }
     var source: VisionInputSource {
@@ -99,7 +111,7 @@ final class VisionLabController: ObservableObject {
         return fixtureMode == nil ? .camera : .fixture
     }
     var trialActive: Bool { trialStartedAt != nil }
-    var automaticCount: Int { tracker.repetitions.count }
+    var automaticCount: Int { assistedCurlEnabled ? (assistedEvidence?.observedCount ?? 0) : tracker.repetitions.count }
     var confirmedCount: Int { max(0, automaticCount + manualAdjustment) }
     var repetitions: [CurlRepetition] { tracker.repetitions }
     var processingHz: Double {
@@ -107,7 +119,7 @@ final class VisionLabController: ObservableObject {
         return Double(recentFrameTimes.count - 1) / (last - first)
     }
     var isPreparing: Bool { startState.isPreparing }
-    var needsRebind: Bool { subjectSelection.state == .lost && isCounting }
+    var needsRebind: Bool { !assistedCurlEnabled && subjectSelection.state == .lost && isCounting }
     private(set) var preparationReason = "waiting_for_frame"
     var canCount: Bool { cameraState == .running && !isPreparing && !isCounting }
     var selectionLocked: Bool { trialActive || isPreparing || diagnosticCapture.isActive }
@@ -138,6 +150,9 @@ final class VisionLabController: ObservableObject {
         return pose != nil ? .available : (motionStatus == .failed ? .failed : .unavailable)
     }
     var qualityLabel: String {
+        if assistedCurlEnabled {
+            return assistedObservationAvailable ? "辅助计数 · 阶段未提供" : "观察暂不可用，继续运动后核对次数"
+        }
         if cameraState != .running { return cameraState.label }
         if isPreparing || isCounting {
             if subjectSelection.state == .ambiguous { return "主体不明确" }
@@ -260,15 +275,16 @@ final class VisionLabController: ObservableObject {
                     }
                     self.finishDiagnostic(reason: "cameraInterrupted")
                 }
-                self.pauseCounting()
-                self.invalidateMotion(clearPreview: true)
+                if self.assistedCurlEnabled { self.interruptAssistedObservation() }
+                else { self.pauseCounting(); self.invalidateMotion(clearPreview: true) }
             }
             self.onCameraStateChanged?(state)
         }
         camera.onDiscontinuity = { [weak self] id in
             guard let self, self.captureID == id else { return }
             self.recordDiagnosticEvent("cameraDiscontinuity")
-            self.invalidateMotion(clearPreview: true)
+            if self.assistedCurlEnabled {self.requestCountOnlySourceReset()}
+            else {self.invalidateMotion(clearPreview:true)}
         }
         camera.onDiagnosticResult = { [capture = diagnosticCapture] id, result in capture.receive(id: id, result: result) }
         // Selection locking depends on async recording finalization, even when no camera frame arrives.
@@ -416,6 +432,12 @@ final class VisionLabController: ObservableObject {
     }
 
     func startCounting() {
+        if assistedCurlEnabled {
+            guard !isCounting, onCountingBegan?() ?? true else { return }
+            if trialStartedAt == nil { trialStartedAt=wallTime; guidanceAttemptID=UUID() }
+            trialEndedAt=nil; isCounting=true
+            return
+        }
         guard canCount else { return }
         fixtureTimeline.controlBoundary(receivedAt: uptime)
         beginTemporaryDiagnostic()
@@ -456,6 +478,12 @@ final class VisionLabController: ObservableObject {
     }
 
     func pauseCounting() {
+        if assistedCurlEnabled {
+            interruptAssistedObservation()
+            let wasCounting=isCounting;isCounting=false
+            if wasCounting { onCountingPaused?() }
+            return
+        }
         fixtureTimeline.controlBoundary(receivedAt: uptime)
         recordDiagnosticEvent(isPreparing ? "preparationCancelled" : "countingPaused")
         let wasCounting = isCounting
@@ -512,6 +540,7 @@ final class VisionLabController: ObservableObject {
         try settings.validate()
         try PoseSessionSettings(configuration: configuration, runtimePolicy: runtimePolicy).validate()
         stopCamera()
+        countOnlyAction=nil;assistedRuntime=nil;assistedAppleRevision=nil;countOnlySourceResetPending=false;countOnlySourceWindow=nil
         trialStartedAt = nil; trialEndedAt = nil; trialStartedUptime = nil
         arm = settings.arm; exercise = settings.exercise; declaredBodyView = settings.bodyView; frontCamera = true
         self.configuration = configuration; self.runtimePolicy = runtimePolicy
@@ -519,6 +548,49 @@ final class VisionLabController: ObservableObject {
         startGate = PoseStartGate(lossTolerance: runtimePolicy.countdownLossTolerance); startState = startGate.state
         tracker = CurlTracker(side: arm, exercise: exercise, configuration: configuration, runtimePolicy: runtimePolicy)
         snapshot = tracker.snapshot; manualAdjustment = 0; frameCount = 0; validFrameCount = 0
+    }
+
+    /// Same Apple camera source, explicit runtime route; no legacy selector, start gate or phases.
+    func configureAssistedWorkout(side: ArmSide, action: CountOnlyAction = .curl, sourceWindow: (origin: Double, formal: Double)? = nil) {
+        stopCamera()
+        countOnlyAction=action;assistedRuntime=nil;assistedAppleRevision=nil;countOnlySourceResetPending=false;countOnlySourceWindow=sourceWindow
+        assistedReason="waiting_for_observation";arm=side;exercise = .curl;declaredBodyView=action == .curl ? .front:.side;frontCamera=true
+        trialStartedAt=nil;trialEndedAt=nil;startGate.cancel();startState=startGate.state
+        subjectSelector.reset();subjectSelection=subjectSelector.selection
+        snapshot=CurlSnapshot();manualAdjustment=0
+    }
+    private func interruptAssistedObservation() {
+        assistedRuntime?.inputInterrupted()
+        assistedReason="observation_interrupted"
+        onCountingUpdated?()
+    }
+    private func requestCountOnlySourceReset() {
+        interruptAssistedObservation()
+        guard isCounting, assistedRuntime != nil else {lastCaptureTimestamp=nil;return}
+        countOnlySourceResetPending=true
+        _=completeCountOnlySourceReset()
+    }
+    private func completeCountOnlySourceReset() -> Bool {
+        guard countOnlySourceResetPending else {return true}
+        guard onCountOnlySourceChanged?() == true else {assistedReason="source_change_pending_save";return false}
+        assistedRuntime=nil;assistedAppleRevision=nil;lastCaptureTimestamp=nil;countOnlySourceResetPending=false;countOnlySourceWindow=nil
+        return true
+    }
+    private func receiveAssisted(_ value: CapturedPose) {
+        guard isCounting else { return }
+        if let revision=assistedAppleRevision, revision != value.revision {
+            interruptAssistedObservation();assistedReason="observer_revision_changed";return
+        }
+        do {
+            if assistedRuntime == nil {
+                assistedRuntime=try CountOnlySession(action:countOnlyAction!,side:arm,originSeconds:countOnlySourceWindow?.origin ?? value.frame.timestamp,
+                    source:source == .camera ? .cameraPose:.cachedPose,formalStartSeconds:countOnlySourceWindow?.formal)
+                assistedAppleRevision=value.revision
+            }
+            try assistedRuntime!.process(value.frame)
+            assistedReason=assistedRuntime!.reason
+        } catch { assistedReason="invalid_input" }
+        onCountingUpdated?()
     }
 
     func saveReport(referenceCount: Int?, notes: String, bodyView: VisionBodyView? = nil, review: TrialReview? = nil) -> Bool {
@@ -552,9 +624,11 @@ final class VisionLabController: ObservableObject {
     }
 
     private func receive(_ value: CapturedPose) {
+        if assistedCurlEnabled, !completeCountOnlySourceReset() {return}
         guard value.frame.timestamp.isFinite,
               lastCaptureTimestamp.map({ value.frame.timestamp > $0 }) ?? true else {
             recordDiagnosticEvent("frameRejected", detail: "non_monotonic_capture_pts")
+            if assistedCurlEnabled { interruptAssistedObservation() }
             return
         }
         lastCaptureTimestamp = value.frame.timestamp
@@ -562,6 +636,7 @@ final class VisionLabController: ObservableObject {
         recentFrameTimes.append(lastReceivedAt)
         if recentFrameTimes.count > 30 { recentFrameTimes.removeFirst() }
         latest = value
+        if assistedCurlEnabled { receiveAssisted(value);return }
         var selectedFrame = value.frame
         if isPreparing || isCounting {
             let previous = subjectSelection.state
@@ -649,6 +724,11 @@ final class VisionLabController: ObservableObject {
     }
 
     private func invalidateMotion(clearPreview: Bool) {
+        if assistedCurlEnabled {
+            interruptAssistedObservation()
+            if clearPreview { latest=nil }
+            return
+        }
         recordDiagnosticEvent("trackingInvalidated", detail: clearPreview ? "previewCleared" : nil)
         if isCounting { pauseCounting() }
         startGate.invalidate(); startState = startGate.state

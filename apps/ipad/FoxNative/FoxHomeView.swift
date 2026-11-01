@@ -305,6 +305,13 @@ struct FoxHomeView: View {
             Button("试练一组哑铃弯举") { editing = false; trainingRoute = .prepare(.curl, .left, UUID()) }
                 .frame(minHeight: 44).accessibilityIdentifier("home-prepare-curl")
                 .disabled(trainingDispatcher.pendingRequestID != nil)
+            if CountOnlyAvailability.admittedActions.contains(.squat) {
+                Button("内测 · 侧面徒手深蹲") { editing = false; trainingRoute = .squat(.left, UUID()) }
+                    .frame(minHeight: 44).accessibilityIdentifier("home-prepare-squat-assisted")
+                    .disabled(trainingDispatcher.pendingRequestID != nil)
+                Text("辅助计数，结束后核对；开始前在本组设置选择近侧腿。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Button("选择训练动作") { editing = false; showingCapabilities = true }
                 .frame(minHeight: 44).accessibilityIdentifier("home-capabilities")
                 .disabled(trainingDispatcher.pendingRequestID != nil)

@@ -25,11 +25,23 @@ struct TrainingScreen: View {
 
     private var selectedArm: ArmSide { TrainingArmChoice.current(armChoice, session: session) }
     private var armBinding: Binding<ArmSide> {
-        Binding(get: { selectedArm }, set: { armChoice = TrainingArmChoice(attemptID: session.currentSetAttemptId, arm: $0) })
+        Binding(get: { selectedArm }, set: { side in
+            // The sheet/rotation can reappear before onChange runs. Commit the fixed squat side
+            // before updating local presentation, so onAppear cannot restore a stale choice.
+            if store.selectedCountOnlyAction == .squat {
+                guard let executionToken, store.accepts(executionToken), let id=session.currentSetAttemptId,
+                      session.stage == .ready, session.currentAssistedEvidence == nil else {return}
+                let previous=store.clientState
+                var state=previous;state.selectedArms[id.uuidString]=side
+                store.setClientState(state,token:executionToken)
+                guard store.saveClientState() else {store.setClientState(previous,token:executionToken);return}
+            }
+            armChoice = TrainingArmChoice(attemptID: session.currentSetAttemptId, arm: side)
+        })
     }
     private var hasCamera: Bool { store.usesVision && session.stage != .rest }
     private var preparing: Bool { session.currentObservationId != nil && session.stage != .active }
-    private var offersManualContinuation: Bool { hasCamera && (visual.isPreparing || visual.needsRebind) }
+    private var offersManualContinuation: Bool { !store.countOnlySelected && hasCamera && (visual.isPreparing || visual.needsRebind) }
     private var canContinuePractice: Bool { !session.records.contains { $0.feedback.contains(.pain) } }
     private var nextActivity: TrainingActivity? { canContinuePractice ? store.nextPractice : nil }
 
@@ -170,9 +182,13 @@ struct TrainingScreen: View {
             HStack(spacing: 8) {
                 Button { store.setVisionEnabled(!hasCamera) } label: {
                     Image(systemName: hasCamera ? "video" : "video.slash").font(.title3).frame(width: 44, height: 44)
-                }.disabled(session.stage == .rest || (!hasCamera && !store.canEnableVision) || session.exercise.visualObservation == nil)
+                }.disabled(session.stage == .rest || (!hasCamera && !store.canEnableVision) || session.exercise.visualObservation == nil && !store.countOnlySelected)
                     .accessibilityLabel(hasCamera ? "关闭视觉" : "开启视觉")
                     .accessibilityIdentifier("training-vision-toggle").help("切换视觉")
+                if store.canChooseAssistedCurl {
+                    Toggle("近正面辅助 · 开发",isOn:Binding(get:{store.assistedCurlSelected},set:{store.setAssistedCurlEnabled($0,token:executionToken)}))
+                        .accessibilityIdentifier("training-assisted-curl-mode")
+                }
                 GuidanceMuteButton(session: guidance)
                 Button { showingDetails = true } label: {
                     Image(systemName: "slider.horizontal.3").font(.title3).frame(width: 44, height: 44)
@@ -180,10 +196,12 @@ struct TrainingScreen: View {
                 if landscape && offersManualContinuation { manualContinuation(compact: true) }
                 Spacer(minLength: 0)
                 // Recovery is an additional control, never a replacement for pause or finish.
+                if !store.countOnlySelected {
                 Button { store.workoutVision.rebindSubject(token: executionToken) } label: {
                     Image(systemName: "arrow.clockwise").font(.title3).frame(width: 44, height: 44)
                 }.disabled(!hasCamera || !visual.needsRebind)
                     .accessibilityLabel("重新就位").accessibilityIdentifier("rebind-vision-set").help("重新就位")
+                }
             }
             Text(statusDetail).font(.callout).foregroundStyle(.secondary)
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 2).frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
@@ -204,6 +222,15 @@ struct TrainingScreen: View {
     }
 
     private var statusDetail: String {
+        if store.countOnlyUnavailable {
+            return "辅助模式当前不可用，已观测次数保留；本组由你继续并核对实际次数。"
+        }
+        if store.countOnlySelected {
+            if session.stage == .ready {
+                return store.selectedCountOnlyAction == .squat ? "侧面较宽画面，近侧髋膝踝完整入镜；仅辅助计次，结束后核对。节奏与动作质量未提供。" : "近正面较宽构图，肩肘腕入镜；这是辅助观测，结束后核对实际次数。"
+            }
+            return "继续运动；看不清时不补次数，重获后自动继续。阶段与节奏未提供。"
+        }
         if hasCamera {
             if session.currentObservationId == nil && session.stage == .ready {
                 if session.exercise.visualObservation?.exercise == .curl {
@@ -211,7 +238,7 @@ struct TrainingScreen: View {
                 }
                 return session.exercise.visualObservation?.exercise.guidance ?? "准备好后开始"
             }
-            return visual.taskMessage(automaticCount: session.currentVisualEvidence?.automaticCount ?? 0).detail
+            return visual.taskMessage(automaticCount: session.observedAutomaticCount).detail
         }
         if session.stage == .rest { return "上一组已保存，准备好后继续。" }
         if session.currentVisualEvidence?.fallbackReason != nil { return "已观测次数保留；本组余下次数由你核对，下组可重新开启视觉。" }
@@ -223,9 +250,9 @@ struct TrainingScreen: View {
     private func observation(at date: Date) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.currentVisualEvidence.map { String($0.automaticCount) } ?? (hasCamera ? "0" : "—"))
+                Text((session.currentAssistedEvidence != nil || session.currentVisualEvidence != nil) ? String(session.observedAutomaticCount) : (hasCamera ? "0" : "—"))
                     .font(.title2.bold()).monospacedDigit().accessibilityIdentifier("workout-automatic-count")
-                Text(hasCamera || session.currentVisualEvidence?.hasObservedFrames == true ? "视觉观测" : "人工核对")
+                Text((store.countOnlySelected || session.currentAssistedEvidence != nil) ? "辅助观测 · 待核对" : (hasCamera || session.currentVisualEvidence?.hasObservedFrames == true ? "视觉观测" : "人工核对"))
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: true, vertical: false)
             }
             Text(hasCamera ? (preparing ? visual.qualityLabel : session.stage == .paused ? "已暂停" :
@@ -242,7 +269,7 @@ struct TrainingScreen: View {
         ZStack {
             Color(uiColor: .secondarySystemGroupedBackground)
             // Keep the preview's identity through mode/size changes; only its visibility changes.
-            if session.exercise.visualObservation != nil {
+            if session.exercise.visualObservation != nil || store.countOnlySelected {
                 PosePreview(controller: visual).opacity(hasCamera ? 1 : 0)
             }
             if session.stage == .rest {
@@ -333,12 +360,18 @@ struct TrainingScreen: View {
                         }.disabled(!TrainingArmChoice.canChange(session: session))
                             .accessibilityIdentifier("training-other-arm")
                     }
-                    if store.visionRequested && session.exercise.visualObservation != nil {
+                    if store.visionRequested && (session.exercise.visualObservation != nil || store.countOnlySelected) {
                         Button {
                             store.setVisionEnabled(false, token: executionToken); showingDetails = false
                         } label: { Label("关闭视觉 · 人工记录", systemImage: "video.slash") }.accessibilityIdentifier("manual-count")
                     }
-                    GuidanceControls(session: guidance, allowsPlannedMode: true)
+                    if store.selectedCountOnlyAction == .squat {
+                        Picker("固定近侧",selection:armBinding) {
+                            Text("左侧").tag(ArmSide.left);Text("右侧").tag(ArmSide.right)
+                        }.pickerStyle(.segmented).disabled(session.stage != .ready || session.currentAssistedEvidence != nil)
+                            .accessibilityIdentifier("squat-near-side")
+                    }
+                    GuidanceControls(session: guidance, allowsPlannedMode: !store.countOnlySelected && session.currentAssistedEvidence == nil)
                     if session.exercise.visualObservation != nil {
                         DisclosureGroup("录像与诊断") {
                             if session.exercise.visualObservation?.exercise != .curl {
@@ -367,7 +400,9 @@ struct TrainingScreen: View {
 
     private var activityPicker: some View {
         TrainingActivityPicker(current: TrainingActivity(exerciseID: session.exercise.exerciseId),
-            next: store.nextPractice, canReplace: session.canReplaceQuickPractice) { activity in
+            next: store.nextPractice, canReplace: session.canReplaceQuickPractice, chooseSquat:store.canChooseSquat ? {
+                if store.prepareSquatPractice(requestID:UUID()) { showingActivityPicker=false;showingDetails=false }
+            }:nil) { activity in
                 if store.selectActivity(activity, token: executionToken) { showingActivityPicker = false; showingDetails = false }
             }
     }
@@ -478,6 +513,11 @@ struct SetFeedbackView: View {
                             VStack(alignment: .leading, spacing: 16) { actualWeight; actualDuration }
                         }
                     }
+                }
+                if let evidence=session.currentAssistedEvidence {
+                    Text(evidence.action == .squat ? "辅助观测 \(evidence.automaticCount) 次（近侧：\(evidence.side.nearLegSideLabel)），待你确认" : "辅助观测 \(evidence.side.label) \(evidence.automaticCount) 次，待你确认")
+                        .font(.system(size:observationSize)).accessibilityIdentifier("feedback-assisted-observation")
+                    Text("阶段与节奏未提供；请核对实际次数。") .foregroundStyle(.secondary)
                 }
                 if let evidence = session.currentVisualEvidence, evidence.hasObservedFrames {
                     Text("观测 \(evidence.settings.arm.label) \(evidence.automaticCount) 次，待你确认").font(.system(size: observationSize)).foregroundStyle(FoxStyle.green)

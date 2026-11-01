@@ -39,14 +39,43 @@ final class TrainingStore: ObservableObject {
     @Published private var manualSessionID: String?
     private var preferenceKey: String { "FoxTraining.manual.\(fileURL.path)" }
     var visionRequested: Bool { !clientState.manual }
+    let assistedDevelopmentEnabled: Bool
+    private let admittedCountOnlyActions: Set<CountOnlyAction>
+    func allowsCountOnly(_ action: CountOnlyAction) -> Bool { assistedDevelopmentEnabled || admittedCountOnlyActions.contains(action) }
+    var assistedCurlSelected: Bool { countOnlySelected && selectedCountOnlyAction == .curl }
+    var countOnlySelected: Bool { selectedCountOnlyAction.map(allowsCountOnly) ?? false }
+    var countOnlyUnavailable: Bool { session?.currentAssistedEvidence != nil && !countOnlySelected }
+    var canChooseSquat: Bool { allowsCountOnly(.squat) }
+    var selectedCountOnlyAction: CountOnlyAction? {
+        if let existing=session?.currentAssistedEvidence { return existing.action }
+        if session?.exercise.exerciseId == "bodyweight_squat" { return .squat }
+        return
+            (clientState.assistedCurl == true && session?.exercise.visualObservation?.exercise == .curl) ? .curl:nil
+    }
+    var canChooseAssistedCurl: Bool {
+        assistedDevelopmentEnabled && session?.exercise.visualObservation?.exercise == .curl &&
+            session?.stage == .ready && session?.setStartedAt == nil &&
+            session?.currentVisualEvidence == nil && session?.currentAssistedEvidence == nil
+    }
+    func setAssistedCurlEnabled(_ enabled: Bool, token: TrainingExecutionToken? = nil) {
+        guard accepts(token ?? executionToken), canChooseAssistedCurl else { return }
+        workoutVision.stop()
+        var state=clientState;state.assistedCurl=enabled ? true:nil
+        if let token=executionToken { setClientState(state,token:token) }
+        _=saveClientState()
+        workoutVision.preview()
+    }
     private var manuallyStartedAttempt: Bool {
-        session.map { $0.setStartedAt != nil && $0.currentVisualEvidence == nil } ?? false
+        session.map { $0.setStartedAt != nil && $0.currentVisualEvidence == nil && $0.currentAssistedEvidence == nil } ?? false
     }
     var canEnableVision: Bool {
-        guard let session, [.ready, .paused].contains(session.stage), session.exercise.visualObservation != nil else { return false }
+        if countOnlyUnavailable {return false}
+        guard let session, [.ready, .paused].contains(session.stage), (session.exercise.visualObservation != nil || countOnlySelected) else { return false }
         return !manuallyStartedAttempt && session.currentVisualEvidence?.fallbackReason == nil
     }
     var usesVision: Bool {
+        if countOnlyUnavailable {return false}
+        if countOnlySelected { return visionRequested }
         guard visionRequested, !manuallyStartedAttempt, let session, session.exercise.visualObservation != nil,
               session.currentVisualEvidence?.fallbackReason == nil else { return false }
         switch workoutVision.controller.cameraState {
@@ -55,7 +84,7 @@ final class TrainingStore: ObservableObject {
         }
     }
     lazy var workoutVision = WorkoutVisionCoordinator(store: self, diagnosticRoot: diagnosticRoot)
-    lazy var guidance = GuidanceSession(vision: workoutVision.controller, store: self)
+    lazy var guidance = GuidanceSession(vision: workoutVision.controller, store: self, defaults: preferences)
 
     var session: TrainingSession? { pendingSwitch?.snapshot?.session ?? archive.currentSession }
 
@@ -66,7 +95,14 @@ final class TrainingStore: ObservableObject {
             .appendingPathComponent(testing ? "ui-test-records.json" : "training-records.v1.json")
     }
 
-    init(archiveURL: URL? = nil, diagnosticRoot: URL? = nil, preferences: UserDefaults? = nil, writer: ((Data, URL) throws -> Void)? = nil) {
+    init(archiveURL: URL? = nil, diagnosticRoot: URL? = nil, preferences: UserDefaults? = nil, assistedDevelopmentEnabled: Bool? = nil, admittedCountOnlyActions: Set<CountOnlyAction>? = nil, writer: ((Data, URL) throws -> Void)? = nil) {
+        #if DEBUG
+        self.assistedDevelopmentEnabled=assistedDevelopmentEnabled ?? (ProcessInfo.processInfo.environment["FOX_ASSISTED_CURL_DEVELOPMENT"] == "1" || ProcessInfo.processInfo.environment["FOX_COUNT_ONLY_DEVELOPMENT"] == "1")
+        #else
+        self.assistedDevelopmentEnabled=false
+        #endif
+        // Ordinary admission is action-specific. Stopped curl cannot be enabled by a squat gate.
+        self.admittedCountOnlyActions=(admittedCountOnlyActions ?? CountOnlyAvailability.admittedActions).intersection([.squat])
         self.diagnosticRoot = diagnosticRoot
         self.preferences = preferences ?? (archiveURL == nil ? .standard : nil)
         let environment = ProcessInfo.processInfo.environment
@@ -144,7 +180,16 @@ final class TrainingStore: ObservableObject {
 
     @discardableResult
     func preparePractice(_ activity: TrainingActivity, arm: ArmSide = .left, requestID: UUID) -> Bool {
-        transition(.init(id: requestID, target: .new(TrainingCapabilities.trial(activity, arm: arm))))
+        return transition(.init(id: requestID, target: .new(TrainingCapabilities.trial(activity, arm: arm))))
+    }
+
+    @discardableResult
+    func prepareSquatPractice(side: ArmSide = .left, requestID: UUID) -> Bool {
+        guard canChooseSquat else {return false}
+        guard transition(.init(id:requestID,target:.new(TrainingCapabilities.squatTrial()))), let token=executionToken, let attempt=token.attemptID else {return false}
+        var state=clientState;state.selectedArms[attempt.uuidString]=side
+        setClientState(state,token:token)
+        return saveClientState()
     }
 
     @discardableResult

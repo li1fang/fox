@@ -5,9 +5,9 @@ enum TrainingFeedbackInput {
         if let saved { return saved }
         var draft = TrainingFeedbackDraft()
         draft.weight = session.currentWeight
-        if let evidence = session.currentVisualEvidence, let count = evidence.suggestedCount {
+        if let side=session.observedSide, let count=session.suggestedAutomaticCount {
             if session.exercise.repetitionBasis == .perSide {
-                if evidence.settings.arm == .left { draft.leftReps = String(count) }
+                if side == .left { draft.leftReps = String(count) }
                 else { draft.rightReps = String(count) }
             } else { draft.reps = String(count) }
         }
