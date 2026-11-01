@@ -105,12 +105,19 @@ const openLogFile = async filename => (await open(filename, 'wx')).createWriteSt
 
 export function readProcessTable({launch = spawn, timeoutMs = 3000} = {}) {
   return new Promise((resolve, reject) => {
+    const started = performance.now();
     const child = launch('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], {stdio: ['ignore', 'pipe', 'pipe']});
     let output = '', errorOutput = '', done = false;
+    const inventory = {exited: false, exitCode: null, signal: null, stdoutEnded: false, stderrEnded: false};
     const finish = error => {
       if (done) return;
       done = true; clearTimeout(timer);
       if (error) {
+        const elapsedMs = performance.now() - started;
+        error.inventoryChild = child;
+        error.inventory = {...inventory, pid: child.pid ?? null, timeoutMs, elapsedMs,
+          deadlineOverrunMs: Math.max(0, elapsedMs - timeoutMs),
+          stdoutBytes: Buffer.byteLength(output), stderrBytes: Buffer.byteLength(errorOutput)};
         // Do not wait for close after the observation budget. A stuck ps is
         // unknown cleanup, never proof that the native resource is free.
         try { child.kill('SIGKILL'); } catch {}
@@ -118,7 +125,22 @@ export function readProcessTable({launch = spawn, timeoutMs = 3000} = {}) {
         reject(error);
       } else resolve(output);
     };
-    const timer = setTimeout(() => finish(Error('Process inventory timed out')), timeoutMs);
+    const timer = setTimeout(() => finish(Object.assign(Error('Process inventory timed out'),
+      {code: 'FOX_PROCESS_INVENTORY_TIMEOUT'})), timeoutMs);
+    // Exit plus both EOFs is sufficient; close can be delayed after those facts.
+    // Exit alone is not sufficient: inherited output may still be open.
+    const complete = () => {
+      if (inventory.exited && inventory.stdoutEnded && inventory.stderrEnded) {
+        finish(inventory.exitCode === 0 && inventory.signal === null ? undefined :
+          Error(`Process inventory failed (${inventory.exitCode}, ${inventory.signal}): ${errorOutput}`));
+      }
+    };
+    child.on('exit', (code, signal) => {
+      inventory.exited = true; inventory.exitCode = code; inventory.signal = signal ?? null; complete();
+    });
+    child.stdout?.on('end', () => { inventory.stdoutEnded = true; complete(); });
+    child.stderr?.on('end', () => { inventory.stderrEnded = true; complete(); });
+    child.stdout?.on('error', finish); child.stderr?.on('error', finish);
     child.on('error', finish);
     child.on('close', code => finish(code === 0 ? undefined : Error(`Process inventory failed (${code}): ${errorOutput}`)));
     child.stdout?.on('data', bytes => {
@@ -170,12 +192,13 @@ export async function settleProcessGroup(pgid, {observe = ownedProcessObserver(p
   }
 }
 
-export async function execute(step, {logPath, signal, openLog = openLogFile, forwardOutput = false, launch = spawn} = {}) {
+export async function execute(step, {logPath, signal, openLog = openLogFile, forwardOutput = false, launch = spawn, processObserver = ownedProcessObserver} = {}) {
   signal?.throwIfAborted();
   // Secure the log before spawning; a broken log is a failed run, even when the child exits zero.
   const log = await openLog(logPath);
   return new Promise((resolve, reject) => {
-    let child, forced, failure, observe, monitor, settled = Promise.resolve();
+    let child, forced, failure, observe, monitor, sampling, settled = Promise.resolve();
+    const inventoryObservations = [], inventoryChildren = new Set();
     let stdout = '', stderr = '';
     const terminate = () => {
       if (!child?.pid) return;
@@ -196,10 +219,20 @@ export async function execute(step, {logPath, signal, openLog = openLogFile, for
     // asynchronous error inside the normal receipt/log finalization path.
     child.on('error', error => { failure ??= error; });
     if (child.pid) {
-      observe = ownedProcessObserver(child.pid);
-      const sample = () => observe().catch(error => {
+      observe = processObserver(child.pid);
+      // A missed observation is not evidence that the original command stopped.
+      // Keep its process handle and lease, and ask the same observer again. The
+      // strict final inventory/cleanup still has to succeed before release.
+      const sample = () => sampling ??= observe().catch(error => {
+        if (error.code === 'FOX_PROCESS_INVENTORY_TIMEOUT') {
+          const entry = {observedAt: new Date().toISOString(), error: error.message, inventory: error.inventory};
+          inventoryObservations.push(entry);
+          if (error.inventoryChild) inventoryChildren.add(error.inventoryChild);
+          if (!log.destroyed) log.write(`FOX_PROCESS_INVENTORY_RETRY ${JSON.stringify(entry)}\n`);
+          return;
+        }
         failure ??= error; failure.resourceCleanupUncertain = true; terminate();
-      });
+      }).finally(() => { sampling = undefined; });
       void sample();
       monitor = setInterval(sample, 250);
     }
@@ -236,8 +269,12 @@ export async function execute(step, {logPath, signal, openLog = openLogFile, for
       if (!log.destroyed) log.end();
       await logFinished;
       clearTimeout(forced);
-      if (failure) reject(failure);
-      else resolve({code, signal: childSignal, stdout, output: stdout + '\n' + stderr, liveLog: true});
+      if ([...inventoryChildren].some(helper => helper.exitCode === null && helper.signalCode === null)) {
+        failure ??= Error('Timed-out process inventory helper has not exited');
+        failure.resourceCleanupUncertain = true;
+      }
+      if (failure) { failure.inventoryObservations = inventoryObservations; reject(failure); }
+      else resolve({code, signal: childSignal, stdout, output: stdout + '\n' + stderr, liveLog: true, inventoryObservations});
     });
   });
 }
@@ -271,6 +308,7 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
       try {
         const result = await run(step, {logPath: path.join(directory, `${step.id}.log`), signal: cancellation.signal});
         if (result.resourceAdmission) item.resourceAdmission = result.resourceAdmission;
+        if (result.inventoryObservations?.length) item.inventoryObservations = result.inventoryObservations;
         item.exitCode = result.code; item.signal = result.signal ?? null;
         if (!result.liveLog) await writeFile(path.join(directory, `${step.id}.log`), result.output);
         item.log = await artifact(directory, `${step.id}.log`);
@@ -289,6 +327,8 @@ export async function runSuite({directory, steps, fingerprint: sourceFingerprint
       } catch (error) {
         cleanupUncertain ||= error.resourceCleanupUncertain === true;
         item.status = 'failed'; item.error = error.message;
+        if (error.inventory) item.inventory = error.inventory;
+        if (error.inventoryObservations?.length) item.inventoryObservations = error.inventoryObservations;
         if (error.resourceAdmission) item.resourceAdmission = error.resourceAdmission;
         throw error;
       }

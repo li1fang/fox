@@ -362,3 +362,120 @@ test('cancellation plus a failed final write never leaves a reusable success', a
   assert.notEqual(receipt.status, 'software_suite_passed');
   assert.throws(() => auditReceipt(receipt, {commit: undefined, sourceSHA256: 'same', scope: undefined}), /Incomplete/);
 });
+
+
+test('inventory timeout identifies the sampled child and observation budget without asserting OS exit state', async () => {
+  const child = new EventEmitter(); child.pid = 4242;
+  child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.kill = () => {}; child.unref = () => {};
+  await assert.rejects(suiteModule.readProcessTable({launch:()=>child,timeoutMs:20}), error =>
+    error.inventory?.pid === 4242 && error.inventory?.timeoutMs === 20 &&
+    error.inventory?.elapsedMs >= 20 && error.inventory?.deadlineOverrunMs >= 0 &&
+    error.inventory?.exited === false && error.inventory?.stdoutBytes === 0);
+});
+
+test('inventory accepts exited command with both output EOFs without waiting for close', async () => {
+  for (const order of ['exit-first', 'eof-first']) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    child.kill = () => {}; child.unref = () => {};
+    const result = suiteModule.readProcessTable({timeoutMs: 40, launch: () => {
+      queueMicrotask(() => {
+        child.stdout.write('10 1 10 S START-A\n');
+        if (order === 'exit-first') child.emit('exit', 0, null);
+        child.stdout.end(); child.stderr.end();
+        if (order === 'eof-first') setImmediate(() => child.emit('exit', 0, null));
+      });
+      return child;
+    }});
+    assert.equal(await result, '10 1 10 S START-A\n');
+  }
+});
+
+test('inventory exit without output EOF fails closed with lifecycle diagnostics', async () => {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.kill = () => {}; child.unref = () => {};
+  await assert.rejects(suiteModule.readProcessTable({timeoutMs: 20,launch: () => {
+    queueMicrotask(() => child.emit('exit', 0, null)); return child;
+  }}), error => error.message.includes('timed out') && error.inventory?.exited === true &&
+    error.inventory?.stdoutEnded === false && error.inventory?.stderrEnded === false);
+});
+
+test('inventory EOF without exit and stream failures do not imply command success', async () => {
+  for (const mode of ['no-exit', 'stream-error', 'nonzero', 'oversize']) {
+    const child = new EventEmitter(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    child.kill = () => {}; child.unref = () => {};
+    await assert.rejects(suiteModule.readProcessTable({timeoutMs: 20, launch: () => {
+      queueMicrotask(() => {
+        if (mode === 'oversize') child.stdout.write('x'.repeat(2*1024*1024+1));
+        if (mode === 'stream-error') child.stdout.emit('error', Error('synthetic stream failure'));
+        child.stdout.end(); child.stderr.end();
+        if (mode === 'nonzero') child.emit('exit', 1, null);
+      }); return child;
+    }}), mode === 'oversize' ? /exceeded budget/ : mode === 'stream-error' ? /stream failure/ : mode === 'nonzero' ? /failed/ : /timed out/);
+  }
+});
+
+test('failed suite preserves bounded inventory lifecycle diagnostics', async t => {
+  const {dir, steps} = await harness(t);
+  const inventory = {exited: true, exitCode: 0, stdoutEnded: false, stderrEnded: true, stdoutBytes: 0};
+  await assert.rejects(runSuite({directory:dir,steps,fingerprint:async()=> 'same',preflight:async()=>[],
+    execute:async()=>{throw Object.assign(Error('Process inventory timed out'), {inventory});}}));
+  assert.deepEqual(JSON.parse(await readFile(path.join(dir,'suite.json'))).steps[0].inventory, inventory);
+});
+
+test('a transient inventory timeout keeps the same live command and records recovery', async t => {
+  const dir=await mkdtemp(path.join(tmpdir(),'fox-inventory-recovery-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  let observations=0, watchedPID;
+  const result=await suiteModule.execute({id:'live-inventory-recovery',command:process.execPath,
+    args:['-e',"console.log('original-started');setTimeout(()=>console.log('original-finished'),700)"],timeoutMs:2500},
+    {logPath:path.join(dir,'command.log'),processObserver:pid=>{
+      watchedPID=pid;const real=suiteModule.ownedProcessObserver(pid);
+      return async()=>{ if(observations++===0) throw Object.assign(Error('Process inventory timed out'),
+        {code:'FOX_PROCESS_INVENTORY_TIMEOUT',inventory:{pid:424242,timeoutMs:3000,exited:false}});return real(); };
+    }});
+  assert.ok(watchedPID>0);assert.equal(result.code,0);
+  assert.match(result.output,/original-started/);assert.match(result.output,/original-finished/);
+  assert.equal(result.inventoryObservations.length,1);
+  assert.equal(result.inventoryObservations[0].inventory.pid,424242);
+  assert.match(await readFile(path.join(dir,'command.log'),'utf8'),/FOX_PROCESS_INVENTORY_RETRY/);
+});
+
+test('natural command completion cannot release resources while inventory stays unavailable', async t => {
+  const dir=await mkdtemp(path.join(tmpdir(),'fox-inventory-unknown-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  await assert.rejects(suiteModule.execute({id:'inventory-unknown',command:process.execPath,
+    args:['-e',"console.log('original-started');setTimeout(()=>console.log('original-finished'),400)"],timeoutMs:2000},
+    {logPath:path.join(dir,'command.log'),processObserver:()=>async()=>{
+      throw Object.assign(Error('Process inventory timed out'),{code:'FOX_PROCESS_INVENTORY_TIMEOUT',inventory:{pid:424243}});
+    }}),error=>error.resourceCleanupUncertain===true);
+  assert.match(await readFile(path.join(dir,'command.log'),'utf8'),/original-finished/);
+});
+
+test('a timed-out inventory helper must exit even when a later table is available', async t => {
+  const dir=await mkdtemp(path.join(tmpdir(),'fox-inventory-helper-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  let calls=0;
+  await assert.rejects(suiteModule.execute({id:'inventory-helper',command:process.execPath,
+    args:['-e',"setTimeout(()=>console.log('original-finished'),350)"],timeoutMs:1800},
+    {logPath:path.join(dir,'command.log'),processObserver:pid=>{
+      const real=suiteModule.ownedProcessObserver(pid);
+      return async()=>{if(calls++===0)throw Object.assign(Error('Process inventory timed out'),
+        {code:'FOX_PROCESS_INVENTORY_TIMEOUT',inventory:{pid:424244},inventoryChild:{exitCode:null,signalCode:null}});return real();};
+    }}),error=>error.resourceCleanupUncertain===true && /helper has not exited/.test(error.message));
+});
+
+test('successful suite retains transient inventory diagnostics without a restart', async t => {
+  const {dir}=await harness(t);let calls=0;
+  await runSuite({directory:dir,steps:[{id:'same-command',command:process.execPath,
+    args:['-e',"setTimeout(()=>console.log('original-finished'),350)"],timeoutMs:1800}],
+    fingerprint:async()=> 'fixed',preflight:async()=>[],execute:(step,options)=>suiteModule.execute(step,
+      {...options,processObserver:pid=>{const real=suiteModule.ownedProcessObserver(pid);return async()=>{
+        if(calls++===0)throw Object.assign(Error('Process inventory timed out'),
+          {code:'FOX_PROCESS_INVENTORY_TIMEOUT',inventory:{pid:424245}});return real();};}})});
+  const receipt=JSON.parse(await readFile(path.join(dir,'suite.json'),'utf8'));
+  assert.equal(receipt.status,'software_suite_passed');assert.equal(receipt.steps.length,1);
+  assert.equal(receipt.steps[0].inventoryObservations[0].inventory.pid,424245);
+});
