@@ -24,7 +24,7 @@ public struct WorkoutCountOnlyRun: Codable, Equatable, Identifiable {
         if let old=evidence {
             guard value.inputOriginSeconds == old.inputOriginSeconds,
                   value.formalStartSeconds == old.formalStartSeconds,
-                  value.side == old.side, value.action == old.action, value.algorithm == old.algorithm, value.source == old.source,
+                  value.side == old.side, value.action == old.action, value.algorithm == old.algorithm, value.strategyID == old.strategyID, value.source == old.source,
                   value.events.starts(with: old.events),
                   (value.lastInputSeconds ?? -1) >= (old.lastInputSeconds ?? -1),
                   appleRevision == revision else { throw TrainingError.invalidTransition }

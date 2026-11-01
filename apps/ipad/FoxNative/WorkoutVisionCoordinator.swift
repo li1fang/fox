@@ -52,9 +52,13 @@ final class WorkoutVisionCoordinator {
         }
     }
 
-    func prepare(arm: ArmSide, token: TrainingExecutionToken? = nil, sourceWindow: (origin: Double, formal: Double)? = nil) {
+    func prepare(arm: ArmSide, token: TrainingExecutionToken? = nil, sourceWindow: (origin: Double, formal: Double)? = nil, developmentStrategyID: String? = nil) {
         if let token, store?.accepts(token) != true { return }
         guard let store, let session=store.session else { return }
+        if let strategy=developmentStrategyID {
+            guard store.assistedDevelopmentEnabled, store.selectedCountOnlyAction == .squat,
+                  strategy == CountOnlyAvailability.squatStrategyID else { return }
+        }
         if store.countOnlyUnavailable {
             guard [.ready,.paused].contains(session.stage) else {return}
             _=store.updateSession(token:token) {
@@ -63,7 +67,15 @@ final class WorkoutVisionCoordinator {
             }
             stop();return
         }
-        if store.countOnlySelected { prepareAssisted(arm:arm,token:token,sourceWindow:sourceWindow);return }
+        if store.countOnlySelected {
+            let selectedStrategy: String?
+            if let existing=session.currentAssistedEvidence?.runs.reversed().compactMap(\.evidence).first {
+                selectedStrategy=existing.strategyID
+            } else {
+                selectedStrategy=developmentStrategyID ?? (store.selectedCountOnlyAction == .squat ? store.admittedSquatStrategyID : nil)
+            }
+            prepareAssisted(arm:arm,token:token,sourceWindow:sourceWindow,strategyID:selectedStrategy);return
+        }
         guard var settings=session.exercise.visualObservation else {return}
         if let evidence = session.currentVisualEvidence { settings = evidence.settings } else { settings.arm = arm }
         let configuration = session.currentVisualEvidence?.configuration ?? controller.configuration
@@ -88,11 +100,11 @@ final class WorkoutVisionCoordinator {
         controller.startCamera()
     }
 
-    private func prepareAssisted(arm: ArmSide, token: TrainingExecutionToken?, sourceWindow: (origin: Double, formal: Double)? = nil) {
+    private func prepareAssisted(arm: ArmSide, token: TrainingExecutionToken?, sourceWindow: (origin: Double, formal: Double)? = nil, strategyID: String? = nil) {
         guard let store, store.countOnlySelected else { return }
         var id: UUID?
         guard store.updateSession(token:token, { id=try $0.beginCountOnly(action:store.selectedCountOnlyAction!,side:arm,source:controller.source,at:controller.wallTime) }), let id else { return }
-        stopping=true;controller.configureAssistedWorkout(side:arm,action:store.selectedCountOnlyAction!,sourceWindow:sourceWindow);stopping=false
+        stopping=true;controller.configureAssistedWorkout(side:arm,action:store.selectedCountOnlyAction!,sourceWindow:sourceWindow,strategyID:strategyID);stopping=false
         binding=store.session?.currentSetBinding;observationId=id
         installCallbacks(token:store.executionToken,observation:id,target:binding)
         lastPersistedAt=0;lastCount=0
@@ -107,7 +119,7 @@ final class WorkoutVisionCoordinator {
             guard controller.cameraState == .stopped, store.countOnlySelected, flush(token:token) else { return }
             var id: UUID?
             guard store.updateSession(token:token, { id=try $0.renewCountOnlyObservation(at:self.controller.wallTime) }), let id else { return }
-            stopping=true;controller.configureAssistedWorkout(side:session.currentAssistedEvidence!.side,action:session.currentAssistedEvidence!.action);stopping=false
+            stopping=true;controller.configureAssistedWorkout(side:session.currentAssistedEvidence!.side,action:session.currentAssistedEvidence!.action,strategyID:session.currentAssistedEvidence!.runs.reversed().compactMap(\.evidence).first?.strategyID);stopping=false
             binding=store.session?.currentSetBinding;observationId=id
             installCallbacks(token:store.executionToken,observation:id,target:binding)
             lastCount=0;lastPersistedAt=0

@@ -73,6 +73,29 @@ final class SquatConfidenceFloorTests: XCTestCase {
         }
         XCTAssertNil(try VisionWorkflowBinding.load("squat").jointConfidenceFloor)
     }
+    func testSessionFactoryPersistsFrozenStrategyAndDropsInterruptedHalfCycle() throws {
+        let strategy="squat-side-joint-floor-25-h1-v1"
+        var chosen=try CountOnlySession(action:.squat,side:.right,originSeconds:0,source:.cachedPose,strategyID:strategy)
+        var normal=try CountOnlySession(action:.squat,side:.right,originSeconds:0,source:.cachedPose)
+        var time=0.0
+        for a in cycle {
+            let f=frame(time,a,0.3); try chosen.process(f);try normal.process(f);time+=0.1
+        }
+        XCTAssertEqual(chosen.evidence.observedCount,1);XCTAssertEqual(normal.evidence.observedCount,0)
+        for a in cycle.prefix(18) {let f=frame(time,a,0.3);try chosen.process(f);time+=0.1}
+        try chosen.process(frame(time,95,0.3,missing:true));time+=0.1
+        for a in cycle.suffix(20) {try chosen.process(frame(time,a,0.3));time+=0.1}
+        XCTAssertEqual(chosen.evidence.observedCount,1)
+        for a in cycle {try chosen.process(frame(time,a,0.3));time+=0.1}
+        XCTAssertEqual(chosen.evidence.observedCount,2)
+        XCTAssertEqual(chosen.evidence.strategyID,strategy)
+        XCTAssertEqual(chosen.evidence.algorithm,"squat-selected-count-only-h1-joint-floor-v1")
+        try chosen.evidence.validate()
+        let decoded=try JSONDecoder().decode(CountOnlyEvidence.self,from:JSONEncoder().encode(chosen.evidence))
+        XCTAssertEqual(decoded,chosen.evidence);try decoded.validate()
+        XCTAssertThrowsError(try CountOnlySession(action:.squat,side:.right,originSeconds:0,source:.cachedPose,strategyID:"squat-side-joint-floor-35-h1-v1"))
+        XCTAssertThrowsError(try CountOnlySession(action:.curl,side:.right,originSeconds:0,source:.cachedPose,strategyID:strategy))
+    }
     func testDefaultHalfFloorStrictlyMatchesFrozenOriginalProducerOnSyntheticInputs() throws {
         // Captured from the original4fc8 executable on these exact synthetic rows;
         // no executable/environment dependency and no regenerated expected values.

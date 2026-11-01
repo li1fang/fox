@@ -64,7 +64,8 @@ struct VisionBatchJob: Codable {
         }
         try settings?.validate()
         if let workflow {
-            try workflow.validate()
+            let isApprovedDiagnosticVariant = countOnlyDiagnosticEnabled && workflow.action == "squat" && workflow.strategyID == CountOnlyAvailability.squatStrategyID
+            try workflow.validate(allowDevelopmentVariants:isApprovedDiagnosticVariant)
             guard kind == .cache, settings == nil, effectiveMode.rawValue == workflow.consumerMode,
                   let sourceClock,sourceClock.timebase=="original_cmtime_jsonl",sourceClock.role=="observer_input",files.contains(where:{$0.path==sourceClock.path}) else {throw VisionDiagnosticArchive.error("Workflow mode/clock binding mismatch")}
         }
@@ -324,7 +325,7 @@ enum VisionReplayBatch {
                 result.countOnlyCases=countOnlyResults
                 result.settingsScope="legacy_settings_not_used_by_count_only"
                 result.controllerVersion="workout-coordinator-count-only-v1"
-                result.algorithms=Dictionary(job.cases.compactMap {item in item.countOnlyAction.map {($0.rawValue,$0.algorithm)}},uniquingKeysWith:{_,b in b})
+                result.algorithms=Dictionary(job.cases.compactMap {item in item.countOnlyAction.map {($0.rawValue,job.workflow?.algorithm ?? $0.algorithm)}},uniquingKeysWith:{_,b in b})
                 result.evidenceBoundary="public-raw-through-actual-app-consumer-and-persistence-not-live-camera-or-human-accuracy-acceptance"
             }
             let resultURL = output.appendingPathComponent("result.json")

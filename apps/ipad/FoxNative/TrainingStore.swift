@@ -46,6 +46,7 @@ final class TrainingStore: ObservableObject {
     var countOnlySelected: Bool { selectedCountOnlyAction.map(allowsCountOnly) ?? false }
     var countOnlyUnavailable: Bool { session?.currentAssistedEvidence != nil && !countOnlySelected }
     var canChooseSquat: Bool { allowsCountOnly(.squat) }
+    var admittedSquatStrategyID: String? { admittedCountOnlyActions.contains(.squat) ? CountOnlyAvailability.squatStrategyID : nil }
     var selectedCountOnlyAction: CountOnlyAction? {
         if let existing=session?.currentAssistedEvidence { return existing.action }
         if session?.exercise.exerciseId == "bodyweight_squat" { return .squat }

@@ -11,6 +11,7 @@ public struct CountOnlyEvidence: Codable, Equatable {
     public var schema = "fox.count_only_evidence.v1"
     public let action: CountOnlyAction
     public let algorithm: String
+    public let strategyID: String?
     public var phaseStatus = "not_provided"
     public let source: AssistedPoseSource
     public let side: ArmSide
@@ -21,13 +22,13 @@ public struct CountOnlyEvidence: Codable, Equatable {
     public let segments: [AssistedObservationSegment]
     public var observedCount: Int { events.count }
     public init(_ curl: AssistedCurlEvidence) {
-        action = .curl; algorithm=curl.algorithm; source=curl.source; side=curl.side
+        action = .curl; algorithm=curl.algorithm; strategyID=nil; source=curl.source; side=curl.side
         inputOriginSeconds=curl.inputOriginSeconds;formalStartSeconds=curl.formalStartSeconds
         lastInputSeconds=curl.lastInputSeconds;events=curl.events;segments=curl.segments
     }
-    init(source: AssistedPoseSource, side: ArmSide, origin: Double, formalStart: Double, last: Double?,
+    init(source: AssistedPoseSource, side: ArmSide, origin: Double, formalStart: Double, last: Double?, strategyID: String?, algorithm: String,
          events: [AssistedCountEvent], segments: [AssistedObservationSegment]) {
-        action = .squat;algorithm=action.algorithm;self.source=source;self.side=side
+        action = .squat;self.algorithm=algorithm;self.strategyID=strategyID;self.source=source;self.side=side
         inputOriginSeconds=origin;formalStartSeconds=formalStart;lastInputSeconds=last;self.events=events;self.segments=segments
     }
     public var curlEvidence: AssistedCurlEvidence? {
@@ -36,8 +37,13 @@ public struct CountOnlyEvidence: Codable, Equatable {
             formalStartSeconds:formalStartSeconds,lastInputSeconds:lastInputSeconds,events:events,segments:segments)
     }
     public func validate() throws {
-        guard schema == "fox.count_only_evidence.v1", algorithm == action.algorithm,
-              phaseStatus == "not_provided" else { throw TrainingError.corruptArchive }
+        guard schema == "fox.count_only_evidence.v1", phaseStatus == "not_provided" else { throw TrainingError.corruptArchive }
+        if let strategyID {
+            guard action == .squat, strategyID == "squat-side-joint-floor-25-h1-v1",
+                  let binding=try? VisionActionBinding.load("squat",strategyID:strategyID),
+                  binding.developmentOnly == true, binding.jointConfidenceFloor == 0.25,
+                  algorithm == binding.algorithm else { throw TrainingError.corruptArchive }
+        } else if algorithm != action.algorithm { throw TrainingError.corruptArchive }
         // The shared PTS/unique-segment contract has no action thresholds or phase inference.
         try AssistedCurlEvidence(source:source,side:side,inputOriginSeconds:inputOriginSeconds,
             formalStartSeconds:formalStartSeconds,lastInputSeconds:lastInputSeconds,events:events,segments:segments).validate()
@@ -51,6 +57,8 @@ public struct CountOnlySession {
     private let source: AssistedPoseSource
     private let origin: Double
     private let formalStart: Double
+    private let strategyID: String?
+    private let algorithm: String
     private var curl: AssistedCurlSession?
     private var squat: SquatSelectedCounter?
     private var lastTime: Double?
@@ -60,14 +68,23 @@ public struct CountOnlySession {
     public private(set) var reason = "waiting_for_observation"
     public var evidence: CountOnlyEvidence {
         if let curl { return CountOnlyEvidence(curl.evidence) }
-        return CountOnlyEvidence(source:source,side:side,origin:origin,formalStart:formalStart,last:lastTime,events:events,segments:segments)
+        return CountOnlyEvidence(source:source,side:side,origin:origin,formalStart:formalStart,last:lastTime,strategyID:strategyID,algorithm:algorithm,events:events,segments:segments)
     }
-    public init(action: CountOnlyAction, side: ArmSide, originSeconds: Double, source: AssistedPoseSource, formalStartSeconds: Double? = nil) throws {
+    public init(action: CountOnlyAction, side: ArmSide, originSeconds: Double, source: AssistedPoseSource, formalStartSeconds: Double? = nil, strategyID: String? = nil) throws {
         let formal=formalStartSeconds ?? originSeconds
         guard originSeconds.isFinite, originSeconds >= 0, formal.isFinite, formal >= originSeconds else { throw TrainingError.invalidRecord }
+        var floor: SquatJointConfidenceFloor = .baseline
+        var selectedAlgorithm = action.algorithm
+        if let strategyID {
+            guard action == .squat, strategyID == "squat-side-joint-floor-25-h1-v1" else { throw TrainingError.invalidRecord }
+            let binding=try VisionActionBinding.load("squat",strategyID:strategyID)
+            guard binding.developmentOnly == true, binding.squatJointConfidenceFloor == .lowerProbe else { throw TrainingError.invalidRecord }
+            floor = .lowerProbe; selectedAlgorithm = binding.algorithm
+        }
         self.action=action;self.side=side;origin=originSeconds;self.source=source;formalStart=formal
+        self.strategyID=strategyID;self.algorithm=selectedAlgorithm
         if action == .curl { curl=try AssistedCurlSession(side:side,originSeconds:originSeconds,formalStartSeconds:formal,source:source) }
-        else { squat=SquatSelectedCounter(side:side) }
+        else { squat=SquatSelectedCounter(side:side,jointConfidenceFloor:floor) }
     }
     public mutating func inputInterrupted() {
         if let time=curl?.evidence.lastInputSeconds { try? curl?.inputInterrupted(at:time) }

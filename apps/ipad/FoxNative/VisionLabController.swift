@@ -44,6 +44,7 @@ final class VisionLabController: ObservableObject {
     var assistedCurlEnabled: Bool { countOnlyAction != nil }
     @Published private(set) var assistedReason = "waiting_for_observation"
     private var assistedRuntime: CountOnlySession?
+    private var countOnlyStrategyID: String?
     private var countOnlySourceWindow: (origin: Double, formal: Double)?
     private(set) var assistedAppleRevision: Int?
     var assistedEvidence: CountOnlyEvidence? { assistedRuntime?.evidence }
@@ -540,7 +541,7 @@ final class VisionLabController: ObservableObject {
         try settings.validate()
         try PoseSessionSettings(configuration: configuration, runtimePolicy: runtimePolicy).validate()
         stopCamera()
-        countOnlyAction=nil;assistedRuntime=nil;assistedAppleRevision=nil;countOnlySourceResetPending=false;countOnlySourceWindow=nil
+        countOnlyAction=nil;countOnlyStrategyID=nil;assistedRuntime=nil;assistedAppleRevision=nil;countOnlySourceResetPending=false;countOnlySourceWindow=nil
         trialStartedAt = nil; trialEndedAt = nil; trialStartedUptime = nil
         arm = settings.arm; exercise = settings.exercise; declaredBodyView = settings.bodyView; frontCamera = true
         self.configuration = configuration; self.runtimePolicy = runtimePolicy
@@ -551,9 +552,9 @@ final class VisionLabController: ObservableObject {
     }
 
     /// Same Apple camera source, explicit runtime route; no legacy selector, start gate or phases.
-    func configureAssistedWorkout(side: ArmSide, action: CountOnlyAction = .curl, sourceWindow: (origin: Double, formal: Double)? = nil) {
+    func configureAssistedWorkout(side: ArmSide, action: CountOnlyAction = .curl, sourceWindow: (origin: Double, formal: Double)? = nil, strategyID: String? = nil) {
         stopCamera()
-        countOnlyAction=action;assistedRuntime=nil;assistedAppleRevision=nil;countOnlySourceResetPending=false;countOnlySourceWindow=sourceWindow
+        countOnlyAction=action;countOnlyStrategyID=strategyID;assistedRuntime=nil;assistedAppleRevision=nil;countOnlySourceResetPending=false;countOnlySourceWindow=sourceWindow
         assistedReason="waiting_for_observation";arm=side;exercise = .curl;declaredBodyView=action == .curl ? .front:.side;frontCamera=true
         trialStartedAt=nil;trialEndedAt=nil;startGate.cancel();startState=startGate.state
         subjectSelector.reset();subjectSelection=subjectSelector.selection
@@ -584,7 +585,7 @@ final class VisionLabController: ObservableObject {
         do {
             if assistedRuntime == nil {
                 assistedRuntime=try CountOnlySession(action:countOnlyAction!,side:arm,originSeconds:countOnlySourceWindow?.origin ?? value.frame.timestamp,
-                    source:source == .camera ? .cameraPose:.cachedPose,formalStartSeconds:countOnlySourceWindow?.formal)
+                    source:source == .camera ? .cameraPose:.cachedPose,formalStartSeconds:countOnlySourceWindow?.formal,strategyID:countOnlyStrategyID)
                 assistedAppleRevision=value.revision
             }
             try assistedRuntime!.process(value.frame)

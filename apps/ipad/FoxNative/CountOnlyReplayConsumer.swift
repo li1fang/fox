@@ -61,7 +61,7 @@ enum CountOnlyReplayConsumer {
             if !started, frame.timestamp>=formal {
                 // The fixed source boundary is independent of cadence/readiness or output counts.
                 clock.uptime=1002
-                store.workoutVision.prepare(arm:item.arm,sourceWindow:(origin:first.timestamp,formal:formal))
+                store.workoutVision.prepare(arm:item.arm,sourceWindow:(origin:first.timestamp,formal:formal),developmentStrategyID:item.strategyID == CountOnlyAvailability.squatStrategyID ? item.strategyID:nil)
                 guard store.session?.stage == .active else {throw VisionDiagnosticArchive.error(store.errorMessage ?? "Formal start failed")}
                 started=true
             }

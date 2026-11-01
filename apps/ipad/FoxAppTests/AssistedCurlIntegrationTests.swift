@@ -217,6 +217,34 @@ final class AssistedCurlIntegrationTests: XCTestCase {
         XCTAssertTrue(camera.admitPosePTS(2.0/15))
     }
 
+    func testQualifiedSquatNormalEntryUsesFrozenStrategyAndPreservesSide() throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("QualifiedSquat-\(UUID())")
+        try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
+        addTeardownBlock {try? FileManager.default.removeItem(at:root)}
+        let store=TrainingStore(archiveURL:root.appendingPathComponent("training.json"),diagnosticRoot:root.appendingPathComponent("diagnostic"),assistedDevelopmentEnabled:false,admittedCountOnlyActions:[.squat])
+        let clock=VisionReplayClock();store.workoutVision.controller.enableReplay(clock:clock)
+        defer {store.workoutVision.stop()}
+        XCTAssertTrue(store.prepareSquatPractice(side:.right,requestID:UUID()))
+        store.workoutVision.prepare(arm:.right)
+        XCTAssertEqual(store.session?.stage,.active)
+        let angles=Array(repeating:170.0,count:8)+[150,130,110,95]+Array(repeating:95.0,count:8)+[110,130,150,170]+Array(repeating:170.0,count:8)
+        for (i,angle) in angles.enumerated() {
+            let a=angle * .pi/180,t=10+Double(i)*0.1
+            let points:[PoseJoint:PosePoint]=[.rightHip:.init(x:0.6,y:0.8,confidence:0.3),.rightKnee:.init(x:0.6,y:0.5,confidence:0.3),.rightAnkle:.init(x:0.6+sin(a)*0.25*360/640,y:0.5+cos(a)*0.25,confidence:0.3)]
+            clock.uptime=1000+t
+            store.workoutVision.controller.replayFrame(.init(frame:.init(timestamp:t,width:640,height:360,people:[.init(points:points)]),latencyMs:0,revision:1))
+        }
+        XCTAssertTrue(store.workoutVision.flush())
+        let facts=try XCTUnwrap(store.session?.currentAssistedEvidence?.runs.first?.evidence)
+        XCTAssertEqual(facts.observedCount,1)
+        XCTAssertEqual(facts.strategyID,"squat-side-joint-floor-25-h1-v1")
+        XCTAssertEqual(facts.side,.right);XCTAssertEqual(store.session?.stage,.active)
+        let reopened=TrainingStore(archiveURL:store.fileURL,assistedDevelopmentEnabled:false,admittedCountOnlyActions:[.squat])
+        let saved=try XCTUnwrap(reopened.session?.currentAssistedEvidence?.runs.first?.evidence)
+        XCTAssertEqual(saved.strategyID,facts.strategyID);XCTAssertEqual(saved.side,.right)
+        XCTAssertNil(reopened.session?.currentVisualEvidence)
+    }
+
     func testSquatAdmissionDoesNotAuthorizeCurlAndRestoredCurlContinuesManually() throws {
         let (original,clock)=try makeStore();defer {original.workoutVision.stop()}
         original.workoutVision.prepare(arm:.left)

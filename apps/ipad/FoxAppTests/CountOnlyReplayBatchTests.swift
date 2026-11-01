@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class CountOnlyReplayBatchTests: XCTestCase {
-    func attachWorkflow(_ action:String,documents:URL,id:UUID) throws {
+    func attachWorkflow(_ action:String,documents:URL,id:UUID,strategyID:String? = nil) throws {
         let folder=documents.appendingPathComponent("FoxReplay/Jobs/\(id.uuidString)"),raw=folder.appendingPathComponent("public.jsonl")
         if action=="curl" {
             let original=try String(contentsOf:raw,encoding:.utf8).split(separator:"\n").first!
@@ -26,7 +26,7 @@ final class CountOnlyReplayBatchTests: XCTestCase {
         let clockText=lines.enumerated().map{i,_ in "{\"value\":\"\(i)\",\"timescale\":15,\"epoch\":\"0\"}"}.joined(separator:"\n")+"\n"
         try Data(clockText.utf8).write(to:clock)
         var job=try JSONSerialization.jsonObject(with:Data(contentsOf:folder.appendingPathComponent("job.json"))) as! [String:Any]
-        let binding=try VisionWorkflowBinding.load(action)
+        let binding=try VisionWorkflowBinding.load(action,strategyID:strategyID)
         job["workflow"]=try JSONSerialization.jsonObject(with:JSONEncoder().encode(binding))
         job["sourceClock"]=["path":"times.jsonl","timebase":"original_cmtime_jsonl","role":"observer_input"]
         job["mode"]=binding.consumerMode
@@ -37,6 +37,37 @@ final class CountOnlyReplayBatchTests: XCTestCase {
         c["strategyID"]=binding.strategyID;c["formalStartSeconds"]=2;c["bodyView"]="side";c["personID"]="public-synthetic-person"
         c["endSeconds"]=Double(lines.count)/15;job["cases"]=[c]
         try JSONSerialization.data(withJSONObject:job,options:.sortedKeys).write(to:folder.appendingPathComponent("job.json"))
+    }
+    func testExplicitH1SquatStrategyReachesAppConsumerAndPreservesDefault() async throws {
+        for strategy: String? in [nil, "squat-side-joint-floor-25-h1-v1"] {
+            let (documents,id)=try fixture()
+            let raw=documents.appendingPathComponent("FoxReplay/Jobs/\(id.uuidString)/public.jsonl")
+            var lines=try String(contentsOf:raw,encoding:.utf8).split(separator:"\n").map(String.init)
+            for i in 1..<lines.count {
+                var row=try JSONSerialization.jsonObject(with:Data(lines[i].utf8)) as! [String:Any]
+                var people=row["people"] as! [[[String:Any]]]
+                for j in people[0].indices { people[0][j]["confidence"]=0.3 }
+                row["people"]=people
+                lines[i]=String(decoding:try JSONSerialization.data(withJSONObject:row),as:UTF8.self)
+            }
+            try Data((lines.joined(separator:"\n")+"\n").utf8).write(to:raw)
+            try attachWorkflow("squat",documents:documents,id:id,strategyID:strategy)
+            let result=try await VisionReplayBatch.run(id:id,documents:documents,countOnlyDiagnosticEnabled:true)
+            let c=try XCTUnwrap(result.countOnlyCases?.first)
+            XCTAssertEqual(c.automaticCount,strategy == nil ? 0:1)
+            XCTAssertNil(c.record.reps);XCTAssertNil(c.record.visualEvidence)
+            XCTAssertEqual(c.phaseStatus,"not_provided")
+            XCTAssertEqual(result.workflow?.strategyID,strategy ?? "squat-side-selected-b587-v1")
+            let facts=try XCTUnwrap(c.record.assistedEvidence?.runs.first?.evidence)
+            XCTAssertEqual(facts.strategyID,strategy)
+            XCTAssertEqual(facts.algorithm,strategy == nil ? CountOnlyAction.squat.algorithm : "squat-selected-count-only-h1-joint-floor-v1")
+        }
+    }
+    func testUnapprovedH1VariantCannotEnterAppConsumer() async throws {
+        let (documents,id)=try fixture()
+        try attachWorkflow("squat",documents:documents,id:id,strategyID:"squat-side-joint-floor-35-h1-v1")
+        do { _=try await VisionReplayBatch.run(id:id,documents:documents,countOnlyDiagnosticEnabled:true);XCTFail("Only frozen .25 strategy is admitted to diagnostics") }
+        catch { XCTAssertFalse(error is CancellationError) }
     }
     func testWorkflowSquatBindingPreservesFixedPreludeAndExplicitSkippedFrameFacts() async throws {
         let (documents,id)=try fixture();try attachWorkflow("squat",documents:documents,id:id)
