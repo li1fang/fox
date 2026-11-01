@@ -302,17 +302,17 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         try beginCountOnly(action:.curl,side:side,source:source,at:now)
     }
     @discardableResult
-    public mutating func beginCountOnly(action: CountOnlyAction, side: ArmSide, source: VisionInputSource, at now: Date) throws -> UUID {
+    public mutating func beginCountOnly(action: CountOnlyAction, side: ArmSide, source: VisionInputSource, at now: Date, strategyID: String? = nil) throws -> UUID {
         guard [.ready, .paused].contains(stage), currentObservationId == nil, currentVisualEvidence == nil,
               action.isCompatible(with:exercise), target.targetReps != nil,
               exercise.targetSide == nil || exercise.targetSide == side else { throw TrainingError.invalidTransition }
         var next=self
         if let old=next.currentAssistedEvidence {
-            guard old.binding == next.currentSetBinding, old.side == side, old.source == source, old.action == action else { throw TrainingError.invalidTransition }
+            guard old.binding == next.currentSetBinding, old.side == side, old.source == source, old.action == action, old.runs.last?.resolvedStrategyID == strategyID else { throw TrainingError.invalidTransition }
         } else {
             next.currentAssistedEvidence=WorkoutCountOnlyEvidence(binding:next.currentSetBinding!,side:side,source:source,action:action)
         }
-        let id=try next.currentAssistedEvidence!.begin(at:now)
+        let id=try next.currentAssistedEvidence!.begin(at:now,strategyID:strategyID)
         try next.startTimedSet(at:now);next.currentObservationId=id;self=next;return id
     }
     /// Presentation/camera restart rotates observation identity without pausing the user's set.
@@ -321,8 +321,9 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         guard stage == .active, currentAssistedEvidence != nil, currentVisualEvidence == nil,
               now.timeIntervalSince1970.isFinite, now >= lastCheckpointAt else { throw TrainingError.invalidTransition }
         var next=self
+        let strategyID=next.currentAssistedEvidence!.runs.last?.resolvedStrategyID
         next.currentAssistedEvidence!.end(.cameraInterrupted,at:now)
-        let id=try next.currentAssistedEvidence!.begin(at:now)
+        let id=try next.currentAssistedEvidence!.begin(at:now,strategyID:strategyID)
         next.currentObservationId=id;next.lastCheckpointAt=now;self=next;return id
     }
     public mutating func updateAssistedCurl(binding: WorkoutSetBinding, observationId: UUID,

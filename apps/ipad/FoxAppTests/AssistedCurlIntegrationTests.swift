@@ -217,6 +217,44 @@ final class AssistedCurlIntegrationTests: XCTestCase {
         XCTAssertTrue(camera.admitPosePTS(2.0/15))
     }
 
+    func testSquatStrategySurvivesNoFramePresentationRestartAndDiscontinuity() throws {
+        for qualified in [false,true] {
+            let root=FileManager.default.temporaryDirectory.appendingPathComponent("SquatNoFrame-\(UUID())")
+            try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
+            addTeardownBlock {try? FileManager.default.removeItem(at:root)}
+            let store=TrainingStore(archiveURL:root.appendingPathComponent("training.json"),diagnosticRoot:root.appendingPathComponent("diagnostic"),assistedDevelopmentEnabled:!qualified,admittedCountOnlyActions:qualified ? [.squat]:[])
+            let clock=VisionReplayClock();store.workoutVision.controller.enableReplay(clock:clock)
+            defer {store.workoutVision.stop()}
+            XCTAssertTrue(store.prepareSquatPractice(side:.right,requestID:UUID()))
+            store.workoutVision.prepare(arm:.right)
+            XCTAssertEqual(store.session?.stage,.active)
+            XCTAssertNil(store.session?.currentAssistedEvidence?.runs.first?.evidence)
+            let expected = qualified ? "squat-side-joint-floor-25-h1-v1" : nil
+            XCTAssertEqual(store.session?.currentAssistedEvidence?.runs.first?.declaredStrategyID,expected)
+            let beforeFrame=try LocalTrainingRepository.decoder().decode(TrainingArchive.self,from:Data(contentsOf:store.fileURL))
+            try beforeFrame.validate()
+            XCTAssertEqual(beforeFrame.currentSession?.currentAssistedEvidence?.runs.first?.declaredStrategyID,expected)
+            store.stopPresentation(token:store.executionToken)
+            XCTAssertEqual(store.session?.stage,.active)
+            store.workoutVision.preview()
+            store.workoutVision.controller.replayDiscontinuity()
+            XCTAssertEqual(store.session?.currentAssistedEvidence?.runs.last?.declaredStrategyID,expected)
+            XCTAssertEqual(store.session?.stage,.active)
+            let angles=Array(repeating:170.0,count:8)+[150,130,110,95]+Array(repeating:95.0,count:8)+[110,130,150,170]+Array(repeating:170.0,count:8)
+            for (i,angle) in angles.enumerated() {
+                let a=angle * .pi/180,t=10+Double(i)*0.1
+                let points:[PoseJoint:PosePoint]=[.rightHip:.init(x:0.6,y:0.8,confidence:0.3),.rightKnee:.init(x:0.6,y:0.5,confidence:0.3),.rightAnkle:.init(x:0.6+sin(a)*0.25*360/640,y:0.5+cos(a)*0.25,confidence:0.3)]
+                clock.uptime=1000+t
+                store.workoutVision.controller.replayFrame(.init(frame:.init(timestamp:t,width:640,height:360,people:[.init(points:points)]),latencyMs:0,revision:1))
+            }
+            XCTAssertTrue(store.workoutVision.flush(),"qualified=\(qualified), error=\(store.errorMessage ?? "nil"), reason=\(store.workoutVision.controller.assistedReason), runtime=\(String(describing:store.workoutVision.controller.assistedEvidence)), runs=\(String(describing:store.session?.currentAssistedEvidence?.runs))")
+            let facts=try XCTUnwrap(store.session?.currentAssistedEvidence?.runs.last?.evidence,"qualified=\(qualified), error=\(store.errorMessage ?? "nil")")
+            XCTAssertEqual(facts.strategyID,qualified ? "squat-side-joint-floor-25-h1-v1":nil)
+            XCTAssertEqual(facts.observedCount,qualified ? 1:0)
+            XCTAssertEqual(store.session?.stage,.active);XCTAssertNil(store.session?.currentVisualEvidence)
+        }
+    }
+
     func testQualifiedSquatNormalEntryUsesFrozenStrategyAndPreservesSide() throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent("QualifiedSquat-\(UUID())")
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)

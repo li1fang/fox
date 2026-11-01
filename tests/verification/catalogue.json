@@ -11,6 +11,8 @@
 
     {"id":"FoxTrainingCoreTests/VisionWorkflowTests/testResetIsNotHiddenBySameFrameValidGeometryAndOriginalClockIsRequired","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionWorkflowTests.swift","scope":"public","surface":"host"},
     {"id":"FoxAppTests/CountOnlyReplayBatchTests/testUnapprovedH1VariantCannotEnterAppConsumer","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},
+    {"id":"FoxTrainingCoreTests/AssistedWorkoutTests/testCountOnlyRunDeclaresStrategyBeforeFramesAndRejectsUnknownArchiveStrategy","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/AssistedWorkoutTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxAppTests/AssistedCurlIntegrationTests/testSquatStrategySurvivesNoFramePresentationRestartAndDiscontinuity","file":"apps/ipad/FoxAppTests/AssistedCurlIntegrationTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/AssistedCurlIntegrationTests/testQualifiedSquatNormalEntryUsesFrozenStrategyAndPreservesSide","file":"apps/ipad/FoxAppTests/AssistedCurlIntegrationTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/CountOnlyReplayBatchTests/testExplicitH1SquatStrategyReachesAppConsumerAndPreservesDefault","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/CountOnlyReplayBatchTests/testWorkflowSquatBindingPreservesFixedPreludeAndExplicitSkippedFrameFacts","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},

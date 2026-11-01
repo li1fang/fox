@@ -69,8 +69,8 @@ final class WorkoutVisionCoordinator {
         }
         if store.countOnlySelected {
             let selectedStrategy: String?
-            if let existing=session.currentAssistedEvidence?.runs.reversed().compactMap(\.evidence).first {
-                selectedStrategy=existing.strategyID
+            if let existing=session.currentAssistedEvidence?.runs.last {
+                selectedStrategy=existing.resolvedStrategyID
             } else {
                 selectedStrategy=developmentStrategyID ?? (store.selectedCountOnlyAction == .squat ? store.admittedSquatStrategyID : nil)
             }
@@ -103,7 +103,7 @@ final class WorkoutVisionCoordinator {
     private func prepareAssisted(arm: ArmSide, token: TrainingExecutionToken?, sourceWindow: (origin: Double, formal: Double)? = nil, strategyID: String? = nil) {
         guard let store, store.countOnlySelected else { return }
         var id: UUID?
-        guard store.updateSession(token:token, { id=try $0.beginCountOnly(action:store.selectedCountOnlyAction!,side:arm,source:controller.source,at:controller.wallTime) }), let id else { return }
+        guard store.updateSession(token:token, { id=try $0.beginCountOnly(action:store.selectedCountOnlyAction!,side:arm,source:controller.source,at:controller.wallTime,strategyID:strategyID) }), let id else { return }
         stopping=true;controller.configureAssistedWorkout(side:arm,action:store.selectedCountOnlyAction!,sourceWindow:sourceWindow,strategyID:strategyID);stopping=false
         binding=store.session?.currentSetBinding;observationId=id
         installCallbacks(token:store.executionToken,observation:id,target:binding)
@@ -119,7 +119,7 @@ final class WorkoutVisionCoordinator {
             guard controller.cameraState == .stopped, store.countOnlySelected, flush(token:token) else { return }
             var id: UUID?
             guard store.updateSession(token:token, { id=try $0.renewCountOnlyObservation(at:self.controller.wallTime) }), let id else { return }
-            stopping=true;controller.configureAssistedWorkout(side:session.currentAssistedEvidence!.side,action:session.currentAssistedEvidence!.action,strategyID:session.currentAssistedEvidence!.runs.reversed().compactMap(\.evidence).first?.strategyID);stopping=false
+            stopping=true;controller.configureAssistedWorkout(side:session.currentAssistedEvidence!.side,action:session.currentAssistedEvidence!.action,strategyID:session.currentAssistedEvidence!.runs.last?.resolvedStrategyID);stopping=false
             binding=store.session?.currentSetBinding;observationId=id
             installCallbacks(token:store.executionToken,observation:id,target:binding)
             lastCount=0;lastPersistedAt=0

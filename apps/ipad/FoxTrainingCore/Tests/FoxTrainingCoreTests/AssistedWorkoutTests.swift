@@ -135,6 +135,27 @@ final class AssistedWorkoutTests: XCTestCase {
         XCTAssertFalse(output.cues.contains(where:{$0.kind == .phase}))
     }
 
+    func testCountOnlyRunDeclaresStrategyBeforeFramesAndRejectsUnknownArchiveStrategy() throws {
+        let exercise=Exercise(id:"bodyweight_squat",name:"Squat",sets:[SetTarget(setIndex:1,reps:5)])
+        let plan=TrainingPlan(focus:"Squat",exercises:[exercise])
+        var invalid=try TrainingSession(plan:plan,now:now)
+        XCTAssertThrowsError(try invalid.beginCountOnly(action:.squat,side:.right,source:.fixture,at:now,strategyID:"unknown"))
+        var session=try TrainingSession(plan:plan,now:now)
+        _=try session.beginCountOnly(action:.squat,side:.right,source:.fixture,at:now,strategyID:"squat-side-joint-floor-25-h1-v1")
+        let current=try XCTUnwrap(session.currentAssistedEvidence)
+        XCTAssertNil(current.runs.first?.evidence)
+        XCTAssertEqual(current.runs.first?.declaredStrategyID,"squat-side-joint-floor-25-h1-v1")
+        try current.validate()
+        var data=try XCTUnwrap(JSONSerialization.jsonObject(with:JSONEncoder().encode(current)) as? [String:Any])
+        var runs=try XCTUnwrap(data["runs"] as? [[String:Any]])
+        runs[0]["declaredStrategyID"]="unknown";data["runs"]=runs
+        let decoded=try JSONDecoder().decode(WorkoutCountOnlyEvidence.self,from:JSONSerialization.data(withJSONObject:data))
+        XCTAssertThrowsError(try decoded.validate())
+        runs[0].removeValue(forKey:"declaredStrategyID");data["runs"]=runs
+        let old=try JSONDecoder().decode(WorkoutCountOnlyEvidence.self,from:JSONSerialization.data(withJSONObject:data))
+        XCTAssertNil(old.runs.first?.resolvedStrategyID);try old.validate()
+    }
+
     func testSquatUsesSameCountOnlyRepositoryContractWithoutPhaseFabrication() throws {
         var runtime=try CountOnlySession(action:.squat,side:.left,originSeconds:1000,source:.cachedPose)
         let angles=Array(repeating:170.0,count:5)+[150,130,110,95]+Array(repeating:95.0,count:4)+[110,130,150,170]+Array(repeating:170.0,count:5)
