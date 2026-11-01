@@ -2,8 +2,8 @@ import XCTest
 import UIKit
 
 final class FoxCountOnlyUITests: XCTestCase {
-    func testPhoneSquatCountOnlyUnknownAndZeroSurviveReopenAcrossRotation() { story() }
-    func testPadSquatCountOnlyUnknownAndZeroSurviveReopenAcrossRotation() { story() }
+    func testPhoneSquatCountOnlyUnknownAndZeroSurviveReopenAcrossRotation() { story(isPad: false) }
+    func testPadSquatCountOnlyUnknownAndZeroSurviveReopenAcrossRotation() { story(isPad: true) }
 
     private func visible(_ element: XCUIElement, in app: XCUIApplication, scroll: XCUIElement? = nil, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout:5),file:file,line:line)
@@ -48,7 +48,7 @@ final class FoxCountOnlyUITests: XCTestCase {
             return orientation == .portrait ? frame.height>frame.width : frame.width>frame.height
         },object:nil)],timeout:8),.completed)
     }
-    private func story() {
+    private func story(isPad: Bool) {
         continueAfterFailure=false
         let app=XCUIApplication()
         app.launchEnvironment=["FOX_UI_TESTING":"1","FOX_POSE_FIXTURE":"no_person"]
@@ -115,8 +115,16 @@ final class FoxCountOnlyUITests: XCTestCase {
                 visible(app.buttons["trial-correct-count"],in:app);app.buttons["trial-correct-count"].tap()
                 visible(count,in:app);count.tap();let start=ProcessInfo.processInfo.systemUptime;count.typeText("0")
                 XCTAssertLessThan(ProcessInfo.processInfo.systemUptime-start,20)
-                app.dismissNumericKeyboardPopover()
-                if app.buttons["feedback-dismiss-keyboard"].exists {app.buttons["feedback-dismiss-keyboard"].tap()}
+                if isPad {
+                    let dismiss=app.buttons["feedback-dismiss-keyboard"]
+                    visible(dismiss,in:app);dismiss.tap()
+                    let keyboardGone=XCTNSPredicateExpectation(predicate:NSPredicate(format:"exists == false"),object:app.keyboards.firstMatch)
+                    XCTAssertEqual(XCTWaiter.wait(for:[keyboardGone],timeout:5),.completed)
+                    XCTAssertEqual(count.value as? String,"0")
+                } else {
+                    app.dismissNumericKeyboardPopover()
+                    if app.buttons["feedback-dismiss-keyboard"].exists {app.buttons["feedback-dismiss-keyboard"].tap()}
+                }
                 visible(app.buttons["submit-feedback"],in:app);XCTAssertTrue(app.buttons["submit-feedback"].isEnabled)
                 app.buttons["submit-feedback"].tap()
             } else {
