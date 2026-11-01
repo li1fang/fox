@@ -255,6 +255,64 @@ final class AssistedCurlIntegrationTests: XCTestCase {
         }
     }
 
+    func testNoFrameArchiveReopensIntoSameStrategyAndRejectsUnknown() throws {
+        for qualified in [false,true] {
+            let root=FileManager.default.temporaryDirectory.appendingPathComponent("SquatReopen-\(UUID())")
+            try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
+            addTeardownBlock {try? FileManager.default.removeItem(at:root)}
+            let file=root.appendingPathComponent("training.json")
+            let expected = qualified ? "squat-side-joint-floor-25-h1-v1" : nil
+            var original:TrainingStore?=TrainingStore(archiveURL:file,diagnosticRoot:root.appendingPathComponent("old-diagnostics"),assistedDevelopmentEnabled:!qualified,admittedCountOnlyActions:qualified ? [.squat]:[])
+            let oldClock=VisionReplayClock();original!.workoutVision.controller.enableReplay(clock:oldClock)
+            XCTAssertTrue(original!.prepareSquatPractice(side:.right,requestID:UUID()))
+            original!.workoutVision.prepare(arm:.right)
+            XCTAssertEqual(original!.session?.stage,.active)
+            XCTAssertEqual(original!.session?.currentAssistedEvidence?.runs.first?.declaredStrategyID,expected)
+            XCTAssertNil(original!.session?.currentAssistedEvidence?.runs.first?.evidence)
+            original!.stopPresentation(token:original!.executionToken)
+            original=nil // The new store is the sole writer from this point.
+            let originalBytes=try Data(contentsOf:file)
+            var object=try XCTUnwrap(JSONSerialization.jsonObject(with:originalBytes) as? [String:Any])
+            var sessions=try XCTUnwrap(object["sessions"] as? [[String:Any]])
+            var evidence=try XCTUnwrap(sessions[0]["currentAssistedEvidence"] as? [String:Any])
+            var runs=try XCTUnwrap(evidence["runs"] as? [[String:Any]])
+            runs[0]["declaredStrategyID"]="unknown";evidence["runs"]=runs;sessions[0]["currentAssistedEvidence"]=evidence;object["sessions"]=sessions
+            let badFile=root.appendingPathComponent("unknown.json"), badBytes=try JSONSerialization.data(withJSONObject:object)
+            try badBytes.write(to:badFile)
+            let bad=TrainingStore(archiveURL:badFile,assistedDevelopmentEnabled:false,admittedCountOnlyActions:[.squat])
+            XCTAssertTrue(bad.storageUnavailable);XCTAssertNotNil(bad.errorMessage);XCTAssertNil(bad.session)
+            XCTAssertEqual(try Data(contentsOf:badFile),badBytes)
+            let reopened=TrainingStore(archiveURL:file,diagnosticRoot:root.appendingPathComponent("new-diagnostics"),assistedDevelopmentEnabled:false,admittedCountOnlyActions:[.squat])
+            let clock=VisionReplayClock(origin:oldClock.date.addingTimeInterval(1));reopened.workoutVision.controller.enableReplay(clock:clock)
+            defer {reopened.workoutVision.stop()}
+            XCTAssertFalse(reopened.storageUnavailable);XCTAssertEqual(reopened.session?.stage,.paused)
+            XCTAssertEqual(reopened.session?.currentAssistedEvidence?.runs.first?.declaredStrategyID,expected)
+            XCTAssertEqual(reopened.session?.currentAssistedEvidence?.side,.right)
+            reopened.workoutVision.preview()
+            reopened.workoutVision.prepare(arm:.right)
+            XCTAssertEqual(reopened.session?.stage,.active)
+            XCTAssertEqual(reopened.session?.currentAssistedEvidence?.runs.last?.declaredStrategyID,expected)
+            let angles=Array(repeating:170.0,count:8)+[150,130,110,95]+Array(repeating:95.0,count:8)+[110,130,150,170]+Array(repeating:170.0,count:8)
+            var tick=10.0
+            func feedCycle() {
+                for angle in angles {
+                    let a=angle * .pi/180
+                    let points:[PoseJoint:PosePoint]=[.rightHip:.init(x:0.6,y:0.8,confidence:0.3),.rightKnee:.init(x:0.6,y:0.5,confidence:0.3),.rightAnkle:.init(x:0.6+sin(a)*0.25*360/640,y:0.5+cos(a)*0.25,confidence:0.3)]
+                    clock.uptime=1000+tick
+                    reopened.workoutVision.controller.replayFrame(.init(frame:.init(timestamp:tick,width:640,height:360,people:[.init(points:points)]),latencyMs:0,revision:1));tick+=0.1
+                }
+            }
+            feedCycle();XCTAssertEqual(reopened.session?.observedAutomaticCount,qualified ? 1:0)
+            reopened.workoutVision.controller.replayDiscontinuity()
+            XCTAssertEqual(reopened.session?.stage,.active)
+            XCTAssertEqual(reopened.session?.currentAssistedEvidence?.runs.last?.declaredStrategyID,expected)
+            feedCycle();XCTAssertTrue(reopened.workoutVision.flush())
+            XCTAssertEqual(reopened.session?.observedAutomaticCount,qualified ? 2:0)
+            XCTAssertNil(reopened.session?.currentVisualEvidence)
+            XCTAssertTrue(reopened.session?.currentAssistedEvidence?.runs.allSatisfy {$0.resolvedStrategyID == expected} == true)
+        }
+    }
+
     func testQualifiedSquatNormalEntryUsesFrozenStrategyAndPreservesSide() throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent("QualifiedSquat-\(UUID())")
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
