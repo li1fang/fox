@@ -68,7 +68,7 @@ final class FoxCountOnlyUITests: XCTestCase {
             XCTAssertFalse(app.switches["training-assisted-curl-mode"].exists)
             app.buttons["phone-training-details"].tap()
             let side=app.segmentedControls["squat-near-side"].buttons["右侧"]
-            visible(side,in:app);side.tap()
+            visible(side,in:app);side.coordinate(withNormalizedOffset:CGVector(dx:0.5,dy:0.5)).tap()
             XCTAssertTrue(side.isEnabled,"The fixed near-side selector must be available before the set")
             let selected=XCTWaiter.wait(for:[XCTNSPredicateExpectation(predicate:NSPredicate {_,_ in side.isSelected},object:nil)],timeout:5)
             if selected != .completed {
