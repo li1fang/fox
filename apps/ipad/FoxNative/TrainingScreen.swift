@@ -23,20 +23,66 @@ struct TrainingScreen: View {
     @ScaledMetric(relativeTo: .title) private var summaryTitleSize = 28
     @ScaledMetric(relativeTo: .title3) private var noteSize = 20
 
+    #if DEBUG
+    private func traceSquatSide(_ event: String, request: ArmSide? = nil, saveResult: Bool? = nil) {
+        guard ProcessInfo.processInfo.environment["FOX_UI_TESTING"] == "1", store.selectedCountOnlyAction == .squat else { return }
+        let saved = session.currentSetAttemptId.flatMap { store.clientState.selectedArms[$0.uuidString] }
+        var fields: [String: Any] = ["event": event, "tokenAccepted": store.accepts(executionToken),
+            "hasAttempt": session.currentSetAttemptId != nil, "stageReady": session.stage == .ready,
+            "hasAssistedEvidence": session.currentAssistedEvidence != nil,
+            "savedSide": saved.map { String(describing: $0) } ?? "none",
+            "localSide": armChoice.map { String(describing: $0.arm) } ?? "none",
+            "displaySide": String(describing: TrainingArmChoice.current(armChoice, session: session))]
+        if let request { fields["requestedSide"] = String(describing: request) }
+        if let saveResult { fields["saveSucceeded"] = saveResult }
+        guard let bytes = try? JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys]),
+              let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let folder = root.appendingPathComponent("Fox", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("ui-test-squat-side-diagnostic.jsonl")
+        if !FileManager.default.fileExists(atPath: file.path) { FileManager.default.createFile(atPath: file.path, contents: nil) }
+        if let handle = try? FileHandle(forWritingTo: file) {
+            defer { try? handle.close() }; try? handle.seekToEnd(); try? handle.write(contentsOf: bytes + Data([10]))
+        }
+    }
+    #endif
     private var selectedArm: ArmSide { TrainingArmChoice.current(armChoice, session: session) }
     private var armBinding: Binding<ArmSide> {
-        Binding(get: { selectedArm }, set: { side in
+        Binding(get: {
+            #if DEBUG
+            traceSquatSide("get")
+            #endif
+            return selectedArm
+        }, set: { side in
+            #if DEBUG
+            traceSquatSide("setter_enter", request: side)
+            #endif
             // The sheet/rotation can reappear before onChange runs. Commit the fixed squat side
             // before updating local presentation, so onAppear cannot restore a stale choice.
             if store.selectedCountOnlyAction == .squat {
                 guard let executionToken, store.accepts(executionToken), let id=session.currentSetAttemptId,
-                      session.stage == .ready, session.currentAssistedEvidence == nil else {return}
+                      session.stage == .ready, session.currentAssistedEvidence == nil else {
+                    #if DEBUG
+                    traceSquatSide("setter_rejected", request: side)
+                    #endif
+                    return
+                }
                 let previous=store.clientState
                 var state=previous;state.selectedArms[id.uuidString]=side
                 store.setClientState(state,token:executionToken)
-                guard store.saveClientState() else {store.setClientState(previous,token:executionToken);return}
+                #if DEBUG
+                traceSquatSide("before_save", request: side)
+                #endif
+                let saved = store.saveClientState()
+                #if DEBUG
+                traceSquatSide("after_save", request: side, saveResult: saved)
+                #endif
+                guard saved else {store.setClientState(previous,token:executionToken);return}
             }
             armChoice = TrainingArmChoice(attemptID: session.currentSetAttemptId, arm: side)
+            #if DEBUG
+            traceSquatSide("after_local", request: side)
+            #endif
         })
     }
     private var hasCamera: Bool { store.usesVision && session.stage != .rest }
@@ -58,12 +104,18 @@ struct TrainingScreen: View {
                 guard store.accepts(executionToken) else { return }
                 summaryNote = store.clientState.summary
                 if let id = session.currentSetAttemptId, let arm = store.clientState.selectedArms[id.uuidString] { armChoice = TrainingArmChoice(attemptID: id, arm: arm) }
+                #if DEBUG
+                traceSquatSide("appear")
+                #endif
                 guidance.stop(); guidance.start(); store.workoutVision.preview(token: executionToken)
             }
             .onChange(of: summaryNote) { value in
                 guard let executionToken else { return }; var state = store.clientState; state.summary = value; store.setClientState(state, token: executionToken)
             }
             .onChange(of: selectedArm) { value in
+                #if DEBUG
+                traceSquatSide("on_change", request: value)
+                #endif
                 guard let executionToken, let id = session.currentSetAttemptId else { return }
                 var state = store.clientState; state.selectedArms[id.uuidString] = value; store.setClientState(state, token: executionToken)
             }
