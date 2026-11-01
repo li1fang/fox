@@ -7,9 +7,10 @@ import { spawnSync } from 'node:child_process';
 
 const root=fileURLToPath(new URL('..',import.meta.url));
 export const registryFile=path.join(root,'apps/ipad/FoxTrainingCore/Sources/FoxTrainingCore/Resources/vision-actions.json');
-export async function workflowBinding(action) {
+export async function workflowBinding(action,strategyID) {
   const registry=JSON.parse(await readFile(registryFile,'utf8'));
-  const value=registry.actions.find(a=>a.action===action);
+  const entries=strategyID==null?registry.actions:[...registry.actions,...(registry.variants??[])];
+  const value=entries.find(a=>a.action===action&&(strategyID==null||a.strategyID===strategyID));
   if(registry.schema!=='fox.vision_actions.v1'||registry.version!==1||!value) throw Error('Unknown workflow action/strategy');
   for(const file of value.implementation) {
     const bytes=await readFile(path.join(root,'apps/ipad/FoxTrainingCore/Sources/FoxTrainingCore',file.path));
@@ -20,7 +21,7 @@ export async function workflowBinding(action) {
 }
 export async function validateWorkflow(job,{requireClock=true}={}) {
   if(job.workflow==null) return;
-  const binding=await workflowBinding(job.workflow.action);
+  const binding=await workflowBinding(job.workflow.action,job.workflow.strategyID);
   if(!isDeepStrictEqual(binding,job.workflow)||job.mode!==binding.consumerMode||job.kind!=='cache'||job.settings!=null)
     throw Error('Workflow strategy binding mismatch');
   if(requireClock&&(job.sourceClock?.timebase!=='original_cmtime_jsonl'||job.sourceClock.role!=='observer_input'||!job.files?.some(f=>f.path===job.sourceClock.path)))throw Error('Workflow observation input clock asset missing');
@@ -83,7 +84,9 @@ export function normalizeWorkflowResult(job,result,{jobSHA256,frames,witness}={}
       const admitted=greedyPTS(times);
       let events,trace,resetCounts;
       if(portable) {
-        if(raw.replay.binding.algorithm!==job.workflow.algorithm||raw.replay.formalStartSeconds!==spec.formalStartSeconds
+        if(raw.replay.binding.algorithm!==job.workflow.algorithm||raw.replay.binding.strategyID!==job.workflow.strategyID
+          ||raw.replay.binding.jointConfidenceFloor!==job.workflow.jointConfidenceFloor
+          ||raw.replay.binding.developmentOnly!==job.workflow.developmentOnly||raw.replay.formalStartSeconds!==spec.formalStartSeconds
           ||raw.replay.sourceOriginSeconds!==spec.startSeconds||raw.replay.side!==spec.arm)throw Error('Detached portable case');
         ({events,trace,resetCounts}=raw.replay);
       } else if(job.mode==='countOnly') {

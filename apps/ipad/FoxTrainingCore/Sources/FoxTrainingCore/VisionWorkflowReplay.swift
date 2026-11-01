@@ -39,15 +39,16 @@ public struct VisionWorkflowReplayResult: Codable {
 /// Thin orchestration over the existing implementations. No motion thresholds are owned here.
 /// Formal/reference start is fixed even when the original arm preparation gate becomes ready later.
 public enum VisionWorkflowReplay {
-    public static func run(action: String, side: ArmSide, frames: [PoseFrame]) throws -> VisionWorkflowReplayResult {
-        let binding=try VisionActionBinding.load(action), registry=try VisionActionRegistry.load()
+    public static func run(action: String, side: ArmSide, frames: [PoseFrame],strategyID:String? = nil) throws -> VisionWorkflowReplayResult {
+        let binding=try VisionActionBinding.load(action,strategyID:strategyID), registry=try VisionActionRegistry.load()
         guard let first=frames.first, let last=frames.last, first.timestamp>=0,
               last.timestamp>=first.timestamp+registry.formalOffsetSeconds,
               zip(frames,frames.dropFirst()).allSatisfy({$0.timestamp.isFinite && $0.timestamp<$1.timestamp})
         else {throw TrainingError.invalidRecord}
         let formal=first.timestamp+registry.formalOffsetSeconds
         var cadence=PoseFrameCadenceGate(), trace:[VisionWorkflowTrace]=[]
-        var squat=SquatSelectedCounter(side:side)
+        guard let floor=binding.squatJointConfidenceFloor else {throw TrainingError.invalidRecord}
+        var squat=SquatSelectedCounter(side:side,jointConfidenceFloor:floor)
         var selector=PoseSubjectSelector(), gate=PoseStartGate(lossTolerance:PoseRuntimePolicy.standard.countdownLossTolerance)
         var tracker=CurlTracker(side:side,exercise:.curl,configuration:.standard,runtimePolicy:.standard)
         var counting=false, trackerOrigin:Double?

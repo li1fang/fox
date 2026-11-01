@@ -58,8 +58,9 @@ export async function validateBatchJob(folder) {
   return { job, jobSHA256:digest(bytes) };
 }
 
-export async function prepareBatch({source,kind,cases,settings,destination,mode,assets = [],action,provenance,clock}) {
-  const workflow=action==null?undefined:await workflowBinding(action);
+export async function prepareBatch({source,kind,cases,settings,destination,mode,assets = [],action,provenance,clock,strategy}) {
+  if(strategy!=null&&action==null)throw Error('Explicit strategy requires an action');
+  const workflow=action==null?undefined:await workflowBinding(action,strategy);
   if(workflow) {
     if(mode!=null&&mode!==workflow.consumerMode) throw Error('Workflow mode binding mismatch');
     mode=workflow.consumerMode;
@@ -258,6 +259,7 @@ async function cli() {
       assets:args.flatMap((v,i)=>v === '--asset' ? [args[i+1]] : []),action:option('--action'),
       provenance:option('--source-provenance')?await json(option('--source-provenance')):undefined,
       clock:option('--clock'),
+      strategy:option('--strategy'),
       destination:path.resolve(option('--destination') ?? path.join(root,'.data/vision-replay/jobs'))});
   }
   if (!['run','pull','verify','replay','evaluate','inspect'].includes(command) || !args[0]) throw Error('Expected prepare --action, inspect, replay <job> --executable <binary> --output <fresh-folder>, evaluate <result.json> --job <job> --reference <frozen.json> --output <fresh.json>, run, pull or verify');

@@ -66,6 +66,17 @@ def stage(root, destination, classes=CLASSES):
         for test_id in ids:
             if by_id[test_id]["scope"] != "public" or by_id[test_id]["surface"] != "host":
                 raise ValueError(f"Non-public host test: {test_id}")
+            for fixture_name in by_id[test_id].get("fixtures", []):
+                fixture = Path(fixture_name)
+                base = CORE / "Tests/FoxTrainingCoreTests/Fixtures"
+                if fixture.is_absolute() or '..' in fixture.parts or not fixture.is_relative_to(base):
+                    raise ValueError("Invalid public test fixture")
+                if any((root / Path(*fixture.parts[:i])).is_symlink() for i in range(1, len(fixture.parts)+1)):
+                    raise ValueError("Unexpected fixture symlink")
+                file = root / fixture
+                if not file.is_file() or file.stat().st_size > 1024*1024:
+                    raise ValueError("Missing or oversized public fixture")
+                payloads[str(fixture.relative_to(CORE))] = file.read_bytes()
         selected.extend(ids)
         payloads[str(relative.relative_to(CORE))] = data
     source_dir = root / CORE / "Sources/FoxTrainingCore"

@@ -17,6 +17,18 @@ async function fixture(t) {
   const clock=path.join(dir,'times.jsonl');await writeFile(clock,'original clock placeholder\n');
   return {source,clock,destination:dir,kind:'cache',cases:[{id:'one',personID:'public-person',arm:'right',startSeconds:1,endSeconds:12,rebindAtSeconds:[]}]};
 }
+test('explicit H1 strategy binds the one confidence floor and rejects unknown or detached variants',async t=>{
+  for(const floor of [.35,.25]) {
+    const input=await fixture(t),strategy=`squat-side-joint-floor-${Math.round(floor*100)}-h1-v1`;
+    const p=await prepareBatch({...input,action:'squat',strategy}),{job}=await validateBatchJob(p.directory);
+    assert.equal(job.workflow.strategyID,strategy);assert.equal(job.workflow.jointConfidenceFloor,floor);
+    assert.equal(job.workflow.developmentOnly,true);
+    const file=path.join(p.directory,'job.json');job.workflow.jointConfidenceFloor=floor===.35?.25:.35;
+    await writeFile(file,JSON.stringify(job));await assert.rejects(validateBatchJob(p.directory),/binding/i);
+  }
+  const input=await fixture(t);
+  await assert.rejects(prepareBatch({...input,action:'squat',strategy:'squat-unregistered-floor'}),/strategy/i);
+});
 test('workflow binds action to the real frozen strategy and preserves a fixed formal boundary',async t=>{
   for(const [action,mode,algorithm] of [['squat','countOnly','squat-selected-count-only-v1'],['curl','controller','curl_2d_v4']]) {
     const input=await fixture(t),prepared=await prepareBatch({...input,action});

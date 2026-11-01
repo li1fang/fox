@@ -2,10 +2,12 @@ import Foundation
 
 /// Explicit central-person diagnostic. Selection is not a persistent identity claim.
 /// Same central-x/short-continuity policy as AssistedCurlSession, with a fixed-side
-/// hip anchor and the frozen squat counter's complete .5 hip/knee/ankle gate.
+/// hip anchor and the same explicit confidence floor as the complete leg counter.
 public struct SquatSelectedCounter {
     private struct Candidate { let index: Int; let point: PosePoint }
     public let side: ArmSide
+    public let jointConfidenceFloor: SquatJointConfidenceFloor
+    public var counterJointConfidenceFloor: SquatJointConfidenceFloor { counter.jointConfidenceFloor }
     private let policy = PoseRuntimePolicy.standard
     private var counter: SquatCountOnlyCounter
     private var anchor: PosePoint?
@@ -18,7 +20,10 @@ public struct SquatSelectedCounter {
     public var events: [SquatCountEvent] { counter.events }
     public var lastAngle: Double? { counter.lastAngle }
     public var lastReason: String { counter.lastReason }
-    public init(side: ArmSide) { self.side=side;counter=SquatCountOnlyCounter(side:side) }
+    public init(side: ArmSide, jointConfidenceFloor: SquatJointConfidenceFloor = .baseline) {
+        self.side=side;self.jointConfidenceFloor=jointConfidenceFloor
+        counter=SquatCountOnlyCounter(side:side,jointConfidenceFloor:jointConfidenceFloor)
+    }
     public mutating func interrupt() {
         counter.interrupt();anchor=nil;selectedIndex=nil;selectedAnchor=nil;selectionReason="host_interrupted";selectionBreakReason="host_interrupted"
     }
@@ -36,7 +41,7 @@ public struct SquatSelectedCounter {
         lastTime=frame.timestamp;dimensions=[frame.width,frame.height]
         let required:[PoseJoint] = side == .left ? [.leftHip,.leftKnee,.leftAnkle]:[.rightHip,.rightKnee,.rightAnkle]
         let candidates=frame.people.enumerated().compactMap { index,body -> Candidate? in
-            guard required.allSatisfy({body.points[$0].map{$0.isValid && $0.confidence>=0.5} ?? false}),
+            guard required.allSatisfy({body.points[$0].map{$0.isValid && $0.confidence>=jointConfidenceFloor.rawValue} ?? false}),
                   let hip=body.points[required[0]] else {return nil}
             return Candidate(index:index,point:hip)
         }

@@ -16,11 +16,11 @@
       "implementation": [
         {
           "path": "SquatSelectedCounter.swift",
-          "sha256": "8781f2bf97e30bff63d860a37f7828723fa73b1c2d30cd92addca95b31eba588"
+          "sha256": "cdb86a5f93cc8f26704f3e9052636f949ccd11a4c135edd55fae162cb2433073"
         },
         {
           "path": "SquatCountOnly.swift",
-          "sha256": "835fc68a49a664f893684bc018d071c2102a66d4fed803d696aabbbcdfc03d6a"
+          "sha256": "08d2e84a452d7d9184cd5a4cb7da8ee0febabf7ad1a1f9440786d9d4de69b7d8"
         },
         {
           "path": "PoseRuntimePolicy.swift",
@@ -29,6 +29,10 @@
         {
           "path": "Resources/pose-runtime-defaults.json",
           "sha256": "65ee310f23cbd5c7d32586b0cd5c081973d3507fae61e96768ce80a6702c6232"
+        },
+        {
+          "path": "SquatJointConfidenceFloor.swift",
+          "sha256": "5a92b0062f32bad3cfec1d38fe69ed5732b7cd601ed1eab1e5698672f8e27446"
         }
       ]
     },
@@ -76,6 +80,78 @@
           "sha256": "61c84ffe05c6b5a42772be75a765e36cc49d719046ad9e4bea9d0948045177a3"
         }
       ]
+    }
+  ],
+  "variants": [
+    {
+      "action": "squat",
+      "label": "深蹲",
+      "strategyID": "squat-side-joint-floor-35-h1-v1",
+      "strategyVersion": 1,
+      "algorithm": "squat-selected-count-only-h1-joint-floor-v1",
+      "consumerMode": "countOnly",
+      "bodyView": "side",
+      "phaseStatus": "not_provided",
+      "eventTimeMeaning": "count_confirmation_not_anatomical_return_endpoint",
+      "implementation": [
+        {
+          "path": "SquatSelectedCounter.swift",
+          "sha256": "cdb86a5f93cc8f26704f3e9052636f949ccd11a4c135edd55fae162cb2433073"
+        },
+        {
+          "path": "SquatCountOnly.swift",
+          "sha256": "08d2e84a452d7d9184cd5a4cb7da8ee0febabf7ad1a1f9440786d9d4de69b7d8"
+        },
+        {
+          "path": "PoseRuntimePolicy.swift",
+          "sha256": "816ba0ce2a4fea23c4b58a5ce2335e5b00117c73fa22998a3ceba0aa2e853e45"
+        },
+        {
+          "path": "Resources/pose-runtime-defaults.json",
+          "sha256": "65ee310f23cbd5c7d32586b0cd5c081973d3507fae61e96768ce80a6702c6232"
+        },
+        {
+          "path": "SquatJointConfidenceFloor.swift",
+          "sha256": "5a92b0062f32bad3cfec1d38fe69ed5732b7cd601ed1eab1e5698672f8e27446"
+        }
+      ],
+      "jointConfidenceFloor": 0.35,
+      "developmentOnly": true
+    },
+    {
+      "action": "squat",
+      "label": "深蹲",
+      "strategyID": "squat-side-joint-floor-25-h1-v1",
+      "strategyVersion": 1,
+      "algorithm": "squat-selected-count-only-h1-joint-floor-v1",
+      "consumerMode": "countOnly",
+      "bodyView": "side",
+      "phaseStatus": "not_provided",
+      "eventTimeMeaning": "count_confirmation_not_anatomical_return_endpoint",
+      "implementation": [
+        {
+          "path": "SquatSelectedCounter.swift",
+          "sha256": "cdb86a5f93cc8f26704f3e9052636f949ccd11a4c135edd55fae162cb2433073"
+        },
+        {
+          "path": "SquatCountOnly.swift",
+          "sha256": "08d2e84a452d7d9184cd5a4cb7da8ee0febabf7ad1a1f9440786d9d4de69b7d8"
+        },
+        {
+          "path": "PoseRuntimePolicy.swift",
+          "sha256": "816ba0ce2a4fea23c4b58a5ce2335e5b00117c73fa22998a3ceba0aa2e853e45"
+        },
+        {
+          "path": "Resources/pose-runtime-defaults.json",
+          "sha256": "65ee310f23cbd5c7d32586b0cd5c081973d3507fae61e96768ce80a6702c6232"
+        },
+        {
+          "path": "SquatJointConfidenceFloor.swift",
+          "sha256": "5a92b0062f32bad3cfec1d38fe69ed5732b7cd601ed1eab1e5698672f8e27446"
+        }
+      ],
+      "jointConfidenceFloor": 0.25,
+      "developmentOnly": true
     }
   ]
 }

@@ -2,6 +2,12 @@
   "schema": "fox.test_catalogue.v1",
   "notes": "Native cases individually classified; script/browser suites run every case in each listed file. No implicit skips.",
   "tests": [
+    {"id":"FoxTrainingCoreTests/SquatConfidenceFloorTests/testExplicitFloorActuallyReachesSelectorAndCounterAndExactBoundary","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/SquatConfidenceFloorTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/SquatConfidenceFloorTests/testZeroMissingStaticAndHalfCyclesNeverProduceAnEvent","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/SquatConfidenceFloorTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/SquatConfidenceFloorTests/testLostPointDropsOnlyHalfAndReacquiresWithoutLosingCompletedCount","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/SquatConfidenceFloorTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/SquatConfidenceFloorTests/testVariantIsExplicitAndAppValidationRejectsDevelopmentConfiguration","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/SquatConfidenceFloorTests.swift","scope":"public","surface":"host"},
+    {"id":"FoxTrainingCoreTests/SquatConfidenceFloorTests/testDefaultHalfFloorStrictlyMatchesFrozenOriginalProducerOnSyntheticInputs","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/SquatConfidenceFloorTests.swift","scope":"public","surface":"host","fixtures":["apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/Fixtures/h1-frozen-synthetic-oracle.json"]},
+
     {"id":"FoxTrainingCoreTests/VisionWorkflowTests/testResetIsNotHiddenBySameFrameValidGeometryAndOriginalClockIsRequired","file":"apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests/VisionWorkflowTests.swift","scope":"public","surface":"host"},
     {"id":"FoxAppTests/CountOnlyReplayBatchTests/testWorkflowSquatBindingPreservesFixedPreludeAndExplicitSkippedFrameFacts","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},
     {"id":"FoxAppTests/CountOnlyReplayBatchTests/testWorkflowOriginalCurlUsesActualStoreAndNeverEnablesFrontalCountOnly","file":"apps/ipad/FoxAppTests/CountOnlyReplayBatchTests.swift","scope":"public","surface":"ipad"},

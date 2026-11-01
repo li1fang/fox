@@ -14,10 +14,14 @@ public struct VisionActionBinding: Codable, Equatable {
     public let phaseStatus: String
     public let eventTimeMeaning: String
     public let implementation: [Implementation]
+    public let jointConfidenceFloor: Double?
+    public let developmentOnly: Bool?
+    var squatJointConfidenceFloor: SquatJointConfidenceFloor? { SquatJointConfidenceFloor(rawValue:jointConfidenceFloor ?? 0.5) }
 
-    public static func load(_ action: String) throws -> Self {
+    public static func load(_ action: String, strategyID: String? = nil) throws -> Self {
         let registry=try VisionActionRegistry.load()
-        guard let value=registry.actions.first(where:{$0.action==action}) else {throw TrainingError.invalidRecord}
+        let entries = strategyID == nil ? registry.actions : registry.actions+(registry.variants ?? [])
+        guard let value=entries.first(where:{$0.action==action && (strategyID == nil || $0.strategyID==strategyID)}) else {throw TrainingError.invalidRecord}
         return value
     }
     func validate() throws {
@@ -26,8 +30,13 @@ public struct VisionActionBinding: Codable, Equatable {
               eventTimeMeaning=="count_confirmation_not_anatomical_return_endpoint" else {throw TrainingError.invalidRecord}
         switch action {
         case "squat":
-            guard algorithm==CountOnlyAction.squat.algorithm, consumerMode=="countOnly", phaseStatus=="not_provided",
-                  strategyID=="squat-side-selected-b587-v1" else {throw TrainingError.invalidRecord}
+            guard consumerMode=="countOnly",phaseStatus=="not_provided",let floor=SquatJointConfidenceFloor(rawValue:jointConfidenceFloor ?? 0.5) else {throw TrainingError.invalidRecord}
+            if strategyID=="squat-side-selected-b587-v1" {
+                guard algorithm==CountOnlyAction.squat.algorithm,floor == .baseline,developmentOnly != true else {throw TrainingError.invalidRecord}
+            } else {
+                guard floor != .baseline,developmentOnly==true,algorithm=="squat-selected-count-only-h1-joint-floor-v1",
+                    strategyID=="squat-side-joint-floor-\(Int(floor.rawValue*100))-h1-v1" else {throw TrainingError.invalidRecord}
+            }
         case "curl":
             let original=try MotionStrategy.load(.curl)
             guard algorithm==original.algorithm, strategyID==original.id, consumerMode=="controller",
@@ -41,12 +50,16 @@ public struct VisionActionRegistry: Codable {
     public let version: Int
     public let formalOffsetSeconds: Double
     public let actions: [VisionActionBinding]
+    public let variants: [VisionActionBinding]?
     public static func load() throws -> Self {
         guard let url=Bundle.module.url(forResource:"vision-actions",withExtension:"json") else {throw TrainingError.invalidRecord}
         let value=try JSONDecoder().decode(Self.self,from:Data(contentsOf:url))
         guard value.schema=="fox.vision_actions.v1", value.version==1, value.formalOffsetSeconds==2,
               Set(value.actions.map(\.action)).count==value.actions.count else {throw TrainingError.invalidRecord}
         try value.actions.forEach {try $0.validate()}
+        let all=value.actions+(value.variants ?? [])
+        guard Set(all.map(\.strategyID)).count==all.count,(value.variants ?? []).allSatisfy({$0.action=="squat" && $0.developmentOnly==true}) else {throw TrainingError.invalidRecord}
+        try value.variants?.forEach {try $0.validate()}
         return value
     }
 }
@@ -65,16 +78,19 @@ public struct VisionWorkflowBinding: Codable, Equatable {
     public let implementation: [VisionActionBinding.Implementation]
     public let formalOffsetSeconds: Double
     public let acceptance: String
-    public static func load(_ action:String) throws -> Self {
-        let r=try VisionActionRegistry.load(),a=try VisionActionBinding.load(action)
+    public let jointConfidenceFloor: Double?
+    public let developmentOnly: Bool?
+    public static func load(_ action:String,strategyID:String? = nil) throws -> Self {
+        let r=try VisionActionRegistry.load(),a=try VisionActionBinding.load(action,strategyID:strategyID)
         return .init(schema:"fox.vision_workflow_binding.v1",registryVersion:r.version,action:a.action,label:a.label,
             strategyID:a.strategyID,strategyVersion:a.strategyVersion,algorithm:a.algorithm,consumerMode:a.consumerMode,
             bodyView:a.bodyView,phaseStatus:a.phaseStatus,eventTimeMeaning:a.eventTimeMeaning,implementation:a.implementation,
-            formalOffsetSeconds:r.formalOffsetSeconds,acceptance:"not_assessed")
+            formalOffsetSeconds:r.formalOffsetSeconds,acceptance:"not_assessed",jointConfidenceFloor:a.jointConfidenceFloor,developmentOnly:a.developmentOnly)
     }
-    public func validate() throws {
-        let registry=try VisionActionRegistry.load(), expected=try VisionActionBinding.load(action)
+    public func validate(allowDevelopmentVariants: Bool = false) throws {
+        let registry=try VisionActionRegistry.load(), expected=try VisionActionBinding.load(action,strategyID:strategyID)
         guard schema=="fox.vision_workflow_binding.v1",registryVersion==registry.version,
+              (developmentOnly != true || allowDevelopmentVariants),jointConfidenceFloor==expected.jointConfidenceFloor,developmentOnly==expected.developmentOnly,
               formalOffsetSeconds==registry.formalOffsetSeconds,acceptance=="not_assessed",
               strategyID==expected.strategyID,strategyVersion==expected.strategyVersion,algorithm==expected.algorithm,
               consumerMode==expected.consumerMode,bodyView==expected.bodyView,phaseStatus==expected.phaseStatus,

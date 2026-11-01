@@ -27,7 +27,7 @@ do {
     let bytes=try Data(contentsOf:folder.appendingPathComponent("job.json"))
     guard bytes.count<=131072 else {throw TrainingError.invalidRecord}
     let job=try JSONDecoder().decode(Job.self,from:bytes)
-    try job.workflow.validate()
+    try job.workflow.validate(allowDevelopmentVariants:true)
     guard job.schema=="fox.vision_batch_job.v1",UUID(uuidString:job.id) != nil,safe(job.input),
           (1...4).contains(job.files.count),Set(job.files.map(\.path)).count==job.files.count,
           job.files.contains(where:{$0.path==job.input}), (1...16).contains(job.cases.count),
@@ -55,7 +55,7 @@ do {
               c.bodyView==job.workflow.bodyView else {throw TrainingError.invalidRecord}
         let selected=frames.filter{$0.timestamp>=c.startSeconds && $0.timestamp<c.endSeconds}
         guard selected.first?.timestamp==c.startSeconds else {throw TrainingError.invalidRecord}
-        return .init(specification:c,replay:try VisionWorkflowReplay.run(action:job.workflow.action,side:c.arm,frames:selected))
+        return .init(specification:c,replay:try VisionWorkflowReplay.run(action:job.workflow.action,side:c.arm,frames:selected,strategyID:job.workflow.strategyID))
     }
     let result=Result(jobID:job.id,jobSHA256:VisionWorkflowDigest.sha256(bytes),workflow:job.workflow,inputProvenance:header,cases:results)
     let encoder=JSONEncoder();encoder.outputFormatting=[.sortedKeys,.prettyPrinted]

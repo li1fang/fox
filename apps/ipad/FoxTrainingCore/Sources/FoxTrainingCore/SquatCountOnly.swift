@@ -12,6 +12,7 @@ public struct SquatCountEvent: Codable, Equatable {
 /// or measured anatomical phases. New modes remain disabled by the host by default.
 public struct SquatCountOnlyCounter {
     public let side: ArmSide
+    public let jointConfidenceFloor: SquatJointConfidenceFloor
     public let capability = "count_only_experimental"
     public private(set) var events: [SquatCountEvent] = []
     public private(set) var lastAngle: Double?
@@ -26,7 +27,9 @@ public struct SquatCountOnlyCounter {
     private var cycleStart: Double?
     private var lowTime: Double?
 
-    public init(side: ArmSide) { self.side=side }
+    public init(side: ArmSide, jointConfidenceFloor: SquatJointConfidenceFloor = .baseline) {
+        self.side=side;self.jointConfidenceFloor=jointConfidenceFloor
+    }
     /// A host discontinuity discards only unfinished evidence. It does not emit
     /// a training pause, invent a missing frame, or remove completed events.
     public mutating func interrupt() { lastAngle=nil; reset("host_interrupted") }
@@ -48,7 +51,7 @@ public struct SquatCountOnlyCounter {
         let hip: PoseJoint = left ? .leftHip : .rightHip
         let required: [PoseJoint] = [hip, left ? .leftKnee : .rightKnee, left ? .leftAnkle : .rightAnkle]
         let points = frame.people[0].points
-        guard required.allSatisfy({ points[$0].map { $0.isValid && $0.confidence >= 0.5 } ?? false }) else {
+        guard required.allSatisfy({ points[$0].map { $0.isValid && $0.confidence >= jointConfidenceFloor.rawValue } ?? false }) else {
             reset("missing_required_joint"); return
         }
         let a = points[required[0]]!, b = points[required[1]]!, c = points[required[2]]!

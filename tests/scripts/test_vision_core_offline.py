@@ -16,6 +16,19 @@ SPEC.loader.exec_module(offline)
 
 
 class OfflineCoreTests(unittest.TestCase):
+    def test_declared_public_fixture_is_staged_and_escaping_fixture_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root,out=Path(tmp)/"source",Path(tmp)/"bundle"
+            catalogue,rows=self.fixture(root)
+            relative=offline.CORE/"Tests/FoxTrainingCoreTests/Fixtures/oracle.json"
+            fixture=root/relative;fixture.parent.mkdir();fixture.write_text('{"synthetic":true}')
+            rows[0]['fixtures']=[str(relative)]
+            catalogue.write_text(json.dumps(dict(schema='fox.test_catalogue.v1',tests=rows)))
+            offline.stage(root,out,classes=(offline.CLASSES[0],))
+            self.assertEqual((out/relative.relative_to(offline.CORE)).read_bytes(),fixture.read_bytes())
+            rows[0]['fixtures']=['../private.json']
+            catalogue.write_text(json.dumps(dict(schema='fox.test_catalogue.v1',tests=rows)))
+            with self.assertRaises(ValueError):offline.stage(root,Path(tmp)/'invalid',classes=(offline.CLASSES[0],))
     def test_macos_standalone_runner_refuses_to_bypass_native_admission(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, out, receipt = Path(tmp) / "source", Path(tmp) / "bundle", Path(tmp) / "run"
