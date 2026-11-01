@@ -40,6 +40,25 @@ final class TrainingJourneyInputTests: XCTestCase {
         defaults.set(false,forKey:CountOnlyAvailability.trialPreferenceKey)
         XCTAssertFalse(store.canChooseSquat)
     }
+    func testUITestPreferenceDomainIsIsolatedPersistentAndResettable() throws {
+        let productionName="FoxPreferenceProduction-\(UUID())", testName="FoxPreferenceUI-\(UUID())"
+        let production=try XCTUnwrap(UserDefaults(suiteName:productionName))
+        defer { production.removePersistentDomain(forName:productionName); production.removePersistentDomain(forName:testName) }
+        let key=CountOnlyAvailability.trialPreferenceKey
+        production.set(false,forKey:key)
+        let first=FoxPreferenceDomain.resolve(isUITesting:true,production:production,testSuiteName:testName)
+        first.set(true,forKey:key)
+        XCTAssertFalse(production.bool(forKey:key))
+        let reopened=FoxPreferenceDomain.resolve(isUITesting:true,production:production,testSuiteName:testName)
+        XCTAssertTrue(reopened.bool(forKey:key))
+        FoxPreferenceDomain.resetIfRequested(isUITesting:true,arguments:["--ui-testing-reset"],testSuiteName:testName)
+        XCTAssertNil(reopened.object(forKey:key))
+        XCTAssertEqual(production.object(forKey:key) as? Bool,false)
+        production.set(true,forKey:key)
+        FoxPreferenceDomain.resetIfRequested(isUITesting:false,arguments:["--ui-testing-reset"],testSuiteName:productionName)
+        XCTAssertTrue(production.bool(forKey:key))
+        XCTAssertTrue(FoxPreferenceDomain.resolve(isUITesting:false,production:production,testSuiteName:testName).bool(forKey:key))
+    }
     func testUnknownCountOnlyChangesAfterExplicitStep() {
         XCTAssertFalse(TrainingCountInput.canConfirm([""]))
         XCTAssertNil(TrainingCountInput.adjusted("", by: -1))

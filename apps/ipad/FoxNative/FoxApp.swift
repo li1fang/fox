@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct FoxApp: App {
     init() {
+        FoxPreferenceDomain.prepareForLaunch()
         #if DEBUG
         if let id = ProcessInfo.processInfo.environment["FOX_POSE_BATCH_JOB"] {
             print("Fox batch launch requested: \(id)")

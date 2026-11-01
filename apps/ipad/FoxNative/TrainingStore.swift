@@ -108,7 +108,7 @@ final class TrainingStore: ObservableObject {
         // Ordinary admission is action-specific. Stopped curl cannot be enabled by a squat gate.
         self.admittedCountOnlyActions=(admittedCountOnlyActions ?? CountOnlyAvailability.admittedActions).intersection([.squat])
         self.diagnosticRoot = diagnosticRoot
-        self.preferences = preferences ?? (archiveURL == nil ? .standard : nil)
+        self.preferences = preferences ?? (archiveURL == nil ? FoxPreferenceDomain.current : nil)
         let environment = ProcessInfo.processInfo.environment
         let testing = environment["FOX_UI_TESTING"] == "1"
         fileURL = archiveURL ?? Self.defaultArchiveURL

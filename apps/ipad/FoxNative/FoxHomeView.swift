@@ -60,7 +60,7 @@ struct HomeCard: ViewModifier {
 
 @MainActor
 struct FoxHomeView: View {
-    @AppStorage(CountOnlyAvailability.trialPreferenceKey) private var squatTrialEnabled = false
+    @AppStorage(CountOnlyAvailability.trialPreferenceKey, store: FoxPreferenceDomain.current) private var squatTrialEnabled = false
     @StateObject private var journal: JournalStore
     @StateObject private var photos: JournalPhotoSelection
     @StateObject private var trainingArchive: HomeTrainingStore

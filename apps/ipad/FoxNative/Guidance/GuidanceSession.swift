@@ -17,7 +17,7 @@ final class GuidanceSession: ObservableObject {
     private var notifications: [NSObjectProtocol] = []
 
     init(vision: VisionLabController, store: TrainingStore? = nil, driver: SpeechOutputDriver? = nil,
-         defaults: UserDefaults? = .standard) {
+         defaults: UserDefaults? = FoxPreferenceDomain.current) {
         self.vision = vision; self.store = store; self.defaults = defaults
         let modeKey = store == nil ? "FoxGuidance.standaloneMode" : "FoxGuidance.visualMode"
         let storedMode = defaults?.string(forKey: modeKey).flatMap(GuidanceMode.init(rawValue:)) ?? .observed
