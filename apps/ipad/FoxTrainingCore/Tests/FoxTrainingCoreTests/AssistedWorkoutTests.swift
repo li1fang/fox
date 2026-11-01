@@ -135,6 +135,86 @@ final class AssistedWorkoutTests: XCTestCase {
         XCTAssertFalse(output.cues.contains(where:{$0.kind == .phase}))
     }
 
+    func testSquatTrialMaySaveAnUnconfirmedCountWithoutInventingZero() throws {
+        let exercise=Exercise(id:"bodyweight_squat",name:"Squat",sets:[SetTarget(setIndex:1,reps:5)])
+        var session=try TrainingSession(plan:TrainingPlan(focus:"Squat",exercises:[exercise]),now:now)
+        _=try session.beginCountOnly(action:.squat,side:.right,source:.fixture,at:now,strategyID:"squat-side-joint-floor-25-h1-v1")
+        try session.finishSet(at:now.addingTimeInterval(2))
+        XCTAssertNoThrow(try session.submit(reps:nil,feedback:[],notes:"",at:now.addingTimeInterval(3)))
+        if let record=session.records.first {
+            XCTAssertNil(record.reps);XCTAssertEqual(record.countingMethod,"unconfirmed")
+            XCTAssertNil(record.visualEvidence);XCTAssertEqual(record.assistedEvidence?.automaticCount,0)
+            XCTAssertNil(record.trialCountReview?.observedCount);XCTAssertEqual(record.trialCountReview?.choice,.unconfirmed)
+            XCTAssertNil(record.trialCountReview?.confirmedCount)
+        } else { XCTFail("The unknown result must be saved as a record") }
+        var early=try TrainingSession(plan:TrainingPlan(focus:"Squat",exercises:[exercise]),now:now)
+        _=try early.beginCountOnly(action:.squat,side:.right,source:.fixture,at:now,strategyID:"squat-side-joint-floor-25-h1-v1")
+        try early.endEarly(at:now.addingTimeInterval(2))
+        XCTAssertEqual(early.records.first?.trialCountReview?.choice,.unconfirmed)
+        XCTAssertNil(early.records.first?.trialCountReview?.observedCount)
+    }
+
+    func testTrialChoicesSaveAndReopenWithoutChangingAutomaticEvidence() throws {
+        for choice:TrialCountChoice in [.confirmedObserved,.corrected,.unconfirmed] {
+            let exercise=Exercise(id:"bodyweight_squat",name:"Squat",sets:[SetTarget(setIndex:1,reps:5)])
+            let url=try file(),repo=try LocalTrainingRepository(fileURL:url)
+            try repo.start(plan:TrainingPlan(focus:"Squat",exercises:[exercise]),at:now)
+            var runtime=try CountOnlySession(action:.squat,side:.right,originSeconds:0,source:.cachedPose,strategyID:"squat-side-joint-floor-25-h1-v1")
+            let points:[PoseJoint:PosePoint]=[.rightHip:.init(x:0.5,y:0.8,confidence:0.3),.rightKnee:.init(x:0.5,y:0.5,confidence:0.3),.rightAnkle:.init(x:0.5,y:0.2,confidence:0.3)]
+            try runtime.process(.init(timestamp:0,width:640,height:360,people:[.init(points:points)]))
+            try repo.updateSession(id:repo.archive.currentSession!.id) { session in
+                let id=try session.beginCountOnly(action:.squat,side:.right,source:.fixture,at:now,strategyID:"squat-side-joint-floor-25-h1-v1")
+                try session.updateCountOnly(binding:XCTUnwrap(session.currentSetBinding),observationId:id,evidence:runtime.evidence,appleRevision:1,at:now.addingTimeInterval(1))
+                try session.finishSet(at:now.addingTimeInterval(2))
+                try session.submit(reps:choice == .unconfirmed ? nil : (choice == .confirmedObserved ? 0:3),feedback:[],notes:"",at:now.addingTimeInterval(3),trialCountChoice:choice)
+            }
+            let record=try XCTUnwrap(LocalTrainingRepository(fileURL:url).archive.sessions.first?.records.first)
+            XCTAssertEqual(record.trialCountReview?.choice,choice)
+            XCTAssertEqual(record.trialCountReview?.observedCount,0)
+            XCTAssertEqual(record.trialCountReview?.confirmedCount,choice == .unconfirmed ? nil : (choice == .confirmedObserved ? 0:3))
+            XCTAssertEqual(record.assistedEvidence?.automaticCount,0)
+            XCTAssertNotEqual(record.countingMethod,"vision_confirmed")
+            XCTAssertNil(record.visualEvidence)
+        }
+    }
+
+    func testTrialRecordNoteEditsPreserveReviewUntilCountChanges() throws {
+        for choice: TrialCountChoice in [.confirmedObserved, .unconfirmed] {
+            let exercise=Exercise(id:"bodyweight_squat",name:"Squat",sets:[SetTarget(setIndex:1,reps:5)])
+            var session=try TrainingSession(plan:TrainingPlan(focus:"Squat",exercises:[exercise]),now:now)
+            var runtime=try CountOnlySession(action:.squat,side:.right,originSeconds:0,source:.cachedPose,strategyID:"squat-side-joint-floor-25-h1-v1")
+            let points:[PoseJoint:PosePoint]=[.rightHip:.init(x:0.5,y:0.8,confidence:0.3),.rightKnee:.init(x:0.5,y:0.5,confidence:0.3),.rightAnkle:.init(x:0.5,y:0.2,confidence:0.3)]
+            try runtime.process(.init(timestamp:0,width:640,height:360,people:[.init(points:points)]))
+            let id=try session.beginCountOnly(action:.squat,side:.right,source:.fixture,at:now,strategyID:"squat-side-joint-floor-25-h1-v1")
+            try session.updateCountOnly(binding:XCTUnwrap(session.currentSetBinding),observationId:id,evidence:runtime.evidence,appleRevision:1,at:now.addingTimeInterval(1))
+            try session.finishSet(at:now.addingTimeInterval(2))
+            let count: Int? = choice == .unconfirmed ? nil : 0
+            try session.submit(reps:count,feedback:[],notes:"",at:now.addingTimeInterval(3),trialCountChoice:choice)
+            let original=try XCTUnwrap(session.records.first)
+            try session.reviseRecord(id:original.id,reps:count,weight:nil,notes:"note only",at:now.addingTimeInterval(4))
+            XCTAssertEqual(session.records[0].trialCountReview,original.trialCountReview)
+            XCTAssertEqual(session.records[0].notes,"note only")
+            try session.reviseRecord(id:original.id,reps:3,weight:nil,notes:"count changed",at:now.addingTimeInterval(5))
+            XCTAssertEqual(session.records[0].trialCountReview?.choice,.corrected)
+            XCTAssertEqual(session.records[0].trialCountReview?.confirmedCount,3)
+            XCTAssertEqual(session.records[0].trialCountReview?.observedCount,0)
+        }
+    }
+
+    func testTrialCountReviewRequiresExplicitValidObservationAndPreservesManualZero() throws {
+        let noObservation=try TrialCountReview(choice:.unconfirmed,observedCount:nil,confirmedCount:nil)
+        XCTAssertNil(noObservation.observedCount);XCTAssertNil(noObservation.confirmedCount)
+        let manualZero=try TrialCountReview(choice:.corrected,observedCount:nil,confirmedCount:0)
+        XCTAssertEqual(manualZero.confirmedCount,0);XCTAssertNil(manualZero.observedCount)
+        let confirmedZero=try TrialCountReview(choice:.confirmedObserved,observedCount:0,confirmedCount:0)
+        XCTAssertEqual(confirmedZero.observedCount,0)
+        XCTAssertThrowsError(try TrialCountReview(choice:.confirmedObserved,observedCount:nil,confirmedCount:0))
+        XCTAssertThrowsError(try TrialCountReview(choice:.confirmedObserved,observedCount:3,confirmedCount:2))
+        XCTAssertThrowsError(try TrialCountReview(choice:.unconfirmed,observedCount:2,confirmedCount:2))
+        let copy=try JSONDecoder().decode(TrialCountReview.self,from:JSONEncoder().encode(confirmedZero))
+        XCTAssertEqual(copy,confirmedZero);try copy.validate()
+    }
+
     func testCountOnlyRunDeclaresStrategyBeforeFramesAndRejectsUnknownArchiveStrategy() throws {
         let exercise=Exercise(id:"bodyweight_squat",name:"Squat",sets:[SetTarget(setIndex:1,reps:5)])
         let plan=TrainingPlan(focus:"Squat",exercises:[exercise])

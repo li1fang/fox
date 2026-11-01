@@ -250,9 +250,9 @@ struct TrainingScreen: View {
     private func observation(at date: Date) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text((session.currentAssistedEvidence != nil || session.currentVisualEvidence != nil) ? String(session.observedAutomaticCount) : (hasCamera ? "0" : "—"))
+                Text(store.selectedCountOnlyAction == .squat ? session.currentAssistedEvidence?.observedCountIfValid.map(String.init) ?? "—" : ((session.currentAssistedEvidence != nil || session.currentVisualEvidence != nil) ? String(session.observedAutomaticCount) : (hasCamera ? "0" : "—")))
                     .font(.title2.bold()).monospacedDigit().accessibilityIdentifier("workout-automatic-count")
-                Text((store.countOnlySelected || session.currentAssistedEvidence != nil) ? "辅助观测 · 待核对" : (hasCamera || session.currentVisualEvidence?.hasObservedFrames == true ? "视觉观测" : "人工核对"))
+                Text(store.selectedCountOnlyAction == .squat && session.currentAssistedEvidence?.observedCountIfValid == nil ? "暂无有效观察" : ((store.countOnlySelected || session.currentAssistedEvidence != nil) ? "辅助观测 · 待核对" : (hasCamera || session.currentVisualEvidence?.hasObservedFrames == true ? "视觉观测" : "人工核对")))
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: true, vertical: false)
             }
             Text(hasCamera ? (preparing ? visual.qualityLabel : session.stage == .paused ? "已暂停" :
@@ -335,6 +335,10 @@ struct TrainingScreen: View {
                 VStack(alignment: .leading, spacing: 24) {
                     Text(session.exercise.name).font(.title2.bold())
                     Text(statusDetail).foregroundStyle(.secondary)
+                    if let guide=ActionGuide.forExercise(session.exercise.exerciseId) {
+                        DisclosureGroup("动作示例") { ActionGuideView(guide:guide) }
+                            .accessibilityIdentifier("training-action-guide")
+                    }
                     if visual.cameraState == .denied || visual.cameraState == .restricted {
                         Button {
                             if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
@@ -471,6 +475,7 @@ struct SetFeedbackView: View {
     @ObservedObject var store: TrainingStore
     let session: TrainingSession
     @State private var reps = ""
+    @State private var trialCountChoice: TrialCountChoice?
     @State private var leftReps = ""
     @State private var rightReps = ""
     @State private var weight: Double?
@@ -494,8 +499,18 @@ struct SetFeedbackView: View {
     private var draft: TrainingFeedbackDraft {
         var value = TrainingFeedbackDraft()
         value.reps = reps; value.leftReps = leftReps; value.rightReps = rightReps; value.weight = weight
-        value.selected = selected; value.note = note; value.information = information; value.softwareIssue = softwareIssue
+        value.selected = selected; value.note = note; value.information = information; value.softwareIssue = softwareIssue; value.trialCountChoice = trialCountChoice
         return value
+    }
+
+    private var isSquatTrial: Bool { session.currentAssistedEvidence?.isSquatTrial == true }
+    private var trialCountReady: Bool {
+        switch trialCountChoice {
+        case .unconfirmed: return true
+        case .confirmedObserved: return session.currentAssistedEvidence?.observedCountIfValid != nil && Int(reps) == session.currentAssistedEvidence?.observedCountIfValid
+        case .corrected: return TrainingCountInput.canConfirm([reps])
+        case nil: return false
+        }
     }
 
     var body: some View {
@@ -515,9 +530,23 @@ struct SetFeedbackView: View {
                     }
                 }
                 if let evidence=session.currentAssistedEvidence {
-                    Text(evidence.action == .squat ? "辅助观测 \(evidence.automaticCount) 次（近侧：\(evidence.side.nearLegSideLabel)），待你确认" : "辅助观测 \(evidence.side.label) \(evidence.automaticCount) 次，待你确认")
+                    Text(isSquatTrial ? (evidence.observedCountIfValid.map { "已观察到 \($0) 次（近侧：\(evidence.side.nearLegSideLabel)），待核对" } ?? "暂无有效观察（近侧：\(evidence.side.nearLegSideLabel)），请自行核对") : (evidence.action == .squat ? "辅助观测 \(evidence.automaticCount) 次（近侧：\(evidence.side.nearLegSideLabel)），待你确认" : "辅助观测 \(evidence.side.label) \(evidence.automaticCount) 次，待你确认"))
                         .font(.system(size:observationSize)).accessibilityIdentifier("feedback-assisted-observation")
                     Text("阶段与节奏未提供；请核对实际次数。") .foregroundStyle(.secondary)
+                    if isSquatTrial {
+                        VStack(alignment:.leading,spacing:8) {
+                            Button("确认观察无误") { if let n=evidence.observedCountIfValid { reps=String(n);trialCountChoice = .confirmedObserved } }
+                                .disabled(evidence.observedCountIfValid == nil).accessibilityIdentifier("trial-confirm-observation")
+                            Button("更正次数") { reps="";trialCountChoice = .corrected }
+                                .accessibilityIdentifier("trial-correct-count")
+                            Button("暂不确认") { reps="";trialCountChoice = .unconfirmed }
+                                .accessibilityIdentifier("trial-leave-unconfirmed")
+                            if let choice=trialCountChoice {
+                                Text(choice == .confirmedObserved ? "已选择：确认观察无误" : choice == .corrected ? "已选择：更正次数" : "已选择：暂不确认")
+                                    .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("trial-review-choice")
+                            }
+                        }.buttonStyle(.bordered)
+                    }
                 }
                 if let evidence = session.currentVisualEvidence, evidence.hasObservedFrames {
                     Text("观测 \(evidence.settings.arm.label) \(evidence.automaticCount) 次，待你确认").font(.system(size: observationSize)).foregroundStyle(FoxStyle.green)
@@ -564,10 +593,10 @@ struct SetFeedbackView: View {
                         let sides = session.exercise.repetitionBasis == .perSide ? SideRepetitions(left: Int(leftReps), right: Int(rightReps)) : nil
                         let now = Date()
                         let review = try TrialReview.make(information: information, softwareIssue: softwareIssue, trainingFeeling: note, at: now)
-                        try $0.submit(reps: Int(reps), sideRepetitions: sides, feedback: Array(selected), notes: note, at: now, review: review)
+                        try $0.submit(reps: Int(reps), sideRepetitions: sides, feedback: Array(selected), notes: note, at: now, review: review, trialCountChoice:isSquatTrial ? trialCountChoice:nil)
                     }
-                }.disabled(session.target.targetReps != nil && !TrainingCountInput.canConfirm(
-                    session.exercise.repetitionBasis == .perSide ? [leftReps, rightReps] : [reps]))
+                }.disabled(session.target.targetReps != nil && (isSquatTrial ? !trialCountReady : !TrainingCountInput.canConfirm(
+                    session.exercise.repetitionBasis == .perSide ? [leftReps, rightReps] : [reps])))
                     .accessibilityIdentifier("submit-feedback")
             }.padding(.vertical, verticalSizeClass == .compact ? 4 : 12).background(.bar)
         }.onChange(of: draft) { value in
@@ -577,7 +606,7 @@ struct SetFeedbackView: View {
             let saved = session.currentSetAttemptId.flatMap { store.clientState.feedback[$0.uuidString] }
             let initial = TrainingFeedbackInput.initialDraft(session: session, saved: saved)
             reps = initial.reps; leftReps = initial.leftReps; rightReps = initial.rightReps; weight = initial.weight
-            selected = initial.selected; note = initial.note; information = initial.information; softwareIssue = initial.softwareIssue
+            selected = initial.selected; note = initial.note; information = initial.information; softwareIssue = initial.softwareIssue; trialCountChoice = initial.trialCountChoice
         }
     }
 
@@ -597,9 +626,9 @@ struct SetFeedbackView: View {
                                     } }
                                 }
                             } else {
-                            TrainingCountField(text: $reps, identifier: "actual-reps", label: "实际次数")
+                            TrainingCountField(text: $reps, identifier: "actual-reps", label: "实际次数").disabled(isSquatTrial && trialCountChoice != .corrected)
                             }
-                            if !TrainingCountInput.canConfirm(session.exercise.repetitionBasis == .perSide ? [leftReps, rightReps] : [reps]) {
+                            if isSquatTrial ? trialCountChoice == nil : !TrainingCountInput.canConfirm(session.exercise.repetitionBasis == .perSide ? [leftReps, rightReps] : [reps]) {
                                 Text("次数待确认").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("feedback-count-required")
                             }
                         }

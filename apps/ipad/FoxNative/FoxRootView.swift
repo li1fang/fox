@@ -387,7 +387,7 @@ struct SessionSummary: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(record.exerciseName) · 第 \(record.target.setIndex) 组").font(.system(size: headingSize, weight: .semibold))
                         HStack {
-                        Text(record.status == "skipped" ? "已跳过" : (record.status == "partial" ? "部分完成" : "已完成")).foregroundStyle(.secondary)
+                        Text(record.trialCountReview?.choice == .unconfirmed ? "次数待核对" : (record.status == "skipped" ? "已跳过" : (record.status == "partial" ? "部分完成" : "已完成"))).foregroundStyle(.secondary)
                         Spacer()
                         if let edit, record.status != "skipped" {
                             Button { edit(record) } label: { Image(systemName: "pencil").frame(width: 44, height: 44) }
@@ -408,8 +408,12 @@ struct SessionSummary: View {
                         Text(durationText(record.durationSeconds))
                     }.font(.system(size: detailSize)).monospacedDigit()
                     if let evidence=record.assistedEvidence {
-                        Text(evidence.action == .squat ? "辅助观测：\(evidence.automaticCount) 次 · 近侧：\(evidence.side.nearLegSideLabel) · 人工确认独立" : "辅助观测：\(evidence.side.label) \(evidence.automaticCount) 次 · 人工确认独立")
+                        Text(record.trialCountReview != nil ? (record.trialCountReview?.observedCount.map { "已观察到 \($0) 次 · 近侧：\(evidence.side.nearLegSideLabel)" } ?? "暂无有效观察 · 近侧：\(evidence.side.nearLegSideLabel)") : (evidence.action == .squat ? "辅助观测：\(evidence.automaticCount) 次 · 近侧：\(evidence.side.nearLegSideLabel) · 人工确认独立" : "辅助观测：\(evidence.side.label) \(evidence.automaticCount) 次 · 人工确认独立"))
                             .font(.system(size:observationSize)).accessibilityIdentifier("saved-assisted-observation")
+                        if let review=record.trialCountReview {
+                            Text(review.choice == .confirmedObserved ? "你已确认观察无误" : review.choice == .corrected ? "你已更正次数" : "次数尚未确认")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         Text("阶段、节奏与动作质量：未提供").foregroundStyle(.secondary)
                     }
                     if let evidence = record.visualEvidence {

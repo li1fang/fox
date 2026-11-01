@@ -6,6 +6,7 @@ public struct TrainingFeedbackDraft: Codable, Equatable {
     public var reps = "", leftReps = "", rightReps = "", note = "", information = "", softwareIssue = ""
     public var weight: Double?
     public var selected: Set<SetFeedback> = []
+    public var trialCountChoice: TrialCountChoice? = nil
     public init() {}
 }
 

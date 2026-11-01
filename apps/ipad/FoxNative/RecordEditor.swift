@@ -37,7 +37,7 @@ struct RecordEditor: View {
                         if save(record.repetitionBasis == .perSide ? nil : Int(reps), weight, notes, sides) { dismiss() }
                     }
                         .disabled(record.target.targetReps != nil && (record.repetitionBasis == .perSide
-                            ? Int(leftReps) == nil && Int(rightReps) == nil : Int(reps) == nil))
+                            ? Int(leftReps) == nil && Int(rightReps) == nil : (Int(reps) == nil && !(record.trialCountReview?.choice == .unconfirmed && reps.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))))
                 }
             }
             .onAppear {

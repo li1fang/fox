@@ -153,6 +153,7 @@ public struct LocalSetRecord: Codable, Equatable, Identifiable {
     public var formAssessment: WorkoutFormAssessment? = nil
     public var weightConfirmation: WeightConfirmation? = nil
     public var trialReview: TrialReview? = nil
+    public var trialCountReview: TrialCountReview? = nil
 }
 
 public enum TrainingError: LocalizedError {
@@ -402,19 +403,26 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         currentObservationId = nil
     }
 
-    public mutating func submit(reps: Int?, sideRepetitions: SideRepetitions? = nil, feedback: [SetFeedback], notes: String, at now: Date, review: TrialReview? = nil) throws {
+    public mutating func submit(reps: Int?, sideRepetitions: SideRepetitions? = nil, feedback: [SetFeedback], notes: String, at now: Date, review: TrialReview? = nil, trialCountChoice: TrialCountChoice? = nil) throws {
         guard stage == .feedback else { throw TrainingError.invalidTransition }
         try review?.validate()
         guard now.timeIntervalSince1970.isFinite else { throw TrainingError.invalidRecord }
         if let reps, !(0...1000).contains(reps) { throw TrainingError.invalidRecord }
         try sideRepetitions?.validate()
+        let trial = currentAssistedEvidence?.isSquatTrial == true
+        guard trialCountChoice == nil || trial else { throw TrainingError.invalidRecord }
         guard sideRepetitions == nil || (exercise.repetitionBasis == .perSide && target.targetReps != nil),
               sideRepetitions == nil || reps == nil || sideRepetitions!.commonCount == reps,
-              target.targetReps == nil || reps != nil || sideRepetitions != nil else { throw TrainingError.invalidRecord }
+              target.targetReps == nil || reps != nil || sideRepetitions != nil || trial else { throw TrainingError.invalidRecord }
         let sides = sideRepetitions ?? (exercise.repetitionBasis == .perSide && reps != nil
             ? SideRepetitions(left: exercise.targetSide == .right ? nil : reps, right: exercise.targetSide == .left ? nil : reps) : nil)
         guard target.targetReps == nil || exercise.targetSide == nil || sides?.count(for: exercise.targetSide!) != nil else { throw TrainingError.invalidRecord }
         let actual = sides.map(\.commonCount) ?? reps
+        let countReview: TrialCountReview?
+        if trial {
+            let choice = trialCountChoice ?? (actual == nil ? .unconfirmed : .corrected)
+            countReview = try TrialCountReview(choice:choice, observedCount:currentAssistedEvidence?.observedCountIfValid, confirmedCount:actual)
+        } else { countReview = nil }
         let reached = target.targetReps.map { expected in
             sides.map { $0.meets(expected, side: exercise.targetSide) } ?? ((actual ?? 0) >= expected)
         } ?? (accumulatedSeconds >= (target.targetDurationSeconds ?? 0))
@@ -425,6 +433,7 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
             unit: target.weightUnit, source: .setReview, confirmedAt: now)
         appendRecord(reps: target.targetReps == nil ? nil : actual, sides: sides, feedback: feedback, notes: notes, status: status, at: now)
         records[records.count - 1].trialReview = review
+        records[records.count - 1].trialCountReview = countReview
         if feedback.contains(.pain) {
             endedEarly = true
             close(at: now)
@@ -466,7 +475,8 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
             ? SideRepetitions(left: records[index].targetSide == .right ? nil : reps,
                 right: records[index].targetSide == .left ? nil : reps) : records[index].sideRepetitions)
         guard target.targetReps == nil || records[index].targetSide == nil || sides?.count(for: records[index].targetSide!) != nil else { throw TrainingError.invalidRecord }
-        guard target.targetReps == nil || reps != nil || sides != nil else { throw TrainingError.invalidRecord }
+        guard target.targetReps == nil || reps != nil || sides != nil || records[index].trialCountReview?.choice == .unconfirmed else { throw TrainingError.invalidRecord }
+        let previousReps = records[index].reps
         records[index].sideRepetitions = sides
         records[index].reps = target.targetReps == nil ? nil : (sides.map(\.commonCount) ?? reps)
         records[index].weight = weight
@@ -476,6 +486,10 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         if let expected = target.targetReps {
             let reached = sides.map { $0.meets(expected, side: records[index].targetSide) } ?? ((reps ?? 0) >= expected)
             records[index].status = reached && !records[index].feedback.contains(.pain) ? "completed" : "partial"
+        }
+        if let old=records[index].trialCountReview, records[index].reps != previousReps {
+            guard let count=records[index].reps else { throw TrainingError.invalidRecord }
+            records[index].trialCountReview=try TrialCountReview(choice:.corrected,observedCount:old.observedCount,confirmedCount:count)
         }
         var revised = records[index]
         applyCountingSource(to: &revised)
@@ -514,6 +528,10 @@ public struct TrainingSession: Codable, Equatable, Identifiable {
         record.weightConfirmation = status == "skipped" ? nil : currentWeightConfirmation
         record.visualEvidence = currentVisualEvidence
         record.assistedEvidence = currentAssistedEvidence
+        if let evidence=currentAssistedEvidence, evidence.isSquatTrial {
+            // Early exit retains an unconfirmed result, including an unknown observation.
+            record.trialCountReview=try? TrialCountReview(choice:.unconfirmed,observedCount:evidence.observedCountIfValid,confirmedCount:nil)
+        }
         record.countingEvidenceVersion = currentAssistedEvidence != nil ? 2 : (currentVisualEvidence == nil ? nil : 1)
         if let evidence = currentVisualEvidence {
             record.rhythmAssessment = WorkoutRhythmAssessment.assess(repetitions: evidence.repetitions, tempo: exercise.tempo)
@@ -655,6 +673,11 @@ public struct TrainingArchive: Codable, Equatable {
                     throw TrainingError.corruptArchive
                 }
                 try record.trialReview?.validate()
+                if let review=record.trialCountReview {
+                    try review.validate()
+                    guard let evidence=record.assistedEvidence, evidence.isSquatTrial,
+                          review.observedCount==evidence.observedCountIfValid, review.confirmedCount==record.reps else {throw TrainingError.corruptArchive}
+                }
                 try record.weightConfirmation?.validate(attemptID: record.id, weight: record.weight, unit: record.target.weightUnit)
                 guard record.sideRepetitions == nil || (record.repetitionBasis == .perSide && record.reps == record.sideRepetitions?.commonCount) else {
                     throw TrainingError.corruptArchive

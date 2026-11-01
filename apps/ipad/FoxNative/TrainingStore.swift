@@ -41,12 +41,15 @@ final class TrainingStore: ObservableObject {
     var visionRequested: Bool { !clientState.manual }
     let assistedDevelopmentEnabled: Bool
     private let admittedCountOnlyActions: Set<CountOnlyAction>
-    func allowsCountOnly(_ action: CountOnlyAction) -> Bool { assistedDevelopmentEnabled || admittedCountOnlyActions.contains(action) }
+    private var squatTrialEnabled: Bool { preferences?.bool(forKey:CountOnlyAvailability.trialPreferenceKey) == true }
+    func allowsCountOnly(_ action: CountOnlyAction) -> Bool {
+        assistedDevelopmentEnabled || admittedCountOnlyActions.contains(action) || (action == .squat && squatTrialEnabled)
+    }
     var assistedCurlSelected: Bool { countOnlySelected && selectedCountOnlyAction == .curl }
     var countOnlySelected: Bool { selectedCountOnlyAction.map(allowsCountOnly) ?? false }
     var countOnlyUnavailable: Bool { session?.currentAssistedEvidence != nil && !countOnlySelected }
     var canChooseSquat: Bool { allowsCountOnly(.squat) }
-    var admittedSquatStrategyID: String? { admittedCountOnlyActions.contains(.squat) ? CountOnlyAvailability.squatStrategyID : nil }
+    var admittedSquatStrategyID: String? { (admittedCountOnlyActions.contains(.squat) || squatTrialEnabled) ? CountOnlyAvailability.squatStrategyID : nil }
     var selectedCountOnlyAction: CountOnlyAction? {
         if let existing=session?.currentAssistedEvidence { return existing.action }
         if session?.exercise.exerciseId == "bodyweight_squat" { return .squat }

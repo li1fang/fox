@@ -51,6 +51,11 @@ public struct WorkoutCountOnlyEvidence: Codable, Equatable {
     public var automaticCount: Int { runs.reduce(0) { $0 + ($1.evidence?.observedCount ?? 0) } }
     public var suggestedCount: Int? { automaticCount > 0 ? automaticCount : nil }
     public var hasObservedFrames: Bool { runs.contains { $0.evidence?.lastInputSeconds != nil } }
+    /// A received frame is not a usable observation. A valid segment may have zero events.
+    public var observedCountIfValid: Int? {
+        runs.contains { !($0.evidence?.segments.isEmpty ?? true) } ? automaticCount : nil
+    }
+    public var isSquatTrial: Bool { action == .squat && runs.contains { $0.resolvedStrategyID == "squat-side-joint-floor-25-h1-v1" } }
     public var phaseStatus: String { "not_provided" }
     public init(binding: WorkoutSetBinding, side: ArmSide, source: VisionInputSource, action: CountOnlyAction = .curl) {
         self.binding=binding; self.side=side; self.source=source; self.action=action

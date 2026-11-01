@@ -21,6 +21,25 @@ final class TrainingJourneyInputTests: XCTestCase {
         XCTAssertEqual(TrainingPlanOutline.targetText(SetTarget(setIndex: 1, reps: 5), basis: .total), "5 次")
         XCTAssertEqual(TrainingPlanOutline.targetText(SetTarget(setIndex: 1, duration: 30), basis: nil), "00:30")
     }
+    func testSharedActionGuidesCoverSquatAndExistingSideCurlWithoutEnablingAlgorithms() throws {
+        let squat=try XCTUnwrap(ActionGuide.forExercise("bodyweight_squat"))
+        let curl=try XCTUnwrap(ActionGuide.forExercise("dumbbell_curl"))
+        XCTAssertEqual(squat.diagram,.squatSide);XCTAssertEqual(curl.diagram,.curlSide)
+        XCTAssertTrue(squat.camera.contains("髋、膝、踝"));XCTAssertTrue(curl.camera.contains("肩、肘、腕"))
+        XCTAssertNil(ActionGuide.forExercise("unknown"))
+    }
+    @MainActor func testTrialPreferenceIsOffByDefaultAndDoesNotAdmitCurl() throws {
+        let suite="FoxTrial-\(UUID())",defaults=try XCTUnwrap(UserDefaults(suiteName:suite))
+        defer {defaults.removePersistentDomain(forName:suite)}
+        let file=FileManager.default.temporaryDirectory.appendingPathComponent("FoxTrial-\(UUID())/training.json")
+        let store=TrainingStore(archiveURL:file,preferences:defaults,assistedDevelopmentEnabled:false,admittedCountOnlyActions:[])
+        XCTAssertFalse(store.canChooseSquat);XCTAssertFalse(store.allowsCountOnly(.curl))
+        defaults.set(true,forKey:CountOnlyAvailability.trialPreferenceKey)
+        XCTAssertTrue(store.canChooseSquat);XCTAssertEqual(store.admittedSquatStrategyID,CountOnlyAvailability.squatStrategyID)
+        XCTAssertFalse(store.allowsCountOnly(.curl))
+        defaults.set(false,forKey:CountOnlyAvailability.trialPreferenceKey)
+        XCTAssertFalse(store.canChooseSquat)
+    }
     func testUnknownCountOnlyChangesAfterExplicitStep() {
         XCTAssertFalse(TrainingCountInput.canConfirm([""]))
         XCTAssertNil(TrainingCountInput.adjusted("", by: -1))

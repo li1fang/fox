@@ -5,6 +5,7 @@ import FoxTrainingCore
 /// Development/diagnostic access is separate; ordinary admission never enables stopped curl.
 enum CountOnlyAvailability {
     private static let qualifiedActions: Set<CountOnlyAction> = []
+    static let trialPreferenceKey = "FoxTraining.squatInternalTrialEnabled"
     static let squatStrategyID = "squat-side-joint-floor-25-h1-v1"
     static var admittedActions: Set<CountOnlyAction> {
         #if DEBUG
