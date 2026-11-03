@@ -39,7 +39,7 @@ struct CaptureLabView: View {
         _free = State(initialValue: initialFree)
     }
     private var modeLocked: Bool {
-        freeCapture.selectionLocked || controller.isCounting || controller.isPreparing ||
+        freeCapture.selectionLocked || freeCapture.pumpControlBusy || controller.isCounting || controller.isPreparing ||
             controller.diagnosticCapture.isActive || controller.diagnosticCapture.finishing
     }
     var body: some View {
@@ -49,7 +49,7 @@ struct CaptureLabView: View {
             }.pickerStyle(.segmented).padding(.horizontal).padding(.vertical, 8)
                 .disabled(modeLocked).accessibilityIdentifier("capture-lab-mode")
             if free { FreeCaptureView(controller: freeCapture, phoneLandscapeNavigation: phoneLandscapeNavigation,
-                previewSession: { runtime.backend.previewSession }) }
+                previewSession: { runtime.backend.previewSession }, pump: runtime.backend.pump) }
             else { VisionLabView(controller: controller, phoneLandscapeNavigation: phoneLandscapeNavigation) }
         }
     }

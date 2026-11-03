@@ -11,6 +11,8 @@ configs:
   Release: release
 
 packages:
+  FoxPumpKit:
+    path: FoxPumpKit
   FoxTrainingCore:
     path: FoxTrainingCore
   FoxJournalCore:
@@ -26,6 +28,10 @@ targets:
     sources:
       - path: FoxNative
     dependencies:
+      - package: FoxPumpKit
+        product: PumpCore
+      - package: FoxPumpKit
+        product: FoxPumpApple
       - package: FoxTrainingCore
       - package: FoxTrainingCore
         product: FoxPoseExperimentKit
@@ -92,6 +98,8 @@ targets:
     sources:
       - path: FoxAppTests
     dependencies:
+      - package: FoxPumpKit
+        product: PumpCore
       - target: Fox
       - package: FoxJournalCore
       - package: FoxSyncCore

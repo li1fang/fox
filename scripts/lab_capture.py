@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import tempfile
+import uuid
 import zipfile
 
 MAX_FILE = 512 * 1024 * 1024
@@ -151,6 +152,32 @@ def verify_rows(open_file, names, streams, m):
     parsed = set()
     for name, f in names.items():
         stream = streams[f['stream_id']]
+        if stream['record_schema'] in ('fox.pump_control_event.v1', 'fox.pump_capture_context.v1'):
+            require(stream['kind'] == 'events', 'PUMP control context must be an events stream')
+            with open_file(name) as source:
+                if stream['record_schema'] == 'fox.pump_capture_context.v1':
+                    raw = source.read(MAX_LINE + 1); require(len(raw) <= MAX_LINE, 'Oversize PUMP context')
+                    context = load_json(raw)
+                    fields(context, 'schema session_id capture_id host_clock_id devices events')
+                    require(context['schema'] == 'fox.pump_capture_context.v1' and context['capture_id'] == m['capture_id'], 'Wrong PUMP capture context')
+                    require(context['host_clock_id'] == m['host_clock_id'], 'Wrong PUMP context clock')
+                    identifier(context['session_id'])
+                    require(isinstance(context['devices'], list) and len(context['devices']) <= 2, 'Invalid PUMP pair')
+                    aliases, device_ids = set(), set()
+                    for device in context['devices']:
+                        fields(device, 'id name state writable', 'alias heartbeatNS workState')
+                        require(device.get('alias') in ('pump-A', 'pump-B') and device['alias'] not in aliases and device['id'] not in device_ids, 'Duplicate PUMP identity')
+                        aliases.add(device['alias']); device_ids.add(device['id'])
+                    require(isinstance(context['events'], list), 'Invalid PUMP context events')
+                    for event in context['events']:
+                        verify_control_event(event, stream, m)
+                        require(event['session_id'] == context['session_id'], 'Mixed PUMP sessions')
+                else:
+                    while line := source.readline(MAX_LINE + 1):
+                        require(len(line) <= MAX_LINE, 'Oversize PUMP control row')
+                        verify_control_event(load_json(line), stream, m)
+            parsed.add(f['stream_id'])
+            continue
         if stream['record_schema'] == 'fox.lab_pump_events.v1':
             require(stream['kind'] == 'pump_raw', 'PUMP schema kind mismatch')
             with open_file(name) as source:
@@ -181,6 +208,38 @@ def verify_rows(open_file, names, streams, m):
                 prev_seq, prev_pts, prev_host, origin = seq, pts, host, current_origin
         parsed.add(f['stream_id'])
     return sorted(s['id'] for s in streams.values() if s['id'] not in parsed and any(f['stream_id'] == s['id'] for f in names.values()))
+
+
+def verify_control_event(event, stream, manifest):
+    fields(event, 'schema synthetic event_id session_id host_clock_id host_received_ns utc kind',
+           'device_id device_alias request_id request_devices capture_id configuration packet_hex outcomes raw_hex state connection_segment_id')
+    require(event['schema'] == 'fox.pump_control_event.v1' and type(event['synthetic']) is bool, 'Wrong PUMP control schema')
+    require(event['host_clock_id'] == stream['source']['clock_id'] == manifest['host_clock_id'], 'Wrong PUMP control clock')
+    for key in ('event_id', 'session_id'):
+        identifier(event[key])
+    require(event.get('capture_id', manifest['capture_id']) == manifest['capture_id'], 'Wrong PUMP control capture')
+    # Preparation precedes video. Keep its original time as context, not a motion sample.
+    require(decimal(event['host_received_ns']) <= decimal(manifest['ended_host_ns']), 'PUMP control comes after this package')
+    text(event['kind']); text(event['utc'])
+    if 'configuration' in event:
+        identifier(event.get('request_id'))
+        pair = event.get('request_devices', {})
+        require(type(pair) is dict and set(pair) == {'A', 'B'}, 'Missing frozen PUMP request devices')
+        for value in pair.values():
+            require(type(value) is str and str(uuid.UUID(value)).lower() == value.lower(), 'Invalid PUMP request device')
+        require(pair['A'].lower() != pair['B'].lower(), 'Duplicate PUMP request device')
+        c = event['configuration']; fields(c, 'mode kg reduction')
+        tags = {'standard': 1, 'constant': 7, 'eccentric': 5, 'concentric': 6}
+        require(c['mode'] in tags, 'Unknown PUMP mode')
+        directional = c['mode'] in ('eccentric', 'concentric')
+        kg = c['kg']; require(type(kg) in (int, float) and math.isfinite(kg) and (5 if directional else 2) <= kg <= 20 and abs(kg * 10 - round(kg * 10)) < 1e-8, 'Invalid Pro setpoint')
+        require(type(c['reduction']) is int and c['reduction'] in (0, 25, 50) and (directional or c['reduction'] == 0), 'Invalid PUMP reduction')
+        packet = [0x54, 7 if directional else 6, 2, tags[c['mode']], round(kg * 10)]
+        if directional: packet.append(c['reduction'])
+        packet.append(-sum(packet) & 255)
+        require(event.get('packet_hex') == bytes(packet).hex(), 'PUMP configuration packet mismatch')
+    else:
+        require('packet_hex' not in event, 'PUMP packet without configuration')
 
 
 def verify_pump_rows(source, stream, manifest):

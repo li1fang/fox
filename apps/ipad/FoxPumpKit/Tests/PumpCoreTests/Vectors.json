@@ -1,0 +1,224 @@
+{
+  "notifications": [
+    {
+      "expected": {
+        "battery_pct": 75,
+        "battery_temp_c": 22,
+        "board_temp_c": 21,
+        "checksum_validation": "not_established",
+        "extra_hex": "b5",
+        "firmware_main": 1,
+        "firmware_sub": 32,
+        "interpretation": "upstream_hypothesis",
+        "kind": "device_heartbeat",
+        "motor_temp_c": 20,
+        "payload_hex": "01292a2b4b0120b5",
+        "sum8": 0,
+        "tag": 2,
+        "work_state": "working",
+        "work_state_raw": 1
+      },
+      "hex": "530b0201292a2b4b0120b5"
+    },
+    {
+      "expected": {
+        "cable_length_cm": 42,
+        "checksum_validation": "not_established",
+        "extra_hex": "de",
+        "interpretation": "upstream_hypothesis",
+        "kind": "sports_heartbeat",
+        "payload_hex": "032a0701006400000a0000050009010203de",
+        "power_raw_unverified": 9,
+        "recovery_raw_unverified": 197121,
+        "speed_raw_unverified": 7,
+        "sum8": 0,
+        "tag": 3,
+        "tension_time_raw": 5,
+        "total_distance_cm": 100,
+        "total_energy_j_upstream": 10,
+        "total_reps": 1,
+        "unknown_first_byte": 3
+      },
+      "hex": "531503032a0701006400000a0000050009010203de"
+    }
+  ],
+  "strength": [
+    {
+      "hex": "54060201148f",
+      "kg": 2,
+      "limit": 5,
+      "mode": "standard",
+      "reduction": 0
+    },
+    {
+      "hex": "540602011f84",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "standard",
+      "reduction": 0
+    },
+    {
+      "hex": "540602013271",
+      "kg": 5,
+      "limit": 5,
+      "mode": "standard",
+      "reduction": 0
+    },
+    {
+      "hex": "540602071489",
+      "kg": 2,
+      "limit": 5,
+      "mode": "constant",
+      "reduction": 0
+    },
+    {
+      "hex": "540602071f7e",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "constant",
+      "reduction": 0
+    },
+    {
+      "hex": "54060207326b",
+      "kg": 5,
+      "limit": 5,
+      "mode": "constant",
+      "reduction": 0
+    },
+    {
+      "hex": "5407020514008a",
+      "kg": 2,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 0
+    },
+    {
+      "hex": "54070205141971",
+      "kg": 2,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 25
+    },
+    {
+      "hex": "54070205143258",
+      "kg": 2,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 50
+    },
+    {
+      "hex": "540702051f007f",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 0
+    },
+    {
+      "hex": "540702051f1966",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 25
+    },
+    {
+      "hex": "540702051f324d",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 50
+    },
+    {
+      "hex": "5407020532006c",
+      "kg": 5,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 0
+    },
+    {
+      "hex": "54070205321953",
+      "kg": 5,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 25
+    },
+    {
+      "hex": "5407020532323a",
+      "kg": 5,
+      "limit": 5,
+      "mode": "eccentric",
+      "reduction": 50
+    },
+    {
+      "hex": "54070206140089",
+      "kg": 2,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 0
+    },
+    {
+      "hex": "54070206141970",
+      "kg": 2,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 25
+    },
+    {
+      "hex": "54070206143257",
+      "kg": 2,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 50
+    },
+    {
+      "hex": "540702061f007e",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 0
+    },
+    {
+      "hex": "540702061f1965",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 25
+    },
+    {
+      "hex": "540702061f324c",
+      "kg": 3.1,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 50
+    },
+    {
+      "hex": "5407020632006b",
+      "kg": 5,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 0
+    },
+    {
+      "hex": "54070206321952",
+      "kg": 5,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 25
+    },
+    {
+      "hex": "54070206323239",
+      "kg": 5,
+      "limit": 5,
+      "mode": "concentric",
+      "reduction": 50
+    },
+    {
+      "hex": "540602015053",
+      "kg": 8,
+      "limit": 8,
+      "mode": "standard",
+      "reduction": 0
+    }
+  ],
+  "synthetic": true
+}
+

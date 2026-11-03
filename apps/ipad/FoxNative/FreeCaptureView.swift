@@ -6,6 +6,7 @@ struct FreeCaptureView: View {
     @ObservedObject var controller: FreeCaptureController
     var phoneLandscapeNavigation: AnyView? = nil
     var previewSession: () -> AVCaptureSession? = { nil }
+    var pump: PumpCaptureRuntime? = nil
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -24,7 +25,7 @@ struct FreeCaptureView: View {
                     Picker("姿态分析", selection: Binding(get: { controller.options.analysis }, set: { controller.changeAnalysis($0) })) {
                         ForEach(FreeCaptureAnalysis.allCases) { Text($0.label).tag($0) }
                     }.pickerStyle(.segmented).accessibilityIdentifier("free-capture-analysis")
-                    Toggle("PUMP 只读遥测", isOn: Binding(get: { controller.options.pumpEnabled }, set: { controller.changePump(enabled: $0) }))
+                    Toggle("PUMP", isOn: Binding(get: { controller.options.pumpEnabled }, set: { controller.changePump(enabled: $0) }))
                         .accessibilityIdentifier("free-capture-pump")
                 }.disabled(controller.selectionLocked)
                 if controller.options.pumpEnabled {
@@ -34,12 +35,14 @@ struct FreeCaptureView: View {
                         HStack {
                             Text("\(device.alias ?? "PUMP")：\(device.state)").font(.callout)
                                 .accessibilityIdentifier("free-capture-\(device.alias ?? "pump")-status")
-                            if controller.phase == .recording, device.canReconnect {
+                            if controller.phase != .starting, controller.phase != .finishing, device.canReconnect {
                                 Button("重新连接") { controller.reconnectPump(device.id) }
+                                    .disabled(pump?.isApplying == true)
                                     .accessibilityIdentifier("free-capture-reconnect-\(device.alias ?? "pump")")
                             }
                         }
                     }
+                    if let pump { PumpConfigurationPanel(model: pump, locked: controller.selectionLocked) }
                 }
                 if let session = previewSession() {
                     FreeCapturePreview(session: session, mirrored: controller.options.frontCamera)
@@ -71,7 +74,7 @@ struct FreeCaptureView: View {
                         .accessibilityIdentifier("free-capture-stop")
                 } else {
                     FoxCommand(title: controller.phase == .finishing ? "正在封存" : "开始录制", icon: "record.circle", prominent: true) { controller.start() }
-                        .disabled(controller.phase == .finishing).accessibilityIdentifier("free-capture-start")
+                        .disabled(controller.phase == .finishing || controller.pumpControlBusy).accessibilityIdentifier("free-capture-start")
                 }
             }.padding().background(.bar)
         }
@@ -81,10 +84,14 @@ struct FreeCaptureView: View {
                let navigation = phoneLandscapeNavigation { navigation }
         }
         .onAppear { controller.refresh() }
-        .onDisappear { controller.stop(reason: "viewClosed"); controller.stopPumpScan() }
+        .onAppear { if controller.options.pumpEnabled { pump?.setEnabled(true) } }
+        .onDisappear { controller.stop(reason: "viewClosed"); controller.stopPumpScan(); controller.closePump() }
         // Permission prompts can make the scene inactive; actual background ends the clip.
         // AV session interruptions are separately handled by the camera adapter.
-        .onChange(of: scenePhase) { if $0 == .background { controller.stop(reason: "background") } }
+        .onChange(of: scenePhase) {
+            if $0 == .background { controller.stop(reason: "background"); controller.closePump() }
+            if $0 == .active && controller.options.pumpEnabled { pump?.setEnabled(true) }
+        }
         .sheet(isPresented: $showingLibrary) { FreeCaptureLibrary(controller: controller) }
         .sheet(isPresented: $choosingPump, onDismiss: { controller.stopPumpScan() }) { FreeCapturePumpPicker(controller: controller) }
     }

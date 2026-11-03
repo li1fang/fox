@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import FoxTrainingCore
+import PumpCore
 import Vision
 #if canImport(FoxVision3D)
 import FoxVision3D
@@ -20,20 +21,17 @@ final class FreeCaptureNativeBackend: FreeCaptureBackend {
     private var refreshing = false
     private var refreshAgain = false
     private var setupError: String?
-    private let pump = FreeCapturePumpCentral()
+    let pump: PumpCaptureRuntime
     private let fixtureOverride: String?
     private var fixture: String? {
         fixtureOverride ?? (ProcessInfo.processInfo.environment["FOX_UI_TESTING"] == "1" ? ProcessInfo.processInfo.environment["FOX_FREE_CAPTURE_FIXTURE"] : nil)
     }
     var previewSession: AVCaptureSession? { fixture == nil ? camera.session : nil }
     var sourceLabel: String { fixture == nil ? "本机相机 · 无声录像" : "合成测试样本 · 非真实相机" }
-    init(root: URL = FreeCaptureArchive.root, fixture: String? = nil) {
-        self.root = root; fixtureOverride = fixture
-        pump.onDevices = { [weak self] devices, status in self?.onEvent?(.pumpDevices(devices, status)) }
-        pump.onStatus = { [weak self] status in
-            guard let self, let id = self.recording?.id else { return }
-            self.onEvent?(.sensor(id, status))
-        }
+    init(root: URL = FreeCaptureArchive.root, fixture: String? = nil, pump: PumpCaptureRuntime? = nil) {
+        self.root = root; fixtureOverride = fixture; self.pump = pump ?? PumpCaptureRuntime()
+        self.pump.onDevices = { [weak self] devices, status in self?.onEvent?(.pumpDevices(devices, status)) }
+        self.pump.onBusy = { [weak self] busy in self?.onEvent?(.pumpControlBusy(busy)) }
         if root == FreeCaptureArchive.root, ProcessInfo.processInfo.environment["FOX_UI_TESTING"] == "1",
            ProcessInfo.processInfo.environment["FOX_FREE_CAPTURE_FIXTURE"] != nil,
            ProcessInfo.processInfo.arguments.contains("--ui-testing-reset"), FileManager.default.fileExists(atPath: root.path) {
@@ -46,25 +44,40 @@ final class FreeCaptureNativeBackend: FreeCaptureBackend {
     func start(id: UUID, options: FreeCaptureOptions) throws {
         if let setupError { throw VisionDiagnosticArchive.error(setupError) }
         guard recording == nil else { throw VisionDiagnosticArchive.error("上次采集尚未封存。") }
+        guard !pump.isBusy else { throw VisionDiagnosticArchive.error("PUMP写入尚未排空，请等待回调或重新连接后录制。") }
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let info = try FileManager.default.attributesOfFileSystem(forPath: documents.path)
         guard (info[.systemFreeSize] as? NSNumber)?.int64Value ?? 0 >= 512 * 1024 * 1024 else {
             throw VisionDiagnosticArchive.error("可用空间不足 512 MiB，未开始采集。")
         }
-        let archive = try FreeCaptureArchive(id: id, options: options, root: root, synthetic: fixture != nil,
-                                             pumpAliases: options.pumpEnabled && fixture == nil ? pump.selectedAliases : [])
-        let run = try FreeCaptureRecording(id: id, options: options, archive: archive, camera: camera, fixture: fixture) { [weak self] event in
-            Task { @MainActor in self?.receive(event) }
-        }
+        let usePump = options.pumpEnabled && (fixture == nil || pump.isSynthetic)
+        let controlContext = usePump ? pump.begin(id: id, notification: { [weak self] value in
+            guard let self, let run = self.recording else { return }; self.camera.onCaptureQueue { run.pump(value) }
+        }, connection: { [weak self] value in
+            guard let self, let run = self.recording else { return }; self.camera.onCaptureQueue { run.pump(value) }
+        }) : nil
+        if usePump && controlContext == nil { throw VisionDiagnosticArchive.error(pump.error ?? "未能关联PUMP会话，未开始录像。") }
+        let archive: FreeCaptureArchive
+        do {
+            archive = try FreeCaptureArchive(id: id, options: options, root: root, synthetic: fixture != nil,
+                pumpAliases: usePump ? pump.selectedAliases : [], pumpControlContext: controlContext)
+        } catch { pump.finishCapture(); throw error }
+        let run: FreeCaptureRecording
+        do {
+            run = try FreeCaptureRecording(id: id, options: options, archive: archive, camera: camera, fixture: fixture) { [weak self] event in
+                Task { @MainActor in self?.receive(event) }
+            }
+        } catch { pump.finishCapture(); throw error }
         recording = run
         camera.setPoseAnalysisEnabled(false)
         camera.onRawSample = { [weak run] owner, sample in if owner == id { run?.append(sample) } }
         camera.onRawDrop = { [weak run] owner, pts, reason in if owner == id { run?.dropped(pts: pts, reason: reason) } }
         camera.onRawDiscontinuity = { [weak run] owner in if owner == id { run?.stop(reason: "cameraDiscontinuity") } }
-        if options.pumpEnabled, fixture == nil {
-            pump.begin(captureID: id.uuidString, clockID: archive.clockID,
-                notification: { [weak run, camera] value in camera.onCaptureQueue { run?.pump(value) } },
-                connection: { [weak run, camera] value in camera.onCaptureQueue { run?.pump(value) } })
+        if usePump {
+            for device in pump.session?.selected ?? [] {
+                guard let value = pump.connectionEvent(device, captureID: id, timestamp: DispatchTime.now().uptimeNanoseconds) else { continue }
+                camera.onCaptureQueue { run.pump(value) }
+            }
         }
         camera.onState = { [weak self, weak run] owner, state in
             guard let self, owner == id, self.recording?.id == id else { return }
@@ -116,18 +129,18 @@ final class FreeCaptureNativeBackend: FreeCaptureBackend {
     func stop(id: UUID, reason: String) {
         guard let run = recording, run.id == id else { return }
         cancelTimers()
-        pump.stop()
+        pump.detachNotifications()
         camera.onCaptureQueue { run.stop(reason: reason) }
         camera.stop()
     }
     private func receive(_ event: FreeCaptureEvent) {
         switch event {
         case .finishing(let id) where recording?.id == id:
-            cancelTimers(); pump.stop(); camera.stop()
+            cancelTimers(); pump.detachNotifications(); camera.stop()
         case .finished(let package) where recording?.id == package.id:
-            cancelTimers(); pump.stop(); camera.stop(); recording = nil
+            cancelTimers(); pump.finishCapture(); camera.stop(); recording = nil
         case .failed(let id, _) where recording?.id == id:
-            cancelTimers(); pump.stop(); camera.stop(); recording = nil
+            cancelTimers(); pump.finishCapture(); camera.stop(); recording = nil
         default: break
         }
         onEvent?(event)
@@ -135,7 +148,9 @@ final class FreeCaptureNativeBackend: FreeCaptureBackend {
     func scanPump() { guard recording == nil else { return }; pump.scan() }
     func stopPumpScan() { pump.stopScan() }
     func selectPump(_ id: UUID) { guard recording == nil else { return }; pump.select(id) }
-    func reconnectPump(_ id: UUID) { guard recording != nil else { return }; pump.reconnect(id) }
+    func reconnectPump(_ id: UUID) { guard !pump.isApplying else { return }; pump.reconnect(id) }
+    func setPumpEnabled(_ enabled: Bool) { pump.setEnabled(enabled) }
+    func closePump() { pump.shutdown() }
     private func cancelTimers() {
         deadline?.invalidate(); deadline = nil; fixtureTimer?.invalidate(); fixtureTimer = nil
         capacityTimer?.invalidate(); capacityTimer = nil
@@ -269,7 +284,7 @@ private final class FreeCaptureRecording {
         guard archive.acceptsPump(captureID: value.captureID, clockID: value.hostClockID, alias: value.deviceAlias) else {
             emit(.sensor(id, "PUMP 来源不匹配 · 录像继续")); return
         }
-        do { try archive.pump(value) } catch { stop(reason: "sensorLogFailure") }
+        do { try archive.pump(value); emit(.sensor(id, "\(value.deviceAlias) 正在接收遥测 · 单位待核对")) } catch { stop(reason: "sensorLogFailure") }
     }
     func cameraState(_ value: String) {
         guard !finishing else { return }
@@ -280,7 +295,7 @@ private final class FreeCaptureRecording {
         guard archive.acceptsPump(captureID: value.captureID, clockID: value.hostClockID, alias: value.deviceAlias) else {
             emit(.sensor(id, "PUMP 来源不匹配 · 录像继续")); return
         }
-        do { try archive.pump(value) } catch { stop(reason: "sensorLogFailure") }
+        do { try archive.pump(value); emit(.sensor(id, "\(value.deviceAlias) \(value.state) · 录像继续")) } catch { stop(reason: "sensorLogFailure") }
     }
     func stop(reason: String) {
         guard !finishing else { return }

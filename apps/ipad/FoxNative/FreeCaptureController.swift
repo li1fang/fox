@@ -14,6 +14,7 @@ enum FreeCaptureEvent {
     case libraryFailure(String)
     case libraryLoading(Bool)
     case pumpDevices([FreeCapturePumpDevice], String)
+    case pumpControlBusy(Bool)
 }
 
 @MainActor
@@ -28,6 +29,8 @@ protocol FreeCaptureBackend: AnyObject {
     func stopPumpScan()
     func selectPump(_ id: UUID)
     func reconnectPump(_ id: UUID)
+    func setPumpEnabled(_ enabled: Bool)
+    func closePump()
 }
 extension FreeCaptureBackend {
     var sourceLabel: String { "本机相机 · 无声录像" }
@@ -35,6 +38,8 @@ extension FreeCaptureBackend {
     func stopPumpScan() {}
     func selectPump(_ id: UUID) {}
     func reconnectPump(_ id: UUID) {}
+    func setPumpEnabled(_ enabled: Bool) {}
+    func closePump() {}
 }
 
 @MainActor
@@ -56,6 +61,7 @@ final class FreeCaptureController: ObservableObject {
     @Published private(set) var pumpDevices: [FreeCapturePumpDevice] = []
     @Published private(set) var pumpDiscoveryStatus = "尚未扫描"
     @Published private(set) var libraryLoading = false
+    @Published private(set) var pumpControlBusy = false
     private let backend: FreeCaptureBackend
 
     init(backend: FreeCaptureBackend) {
@@ -88,13 +94,21 @@ final class FreeCaptureController: ObservableObject {
     }
     func changeCamera(front: Bool) { guard !selectionLocked else { return }; options.frontCamera = front }
     func changeAnalysis(_ mode: FreeCaptureAnalysis) { guard !selectionLocked else { return }; options.analysis = mode }
-    func changePump(enabled: Bool) { guard !selectionLocked else { return }; options.pumpEnabled = enabled }
+    func changePump(enabled: Bool) {
+        guard !selectionLocked, !pumpControlBusy else { return }
+        options.pumpEnabled = enabled
+        sensorStatus = enabled ? "PUMP 已启用 · 尚未录制" : "PUMP 未启用"
+        backend.setPumpEnabled(enabled)
+    }
+    func closePump() { backend.closePump() }
     func scanPump() { guard !selectionLocked else { return }; backend.scanPump() }
     func stopPumpScan() { backend.stopPumpScan() }
     func selectPump(_ id: UUID) { guard !selectionLocked else { return }; backend.selectPump(id) }
-    func reconnectPump(_ id: UUID) { guard phase == .recording else { return }; backend.reconnectPump(id) }
+    func reconnectPump(_ id: UUID) {
+        guard phase != .starting, phase != .finishing else { return }; backend.reconnectPump(id)
+    }
     func start() {
-        guard !selectionLocked else { return }
+        guard !selectionLocked, !pumpControlBusy else { return }
         let id = UUID()
         captureID = id; phase = .starting; latest = nil; error = nil; exportStatus = nil
         encodedFrames = 0; droppedFrames = 0; recordingSince = nil
@@ -130,6 +144,7 @@ final class FreeCaptureController: ObservableObject {
         if case .libraryFailure(let message) = event { error = message; return }
         if case .libraryLoading(let value) = event { libraryLoading = value; return }
         if case .pumpDevices(let devices, let status) = event { pumpDevices = devices; pumpDiscoveryStatus = status; return }
+        if case .pumpControlBusy(let value) = event { if value != pumpControlBusy { pumpControlBusy = value }; return }
         switch event {
         case .started(let id) where captureID == id && phase == .starting:
             phase = .recording; recordingSince = Date()

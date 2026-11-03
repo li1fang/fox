@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import FoxTrainingCore
+import PumpCore
 
 /// Permanent experimental originals. This directory is never passed to diagnostic draft pruning.
 final class FreeCaptureArchive {
@@ -45,6 +46,7 @@ final class FreeCaptureArchive {
     let sourceID: String
     let clockID: String
     private let context: Context
+    private let pumpControlContext: PumpCaptureContext?
     private var logs: [String: FileHandle] = [:]
     private var sealed = false
     private var lastFramePTS: CMTime?
@@ -57,12 +59,19 @@ final class FreeCaptureArchive {
     private var pumpHasData = Set<String>()
     private var pumpInterrupted = Set<String>()
 
-    init(id: UUID, options: FreeCaptureOptions, root: URL, synthetic: Bool = false, pumpAliases: [String] = []) throws {
+    init(id: UUID, options: FreeCaptureOptions, root: URL, synthetic: Bool = false, pumpAliases: [String] = [], pumpControlContext: PumpCaptureContext? = nil) throws {
         guard Set(pumpAliases).count == pumpAliases.count, pumpAliases.count <= 2,
               pumpAliases.allSatisfy({ ["pump-A", "pump-B"].contains($0) }), options.pumpEnabled || pumpAliases.isEmpty else {
             throw VisionDiagnosticArchive.error("PUMP 采集别名无效。")
         }
         self.id = id; sourceID = UUID().uuidString; clockID = "host-\(Self.processID.uuidString)"
+        self.pumpControlContext = pumpControlContext
+        if let pumpControlContext {
+            try pumpControlContext.validate()
+            guard pumpControlContext.captureID == id.uuidString, pumpControlContext.hostClockID == clockID else {
+                throw VisionDiagnosticArchive.error("PUMP配置上下文与本段不匹配。")
+            }
+        }
         context = Context(captureID: id, sourceID: sourceID, processID: Self.processID,
                           startedHostNS: String(DispatchTime.now().uptimeNanoseconds), recordedAt: Date(),
                           frontCamera: options.frontCamera, analysis: options.analysis.rawValue, pumpRequested: options.pumpEnabled,
@@ -76,6 +85,12 @@ final class FreeCaptureArchive {
         guard !FileManager.default.fileExists(atPath: folder.path) else { throw VisionDiagnosticArchive.error("采集 ID 已存在，未覆盖。") }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
         try Self.encode(context).write(to: folder.appendingPathComponent("context.json"), options: .atomic)
+        if let pumpControlContext {
+            try Self.encode(pumpControlContext).write(to: folder.appendingPathComponent("pump-context.json"), options: .withoutOverwriting)
+            var rows = Data()
+            for event in pumpControlContext.events { rows.append(try Self.encode(event)); rows.append(10) }
+            try rows.write(to: folder.appendingPathComponent("pump-control.jsonl"), options: .withoutOverwriting)
+        }
         var names = ["frames.jsonl", "events.jsonl"]
         if options.analysis != .none { names.append("poses2d.jsonl") }
         if options.analysis == .comparison { names.append("poses3d.jsonl") }
@@ -194,6 +209,13 @@ final class FreeCaptureArchive {
                                  recordSchema: recovered ? "fox.lab_recovered_raw.v1" : "fox.lab_recording.v1", source: source))
         }
         if recovered { streams.append(.init(id: "recovery", kind: "events", state: "complete", recordSchema: "fox.lab_recovery.v1", source: source)) }
+        for (name, schema) in [("pump-control", "fox.pump_control_event.v1"), ("pump-context", "fox.pump_capture_context.v1")] {
+            let ext = name == "pump-control" ? "jsonl" : "json"
+            if FileManager.default.fileExists(atPath: folder.appendingPathComponent("\(name).\(ext)").path) {
+                streams.append(.init(id: name, kind: "events", state: "complete", recordSchema: schema,
+                    source: .init(producer: "fox_pump_device_session", version: "1", clockID: clockID)))
+            }
+        }
         for kind in ["pose2d", "pose3d"] {
             let requested = kind == "pose2d" ? context.analysis != FreeCaptureAnalysis.none.rawValue : context.analysis == FreeCaptureAnalysis.comparison.rawValue
             let issue = analysisIssues[kind] ?? (requested && analysisRows[kind, default: 0] == 0 ? "no_analysis_frames" : nil)
@@ -215,6 +237,9 @@ final class FreeCaptureArchive {
         var mapping = ["context.json": "context", "recording.json": "recording", "events.jsonl": "events", "frames.jsonl": "frames",
                        "video.mp4": "video", "video.partial.mp4": "video", "poses2d.jsonl": "pose2d", "poses3d.jsonl": "pose3d"]
         if recovered { mapping["recovery.json"] = "recovery" }
+        for (file, stream) in [("pump-control.jsonl", "pump-control"), ("pump-context.json", "pump-context")] {
+            if FileManager.default.fileExists(atPath: folder.appendingPathComponent(file).path) { mapping[file] = stream }
+        }
         for alias in context.pumpAliases { mapping["\(alias).jsonl"] = alias }
         var files: [LabCaptureAsset] = []
         for name in mapping.keys.sorted() where FileManager.default.fileExists(atPath: folder.appendingPathComponent(name).path) {
@@ -250,6 +275,13 @@ final class FreeCaptureArchive {
             let manifest = try decoder.decode(LabCaptureManifest.self, from: Data(contentsOf: manifestURL))
             guard manifest.schema == "fox.lab_capture.v1", manifest.captureID == id.uuidString else { throw VisionDiagnosticArchive.error("实验封包 ID 不匹配。") }
             try verifyAssets(manifest, folder: folder)
+            if manifest.streams.contains(where: { $0.recordSchema == "fox.pump_capture_context.v1" }) {
+                let pump = try decoder.decode(PumpCaptureContext.self, from: metadataBytes(folder.appendingPathComponent("pump-context.json")))
+                try pump.validate()
+                guard pump.captureID == manifest.captureID, pump.hostClockID == manifest.hostClockID else {
+                    throw VisionDiagnosticArchive.error("PUMP资料不属于本段录像。")
+                }
+            }
             let context = try decoder.decode(Context.self, from: Data(contentsOf: folder.appendingPathComponent("context.json")))
             guard context.schema == "fox.lab_context.v1", context.captureID == id else { throw VisionDiagnosticArchive.error("实验上下文 ID 不匹配。") }
             let summaryName = manifest.streams.contains { $0.id == "recovery" && $0.recordSchema == "fox.lab_recovery.v1" } ? "recovery.json" : "recording.json"
@@ -298,6 +330,7 @@ final class FreeCaptureArchive {
         return try Data(contentsOf: url)
     }
     private init(context: Context, folder: URL) throws {
+        pumpControlContext = nil
         self.context = context; self.folder = folder; id = context.captureID; sourceID = context.sourceID
         clockID = "host-\(context.processID.uuidString)"
         let url = folder.appendingPathComponent("events.jsonl")

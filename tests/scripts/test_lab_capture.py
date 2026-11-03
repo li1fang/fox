@@ -22,6 +22,26 @@ class LabCaptureTests(unittest.TestCase):
         self.write()
     def write(self):
         (self.root / "manifest.json").write_text(json.dumps(self.manifest))
+    def control_event(self):
+        return dict(schema="fox.pump_control_event.v1", synthetic=True, event_id="event-1", session_id="session-1",
+                    host_clock_id="host-1", host_received_ns="500000000", utc="2026-11-03T00:00:00Z",
+                    kind="configuration_requested", request_id="request-1", request_devices={"A": "00000000-0000-0000-0000-000000000001", "B": "00000000-0000-0000-0000-000000000002"}, configuration=dict(mode="standard", kg=2, reduction=0), packet_hex="54060201148f")
+    def put_control(self, row):
+        data=(json.dumps(row)+"\n").encode();(self.root/"frames.jsonl").write_bytes(data)
+        self.manifest["streams"][0].update(kind="events",record_schema="fox.pump_control_event.v1")
+        self.manifest["files"][0].update(bytes=len(data),sha256=hashlib.sha256(data).hexdigest());self.write()
+    def test_control_before_video_is_context_not_a_shifted_motion_sample(self):
+        row=self.control_event();self.put_control(row)
+        self.assertEqual(lab.verify_package(self.root)["unparsed_streams"],[])
+        target=Path(self.tmp.name).resolve()/"control.zip";lab.export_package(self.root,target)
+        self.assertEqual(lab.verify_export(target)["unparsed_streams"],[])
+        self.assertEqual(json.loads((self.root/"frames.jsonl").read_text())["host_received_ns"],"500000000")
+    def test_control_context_rejects_wrong_clock_capture_packet_or_out_of_range_config(self):
+        row=self.control_event()
+        for change in [dict(host_clock_id="other"),dict(capture_id="other"),dict(packet_hex="00"),dict(configuration=dict(mode="standard",kg=21,reduction=0)),dict(request_devices={}),dict(request_devices={"A": row["request_devices"]["A"], "B": row["request_devices"]["A"]})]:
+            with self.subTest(change=change):
+                self.put_control(dict(row,**change))
+                with self.assertRaises(ValueError):lab.verify_package(self.root)
     def test_shared_native_manifest_rejection_vectors(self):
         base = Path(__file__).resolve().parents[1] / "fixtures/lab-capture"
         valid = json.loads((base / "synthetic-v1/manifest.json").read_text())

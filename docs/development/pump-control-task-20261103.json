@@ -1,0 +1,11 @@
+{
+  "schema": "fox.development_task.v1",
+  "outcome": "Expose the verified PUMP modes and configuration in iPad free capture through one reusable device session",
+  "nonGoals": ["Counting changes", "Full training UI redesign", "PUMP Lab development", "iPhone delivery", "Automatic resistance control", "Push or merge"],
+  "invariants": ["Preserve originals and existing records", "No control while recording or finalizing", "One BLE owner", "No automatic retry or replay", "Setpoints are not measured forces"],
+  "modules": ["apps/ipad/FoxPumpKit", "apps/ipad/FoxNative/FreeCapture", "scripts/lab_capture.py"],
+  "acceptance": ["Frozen protocol vectors and existing core tests", "Session and fake-transport tests", "Archive consumer compatibility", "Focused host and iPad UI", "Shared iPhone compilation and saved-library boundary", "Preservation-first iPad delivery"],
+  "stopConditions": ["Source drift", "Data loss risk", "Repeated same CoreDevice failure pauses only device delivery", "Physical writes require the user present"],
+  "evidence": ["Failing regressions before implementation", "Scoped tests and source identity", "Fresh-context review", "Separate backup installation and physical receipts"],
+  "humanUnknowns": ["Physical effects of untried modes", "New live-camera accuracy is not evaluated"]
+}

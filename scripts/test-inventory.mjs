@@ -20,6 +20,7 @@ export async function discoverTests(directory = root) {
     ['apps/ipad/FoxTrainingCore/Tests/FoxTrainingCoreTests', 'FoxTrainingCoreTests'],
     ['apps/ipad/FoxJournalCore/Tests/FoxJournalCoreTests', 'FoxJournalCoreTests'],
     ['apps/ipad/FoxSyncCore/Tests/FoxSyncCoreTests', 'FoxSyncCoreTests'],
+    ['apps/ipad/FoxPumpKit/Tests/PumpCoreTests', 'PumpCoreTests'],
     ['apps/ipad/FoxAppTests', 'FoxAppTests'], ['apps/ipad/FoxUITests', 'FoxUITests']]) {
     for (const name of await filesBelow(path.join(directory, folder))) {
       if (!name.endsWith('.swift')) continue;
