@@ -50,4 +50,3 @@ public struct PumpCommandOutcome {
         return !writerInvoked ? "not_sent" : hasError ? "unknown" : "response_unverified"
     }
 }
-

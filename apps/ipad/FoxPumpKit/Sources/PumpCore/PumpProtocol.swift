@@ -109,4 +109,3 @@ public struct PumpGate {
     }
     public mutating func reset() { self = PumpGate() }
 }
-

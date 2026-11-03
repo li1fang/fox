@@ -14,4 +14,3 @@ public struct PumpWriteLedger {
     }
     public mutating func resetConnection() { pendingRequestID=nil }
 }
-

@@ -105,4 +105,3 @@ final class PumpControlApprovalTests: XCTestCase {
         XCTAssertEqual(neverSent.complete(hasError:false),"not_sent")
     }
 }
-

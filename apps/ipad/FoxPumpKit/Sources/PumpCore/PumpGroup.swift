@@ -116,4 +116,3 @@ public enum PumpRememberedPair {
         return validated(["A":observed["A"]!.first!,"B":observed["B"]!.first!])
     }
 }
-

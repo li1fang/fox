@@ -72,4 +72,3 @@ final class PumpCoreTests: XCTestCase {
         XCTAssertThrowsError(try gate.consume(now:6))
     }
 }
-
