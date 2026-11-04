@@ -22,7 +22,13 @@ public struct GuidancePolicy {
     public mutating func update(_ input: GuidanceInput) -> GuidanceUpdate {
         guard input.time.isFinite, input.count >= 0 else { return .init(presentation: .unavailable, cues: []) }
         if context != input.context {
+            // Rebinding replaces the observation, but it does not start a new set.
+            let sameAttempt = context?.sessionID == input.context.sessionID &&
+                context?.attemptID == input.context.attemptID &&
+                context?.executionGeneration == input.context.executionGeneration
+            let keepLossLatch = sameAttempt && reportedLoss
             self = GuidancePolicy(); context = input.context; lastCount = input.count
+            reportedLoss = keepLossLatch
         }
         guard lastTime.map({ input.time > $0 }) ?? true else { return .init(presentation: .unavailable, cues: []) }
         if let lastTime, input.time - lastTime > 0.35 { stableSince = nil; subjectRecoveredSince = nil }
