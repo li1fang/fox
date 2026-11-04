@@ -123,7 +123,8 @@ final class GuidanceSession: ObservableObject {
                 restRemainingSeconds: session.stage == .rest ? session.restRemaining(at: vision.wallTime) : nil,
                 requiresWeightConfirmation: session.target.weightUnit != "bodyweight",
                 plannedCycleLimit: session.exercise.exerciseId == "kegel" ? session.target.targetReps : nil,
-                countOnly:(store.countOnlySelected || session.currentAssistedEvidence != nil) ? true:nil))
+                countOnly:(store.countOnlySelected || session.currentAssistedEvidence != nil) ? true:nil,
+                subjectState: vision.subjectSelection.state))
         } else {
             let stage: GuidanceStage = vision.isPreparing ? (countdown == nil ? .preparing : .countdown) :
                 vision.isCounting ? .active : vision.trialFinished ? .feedback : vision.trialActive ? .paused : .idle
@@ -131,7 +132,8 @@ final class GuidanceSession: ObservableObject {
             // until a plan is explicitly supplied; it must not silently invent a tempo prescription.
             output.update(.init(context: .init(sessionID: standaloneID, attemptID: vision.guidanceAttemptID.uuidString,
                 observationID: vision.guidanceObservationID.uuidString), time: time, stage: stage, exercise: vision.exercise,
-                mode: mode, count: vision.automaticCount, targetReps: nil, motion: motion, tempo: [], elapsed: 0, countdown: countdown))
+                mode: mode, count: vision.automaticCount, targetReps: nil, motion: motion, tempo: [], elapsed: 0, countdown: countdown,
+                subjectState: vision.subjectSelection.state))
         }
     }
 }

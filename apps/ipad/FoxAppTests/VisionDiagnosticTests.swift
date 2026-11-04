@@ -6,6 +6,49 @@ import FoxTrainingCore
 
 @MainActor
 final class VisionDiagnosticTests: XCTestCase {
+    func testTrialAutomaticallyRetainsWithoutReviewAndReopens() async throws {
+        let base = root()
+        let store = VisionDiagnosticStore(root: base.appendingPathComponent("Retained"), autoRetain: true)
+        var c = context()
+        c.retainOnSeal = store.autoRetain
+        XCTAssertTrue(store.begin(c))
+        let folder = try VisionDiagnosticArchive.prepare(c, root: store.recordingRoot)
+        let manifest = try VisionDiagnosticArchive.seal(context: c, folder: folder, state: "failed", reason: "noVideo", error: nil, video: nil)
+        store.receive(id: c.id, result: .success(manifest))
+        XCTAssertNotNil(manifest.retainedAt)
+        XCTAssertEqual(manifest.storagePolicy, "retain-on-seal")
+        XCTAssertNil(store.reviewCandidate)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent("review.json").path))
+        try VisionDiagnosticArchive.pruneDrafts(root: store.draftRoot, now: Date().addingTimeInterval(25 * 3600))
+        XCTAssertEqual(try VisionDiagnosticArchive.list(root: store.root).map(\.id), [c.id])
+        let reopened = VisionDiagnosticStore(root: store.root, autoRetain: true)
+        for _ in 0..<30 where reopened.packages.isEmpty { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(reopened.packages.map(\.id), [c.id])
+    }
+
+    func testVideoUsesBothTrainingAndAttemptIdentityForFeedback() throws {
+        var session = try TrainingSession(plan: .starter, now: Date())
+        var c = context()
+        let attempt = UUID()
+        let wrong = UUID()
+        c.workoutSessionID = session.id; c.setAttemptID = attempt
+        var archive = TrainingArchive()
+        archive.sessions = [session]
+        XCTAssertNil(VisionDiagnosticArchive.linkedFeedback(for: c, in: archive))
+        XCTAssertFalse(VisionDiagnosticArchive.belongsToSet(c, sessionID: wrong, attemptID: attempt))
+        XCTAssertFalse(VisionDiagnosticArchive.belongsToSet(c, sessionID: session.id, attemptID: wrong))
+        XCTAssertTrue(VisionDiagnosticArchive.belongsToSet(c, sessionID: session.id, attemptID: attempt))
+        try session.startSet(at: Date())
+        try session.finishSet(at: Date())
+        let review = try TrialReview.make(information: "test feedback", softwareIssue: "", trainingFeeling: "", at: Date())
+        try session.submit(reps: 3, feedback: [], notes: "", at: Date(), review: review)
+        archive.sessions = [session]
+        c.setAttemptID = try XCTUnwrap(session.records.first).id
+        XCTAssertEqual(VisionDiagnosticArchive.linkedFeedback(for: c, in: archive)?.trialReview?.information, "test feedback")
+        c.workoutSessionID = wrong
+        XCTAssertNil(VisionDiagnosticArchive.linkedFeedback(for: c, in: archive))
+    }
+
     func testDiagnosticSelectionLockPublishesWithoutCameraFrames() throws {
         let root = root(), controller = VisionLabController(diagnosticRoot: root.appendingPathComponent("Diagnostics"), storageDirectory: root)
         let capture = controller.diagnosticCapture, original = controller.configuration

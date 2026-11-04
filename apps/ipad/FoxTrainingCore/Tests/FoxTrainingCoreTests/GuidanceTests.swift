@@ -212,15 +212,26 @@ final class GuidanceTests: XCTestCase {
     func testLongLossAndRecoveryAreNotRepeatedEveryFrame() {
         var policy = GuidancePolicy()
         _ = policy.update(input(0))
-        _ = policy.update(input(0.2, quality: .noPerson, tracking: .lost))
-        let loss = policy.update(input(1.5, quality: .noPerson, tracking: .lost)).cues.first
-        XCTAssertEqual(loss?.text, "暂时看不清")
+        func sample(_ t: Double, _ subject: PoseSubjectState) -> GuidanceInput {
+            var value = input(t, quality: subject == .bound ? .valid : .noPerson,
+                              tracking: subject == .bound ? .tracking : .lost)
+            value.subjectState = subject
+            return value
+        }
+        for t in [0.2, 0.5, 0.8, 1.1, 1.4, 1.7] {
+            XCTAssertTrue(policy.update(sample(t, .occluded)).cues.isEmpty)
+        }
+        let loss = policy.update(sample(2, .lost)).cues.first
+        XCTAssertEqual(loss?.text, "请重新就位")
         XCTAssertEqual(loss?.isCurrent(context: input(0).context, stage: .active, phaseToken: nil, observationAvailable: false), true)
         XCTAssertEqual(loss?.isCurrent(context: input(0).context, stage: .active, phaseToken: nil, observationAvailable: true), false)
-        XCTAssertTrue(policy.update(input(1.6, quality: .noPerson, tracking: .lost)).cues.isEmpty)
-        _ = policy.update(input(1.7))
-        XCTAssertEqual(policy.update(input(1.9)).cues.first?.text, "重新看到了")
-        XCTAssertTrue(policy.update(input(2)).cues.isEmpty)
+        XCTAssertTrue(policy.update(sample(2.2, .lost)).cues.isEmpty)
+        XCTAssertTrue(policy.update(sample(2.4, .bound)).cues.isEmpty)
+        XCTAssertTrue(policy.update(sample(2.6, .lost)).cues.isEmpty)
+        for t in [2.8, 3.1, 3.4, 3.65] {
+            XCTAssertTrue(policy.update(sample(t, .bound)).cues.isEmpty)
+        }
+        XCTAssertEqual(policy.update(sample(3.8, .lost)).cues.map(\.text), ["请重新就位"])
     }
 
     func testReturnSummaryNeverUsesLegacyLowerSecondsOrTerminalPulldownRelaxation() {

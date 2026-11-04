@@ -19,7 +19,7 @@ export function validateManifest(m) {
       || !Number.isFinite(Date.parse(m.startedAt)) || !Number.isFinite(Date.parse(m.endedAt))
       || Date.parse(m.endedAt) < Date.parse(m.startedAt) || typeof m.stopReason !== 'string' || !m.stopReason.length
       || !Array.isArray(m.files) || !m.files.length || m.files.length > allowed.size) throw Error('Invalid or unsealed diagnostic manifest');
-  if (m.storagePolicy != null && (m.storagePolicy !== 'temporary-until-review'
+  if (m.storagePolicy != null && (!['temporary-until-review', 'retain-on-seal'].includes(m.storagePolicy)
       || !Number.isFinite(Date.parse(m.retainedAt)) || Date.parse(m.retainedAt) < Date.parse(m.endedAt))) {
     throw Error('Temporary diagnostic has not been retained after review');
   }
@@ -118,7 +118,8 @@ export async function importPackage(folder, destination, { transport = 'manual-f
     await writeFile(path.join(staging, 'receipt.json'), JSON.stringify({ schema: 'fox.vision_diagnostic_receipt.v1',
       receivedAt: new Date().toISOString(), transport, id, manifestSHA256: copied.manifestSHA256,
       source: copied.manifest.source, videoAvailable: copied.videoAvailable,
-      retention: copied.manifest.retainedAt ? 'kept-after-review' : 'legacy-package',
+      retention: copied.manifest.storagePolicy === 'retain-on-seal' ? 'retain-on-seal' :
+        copied.manifest.retainedAt ? 'kept-after-review' : 'legacy-package',
       evidenceBoundary: 'Captured diagnostic package, not human labels or fitness acceptance' }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
     await rename(staging, final);
     return { status: 'received-and-verified', directory: final, ...copied };

@@ -3,7 +3,7 @@ import Foundation
 /// A read-only, prefix-causal observer. It has no tracker, repository, timer or audio dependency.
 /// Losing a point silences phase coaching; it must not reset the independent motion counter.
 public struct GuidancePolicy {
-    public static let version = "guidance-policy-v1.2"
+    public static let version = "guidance-policy-v1.3"
     private var context: GuidanceContext?
     private var lastTime: Double?
     private var lastCount = 0
@@ -14,7 +14,7 @@ public struct GuidancePolicy {
     private var phaseEpisode = 0
     private var lastSpokenPhase: String?
     private var cueSequence = 0
-    private var unavailableSince: Double?
+    private var subjectRecoveredSince: Double?
     private var reportedLoss = false
     private var lastRestRemaining: Double?
     public init() {}
@@ -25,13 +25,15 @@ public struct GuidancePolicy {
             self = GuidancePolicy(); context = input.context; lastCount = input.count
         }
         guard lastTime.map({ input.time > $0 }) ?? true else { return .init(presentation: .unavailable, cues: []) }
-        if let lastTime, input.time - lastTime > 0.35 { stableSince = nil }
+        if let lastTime, input.time - lastTime > 0.35 { stableSince = nil; subjectRecoveredSince = nil }
         lastTime = input.time
         let presentation = present(input)
-        if input.countOnly != true && input.mode == .observed && input.stage == .active {
-            if input.motion?.isFresh(at: input.time) != true && unavailableSince == nil { unavailableSince = input.time }
-            if input.motion?.isFresh(at: input.time) == true && !reportedLoss { unavailableSince = nil }
-        } else { unavailableSince = nil; reportedLoss = false }
+        let observesSubject = input.countOnly != true && input.mode == .observed && input.stage == .active
+        if observesSubject && input.subjectState == .bound && reportedLoss {
+            let since = subjectRecoveredSince ?? input.time
+            subjectRecoveredSince = since
+            if input.time - since >= 0.7 { reportedLoss = false }
+        } else { subjectRecoveredSince = nil }
         let priorCount = lastCount
         // A decrease is not a new rep; rebind adapters retain the committed cumulative count.
         lastCount = max(lastCount, input.count)
@@ -70,13 +72,9 @@ public struct GuidancePolicy {
            input.restRemainingSeconds == 0 {
             kind = .lifecycle; text = "休息时间到了，要再休息一会儿吗"
         }
-        if text.isEmpty, let since = unavailableSince, input.time - since >= 1.2, !reportedLoss,
-           presentation.source == .unavailable {
-            text = "暂时看不清"; kind = .lifecycle; reportedLoss = true; requiresObservation = false
-        } else if text.isEmpty, presentation.source == .observed, reportedLoss {
-            text = "重新看到了"; kind = .lifecycle; reportedLoss = false; requiresObservation = true
+        if text.isEmpty, observesSubject, input.subjectState == .lost, !reportedLoss {
+            text = "请重新就位"; kind = .lifecycle; reportedLoss = true; requiresObservation = false
         }
-        if presentation.source == .observed { unavailableSince = nil }
         if text.isEmpty, presentation.isMoving, let token = presentation.phaseToken, token != lastSpokenPhase {
             if input.mode == .observed && input.motion?.guidancePhase == .lowering {
                 // The observed window can be under one second. Use a phase label, not a

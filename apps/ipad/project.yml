@@ -48,8 +48,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "$(FOX_DEVELOPMENT_TEAM)"
-        CURRENT_PROJECT_VERSION: 25
-        MARKETING_VERSION: 0.6.8
+        CURRENT_PROJECT_VERSION: 40
+        MARKETING_VERSION: 0.6.18
   FoxSay:
     type: application
     platform: iOS

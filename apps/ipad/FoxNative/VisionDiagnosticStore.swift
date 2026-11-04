@@ -5,6 +5,8 @@ import SwiftUI
 final class VisionDiagnosticStore: ObservableObject {
     let root: URL
     let draftRoot: URL
+    let autoRetain: Bool
+    var recordingRoot: URL { autoRetain ? root : draftRoot }
     @Published private(set) var recordingID: UUID?
     @Published private(set) var finishing = false
     @Published private(set) var packages: [VisionDiagnosticManifest] = []
@@ -12,6 +14,7 @@ final class VisionDiagnosticStore: ObservableObject {
     @Published private(set) var working = false
     @Published var error: String?
     @Published private(set) var latestCaptureID: UUID?
+    private(set) var latestContext: VisionDiagnosticContext?
     @Published private(set) var latestDisposition: String?
     private var deadline: Timer?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -19,7 +22,7 @@ final class VisionDiagnosticStore: ObservableObject {
     var onLimit: (() -> Void)?
     var isActive: Bool { recordingID != nil }
     var status: String {
-        finishing ? "正在整理临时片段" : (isActive ? "临时录像中 · 未保留" :
+        finishing ? "正在封存录像" : (isActive ? (autoRetain ? "无声录像中 · 停止后保留" : "临时录像中 · 未保留") :
             (latestDisposition ?? (drafts.isEmpty ? "暂无待核对片段" : "有待核对片段 · 未保留")))
     }
     var reviewCandidate: VisionDiagnosticManifest? {
@@ -27,12 +30,26 @@ final class VisionDiagnosticStore: ObservableObject {
         if let latestCaptureID { return drafts.first { $0.id == latestCaptureID } }
         return drafts.first
     }
+    var latestRetained: VisionDiagnosticManifest? {
+        guard !isActive, !finishing, let latestCaptureID else { return nil }
+        return packages.first { $0.id == latestCaptureID }
+    }
 
-    init(root: URL = VisionDiagnosticArchive.root, draftRoot: URL? = nil) {
+    init(root: URL = VisionDiagnosticArchive.root, draftRoot: URL? = nil, autoRetain: Bool? = nil) {
         self.root = root
         self.draftRoot = draftRoot ?? (root == VisionDiagnosticArchive.root ? VisionDiagnosticArchive.draftRoot :
             root.deletingLastPathComponent().appendingPathComponent(root.lastPathComponent + "-Drafts"))
+        self.autoRetain = autoRetain ?? (root == VisionDiagnosticArchive.root && Self.trialRetentionEnabled)
         refresh()
+    }
+    private static var trialRetentionEnabled: Bool {
+        #if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if environment["FOX_UI_TESTING"] == "1" { return environment["FOX_TRIAL_RETAIN_VIDEO"] == "1" }
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return false
+        #endif
     }
     func begin(_ context: VisionDiagnosticContext) -> Bool {
         guard !isActive, !finishing else { return false }
@@ -40,16 +57,16 @@ final class VisionDiagnosticStore: ObservableObject {
             let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].path
             let info = try FileManager.default.attributesOfFileSystem(forPath: path)
             guard (info[.systemFreeSize] as? NSNumber)?.int64Value ?? 0 >= 512 * 1024 * 1024 else {
-                throw VisionDiagnosticArchive.error("可用空间不足 512 MiB，未能临时录像；训练可继续。")
+                throw VisionDiagnosticArchive.error("可用空间不足 512 MiB，未能录像；训练可继续，旧片保留。")
             }
             error = nil; recordingID = context.id
-            latestCaptureID = context.id; latestDisposition = nil
+            latestCaptureID = context.id; latestContext = context; latestDisposition = nil
             deadline = Timer.scheduledTimer(withTimeInterval: context.maximumSeconds, repeats: false) { [weak self] _ in
                 MainActor.assumeIsolated { self?.onLimit?() }
             }
             return true
         } catch {
-            latestCaptureID = context.id; latestDisposition = "本次录像不可用"
+            latestCaptureID = context.id; latestContext = context; latestDisposition = "本次录像不可用"
             self.error = error.localizedDescription; return false
         }
     }
@@ -73,8 +90,12 @@ final class VisionDiagnosticStore: ObservableObject {
         switch result {
         case .success(let manifest):
             error = manifest.error
-            latestDisposition = manifest.video == nil ? "本次诊断待核对 · 无完整视频" : "本次录像待核对 · 未保留"
-            if manifest.source == .fixture && ProcessInfo.processInfo.environment["FOX_UI_TESTING"] == "1" &&
+            if manifest.storagePolicy == "retain-on-seal" {
+                latestDisposition = manifest.video == nil ? "诊断已保存 · 无完整视频" : "本次录像已保存"
+            } else {
+                latestDisposition = manifest.video == nil ? "本次诊断待核对 · 无完整视频" : "本次录像待核对 · 未保留"
+            }
+            if !autoRetain && manifest.source == .fixture && ProcessInfo.processInfo.environment["FOX_UI_TESTING"] == "1" &&
                 ProcessInfo.processInfo.environment["FOX_DIAGNOSTIC_SMOKE"] == "1" {
                 Task { _ = await retain(manifest) }
             }
@@ -90,11 +111,11 @@ final class VisionDiagnosticStore: ObservableObject {
     func refresh() {
         refreshGeneration += 1
         let generation = refreshGeneration
-        let root = root, draftRoot = draftRoot
+        let root = root, draftRoot = draftRoot, autoRetain = autoRetain
         Task {
             do {
                 let (packages, drafts) = try await Task.detached(priority: .utility) {
-                    try VisionDiagnosticArchive.pruneDrafts(root: draftRoot)
+                    if !autoRetain { try VisionDiagnosticArchive.pruneDrafts(root: draftRoot) }
                     return (try VisionDiagnosticArchive.list(root: root), try VisionDiagnosticArchive.list(root: draftRoot))
                 }.value
                 guard generation == self.refreshGeneration else { return }

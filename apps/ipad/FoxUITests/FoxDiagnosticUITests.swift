@@ -1,18 +1,39 @@
 import XCTest
 
 final class FoxDiagnosticUITests: XCTestCase {
-    private func launch(_ fixture: String) -> XCUIApplication {
+    private func launch(_ fixture: String, retainOnSeal: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
         app.launchEnvironment["FOX_UI_TESTING"] = "1"
         app.launchEnvironment["FOX_START_SCREEN"] = "vision"
         app.launchEnvironment["FOX_POSE_FIXTURE"] = fixture
+        if retainOnSeal { app.launchEnvironment["FOX_TRIAL_RETAIN_VIDEO"] = "1" }
         app.launchArguments = ["--ui-testing-reset"]
         app.launch()
         XCTAssertTrue(app.buttons["vision-start"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.switches["diagnostic-toggle"].exists)
         return app
+    }
+    func testTrialVideoSavesWithoutReviewAndReopensReadOnly() {
+        let app = launch("normal", retainOnSeal: true)
+        let start = app.buttons["vision-start"]; readyToTap(start, in: app); start.tap()
+        let counted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == '2'"), object: app.staticTexts["vision-count"])
+        XCTAssertEqual(XCTWaiter.wait(for: [counted], timeout: 15), .completed)
+        app.buttons["vision-finish"].tap()
+        let latest = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["diagnostic-review-latest", "diagnostic-report-review-latest"])).firstMatch
+        XCTAssertTrue(latest.waitForExistence(timeout: 15))
+        app.terminate(); app.launchArguments = []; app.launch()
+        let library = app.buttons["diagnostic-library"]
+        XCTAssertTrue(library.waitForExistence(timeout: 10))
+        reveal(library, in: app); library.tap()
+        XCTAssertTrue(app.staticTexts["diagnostic-package-status"].firstMatch.waitForExistence(timeout: 10))
+        let detail = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'diagnostic-detail-'")).firstMatch
+        XCTAssertTrue(detail.waitForExistence(timeout: 8)); detail.tap()
+        XCTAssertTrue(app.staticTexts["diagnostic-retained"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.otherElements["diagnostic-video-player"].exists || app.descendants(matching: .any)["diagnostic-video-player"].exists)
+        XCTAssertFalse(app.textFields["diagnostic-reference-count"].exists)
+        XCTAssertFalse(app.buttons["diagnostic-keep"].exists)
     }
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<10 {

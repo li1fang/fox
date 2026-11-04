@@ -17,8 +17,19 @@ struct VisionDiagnosticControls: View {
     @State private var browsing = false
     @State private var reviewing: VisionDiagnosticManifest?
     private let identifierPrefix: String
-    init(controller: VisionLabController, identifierPrefix: String = "diagnostic") {
+    private let training: TrainingArchive?
+    private let session: TrainingSession?
+    init(controller: VisionLabController, identifierPrefix: String = "diagnostic",
+         training: TrainingArchive? = nil, session: TrainingSession? = nil) {
         capture = controller.diagnosticCapture; self.identifierPrefix = identifierPrefix
+        self.training = training; self.session = session
+    }
+    private var latest: VisionDiagnosticManifest? {
+        if let session, capture.autoRetain {
+            guard let context = capture.latestContext, let attempt = session.currentSetAttemptId,
+                  VisionDiagnosticArchive.belongsToSet(context, sessionID: session.id, attemptID: attempt) else { return nil }
+        }
+        return capture.latestRetained ?? capture.reviewCandidate
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -32,7 +43,7 @@ struct VisionDiagnosticControls: View {
                     .disabled(capture.isActive || capture.finishing)
                     .accessibilityLabel("诊断文件").help("诊断文件").accessibilityIdentifier("\(identifierPrefix)-library")
             }
-            if let latest = capture.reviewCandidate {
+            if let latest {
                 Button { reviewing = latest } label: {
                     Label(capture.latestCaptureID == latest.id ? "核对本次录像" : "核对待处理录像", systemImage: "play.rectangle")
                 }
@@ -43,20 +54,27 @@ struct VisionDiagnosticControls: View {
                 Text(error).font(.system(size: 16)).foregroundStyle(FoxStyle.coral).accessibilityIdentifier("diagnostic-error")
             }
         }.accessibilityElement(children: .contain)
-        .sheet(isPresented: $browsing) { VisionDiagnosticLibrary(capture: capture) }
-        .sheet(item: $reviewing) { DiagnosticReview(capture: capture, manifest: $0) }
+        .sheet(isPresented: $browsing) { VisionDiagnosticLibrary(capture: capture, training: training) }
+        .sheet(item: $reviewing) {
+            DiagnosticReview(capture: capture, manifest: $0, retained: $0.retainedAt != nil, training: training)
+        }
     }
 }
 
 struct DiagnosticReview: View {
     @ObservedObject var capture: VisionDiagnosticStore
     let manifest: VisionDiagnosticManifest
+    var retained = false
+    var training: TrainingArchive? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer?
     @State private var reference = ""
     @State private var information = ""
     @State private var softwareIssue = ""
     @State private var trainingFeeling = ""
+    @State private var linkedRecord: LocalSetRecord?
+    @State private var hasTrainingLink = false
+    @State private var diagnosticReview: VisionDiagnosticReview?
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -66,6 +84,22 @@ struct DiagnosticReview: View {
                         VideoPlayer(player: player).frame(height: 280).accessibilityIdentifier("diagnostic-video-player")
                     } else { Text("无完整视频 · 本次故障诊断仍可保留") }
                     Text(manifest.automaticCount.map { "自动观测 \($0) 次 · 尚非人工确认" } ?? "自动观测次数未记录")
+                    if retained {
+                        Text("原件已保存").accessibilityIdentifier("diagnostic-retained")
+                        if let record = linkedRecord {
+                            Text("本组反馈").font(.headline)
+                            feedback(record.trialReview, fallbackNote: record.notes)
+                            ForEach(record.feedback, id: \.self) { Text($0.label) }
+                            if let reps = record.reps { Text("本组记录：\(reps) 次") }
+                            if record.trialReview == nil && record.notes.isEmpty && record.feedback.isEmpty {
+                                Text("本组未填写反馈").foregroundStyle(.secondary)
+                            }
+                        } else if hasTrainingLink, training != nil {
+                            Text("本组反馈在训练核对页填写并保存。").foregroundStyle(.secondary)
+                        } else {
+                            feedback(diagnosticReview?.review)
+                        }
+                    } else {
                     Text("临时片段 · 尚未保留").foregroundStyle(FoxStyle.coral).accessibilityIdentifier("diagnostic-pending-retention")
                     TextField("人工参考次数（可留空）", text: $reference).keyboardType(.numberPad).textFieldStyle(.roundedBorder)
                         .accessibilityIdentifier("diagnostic-reference-count")
@@ -92,21 +126,39 @@ struct DiagnosticReview: View {
                         Task { if await capture.discard(manifest) { dismiss() } else { loadPlayer() } }
                     } label: { Label("不保留", systemImage: "trash") }
                         .accessibilityIdentifier("diagnostic-discard")
+                    }
                 }.padding(24).frame(maxWidth: 800).frame(maxWidth: .infinity)
             }.navigationTitle("核对本次录像").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("稍后") { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(retained ? "完成" : "稍后") { dismiss() } } }
                 .disabled(capture.working).interactiveDismissDisabled(capture.working)
-                .onAppear { loadPlayer() }.onDisappear { player?.pause(); player = nil }
+                .onAppear { loadPlayer(); loadFeedback() }.onDisappear { player?.pause(); player = nil }
         }
     }
     private func loadPlayer() {
         guard manifest.video != nil else { return }
-        player = AVPlayer(url: capture.draftRoot.appendingPathComponent(manifest.id.uuidString).appendingPathComponent("video.mp4"))
+        player = AVPlayer(url: folder.appendingPathComponent("video.mp4"))
+    }
+    private var folder: URL { (retained ? capture.root : capture.draftRoot).appendingPathComponent(manifest.id.uuidString) }
+    private func loadFeedback() {
+        guard retained else { return }
+        if let context = try? VisionDiagnosticArchive.decode(VisionDiagnosticContext.self, at: folder.appendingPathComponent("context.json")),
+           context.id == manifest.id {
+            hasTrainingLink = context.workoutSessionID != nil && context.setAttemptID != nil
+            if let training { linkedRecord = VisionDiagnosticArchive.linkedFeedback(for: context, in: training) }
+        }
+        diagnosticReview = try? VisionDiagnosticArchive.decode(VisionDiagnosticReview.self, at: folder.appendingPathComponent("review.json"))
+    }
+    @ViewBuilder private func feedback(_ review: TrialReview?, fallbackNote: String = "") -> some View {
+        if let information = review?.information { Text("补充信息：\(information)") }
+        if let issue = review?.softwareIssue { Text("软件问题：\(issue)") }
+        let feeling = review?.trainingFeeling ?? fallbackNote
+        if !feeling.isEmpty { Text("训练感受：\(feeling)") }
     }
 }
 
 struct VisionDiagnosticLibrary: View {
     @ObservedObject var capture: VisionDiagnosticStore
+    var training: TrainingArchive? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var exporting: VisionDiagnosticManifest?
     @State private var deleting: VisionDiagnosticManifest?
@@ -145,6 +197,8 @@ struct VisionDiagnosticLibrary: View {
                             Text(manifest.video == nil ? "无完整视频 · 诊断已保留" : "视频与诊断已保留")
                                 .accessibilityIdentifier("diagnostic-package-status")
                             HStack {
+                                Button { reviewing = manifest } label: { Label("查看录像", systemImage: "play.rectangle") }
+                                    .buttonStyle(.borderless).accessibilityIdentifier("diagnostic-detail-\(manifest.id.uuidString)")
                                 Button { exporting = manifest } label: { Label("导出到文件", systemImage: "square.and.arrow.up") }
                                     .buttonStyle(.borderless).accessibilityIdentifier("diagnostic-export-\(manifest.id.uuidString)")
                                 Spacer()
@@ -158,7 +212,9 @@ struct VisionDiagnosticLibrary: View {
             }.navigationTitle("诊断文件")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
                 .onAppear { capture.refresh() }
-                .sheet(item: $reviewing) { DiagnosticReview(capture: capture, manifest: $0) }
+                .sheet(item: $reviewing) {
+                    DiagnosticReview(capture: capture, manifest: $0, retained: $0.retainedAt != nil || showingRetained, training: training)
+                }
                 .fullScreenCover(item: $exporting) { manifest in
                     FolderExporter(url: capture.root.appendingPathComponent(manifest.id.uuidString)) { success in
                         status = success ? "已导出副本，本机原件保留。" : "已关闭导出面板，本机原件保留。"

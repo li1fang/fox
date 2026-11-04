@@ -109,6 +109,15 @@ test('unsupported video timeline, audio and formats cannot claim accepted video'
   m.video.audio = true; assert.throws(() => validateManifest(m), /format/);
   m.video.audio = false; m.video.lastCapturePTS = 99; assert.throws(() => validateManifest(m), /timeline/);
 });
+test('trial recordings are accepted only after automatic retention is sealed', async t => {
+  const f = await fixture(t);
+  f.manifest.storagePolicy = 'retain-on-seal'; await f.save();
+  await assert.rejects(importPackage(f.folder, f.inbox), /not been retained/);
+  f.manifest.retainedAt = f.manifest.endedAt; await f.save();
+  const result = await importPackage(f.folder, f.inbox);
+  assert.equal(result.status, 'received-and-verified');
+  assert.equal(JSON.parse(await readFile(path.join(result.directory, 'receipt.json'), 'utf8')).retention, 'retain-on-seal');
+});
 test('source mismatch between context and manifest is not relabeled as camera evidence', async t => {
   const f = await fixture(t); f.manifest.source = 'camera'; await f.save();
   await assert.rejects(verifyPackage(f.folder), /Context/);

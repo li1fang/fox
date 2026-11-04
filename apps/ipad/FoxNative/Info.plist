@@ -12,7 +12,7 @@
     <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key><true/>
-    <key>NSCameraUsageDescription</key><string>Fox 使用相机拍摄生活记录照片、采集无声实验视频，也可在本机检测训练关键点。实验原件仅手动删除；训练中的临时视频在核对后由你选择保留或删除。不自动上传。</string>
+    <key>NSCameraUsageDescription</key><string>Fox 使用相机拍摄生活记录照片、采集无声实验视频，也可在本机检测训练关键点。iPad 开发试用版会在录制结束后保留原件。录像不会自动上传。</string>
     <key>NSBluetoothAlwaysUsageDescription</key><string>Fox 连接你选择的 PUMP，读取遥测，并在你确认后设置模式和阻力；采集资料保存在本机。</string>
     <key>NSMotionUsageDescription</key><string>Fox 在本机记录设备摆放角度，便于复盘拍摄机位；不采集定位或日常活动记录。</string>
     <key>NSLocalNetworkUsageDescription</key><string>Fox 连接你配对的局域网资料库，同步文字和照片；本机原件会保留。</string>

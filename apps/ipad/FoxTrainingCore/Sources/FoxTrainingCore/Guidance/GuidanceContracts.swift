@@ -58,15 +58,18 @@ public struct GuidanceInput: Codable {
     public var plannedCycleLimit: Int?
     /// Count/lifecycle cues only; no measured or planned phase is supplied by this observer.
     public var countOnly: Bool?
+    public var subjectState: PoseSubjectState?
     public init(context: GuidanceContext, time: Double, stage: GuidanceStage, exercise: VisionExercise?,
                 mode: GuidanceMode, count: Int, targetReps: Int?, motion: MotionObservation?,
                 tempo: [TempoPhase], elapsed: Double, countdown: Int? = nil, remainingSets: Int? = nil, restRemainingSeconds: Double? = nil,
-                requiresWeightConfirmation: Bool = true, plannedCycleLimit: Int? = nil, countOnly: Bool? = nil) {
+                requiresWeightConfirmation: Bool = true, plannedCycleLimit: Int? = nil, countOnly: Bool? = nil,
+                subjectState: PoseSubjectState? = nil) {
         self.context = context; self.time = time; self.stage = stage; self.exercise = exercise; self.mode = mode
         self.count = count; self.targetReps = targetReps; self.motion = motion; self.tempo = tempo
         self.elapsed = elapsed; self.countdown = countdown; self.remainingSets = remainingSets
         self.restRemainingSeconds = restRemainingSeconds
         self.requiresWeightConfirmation = requiresWeightConfirmation; self.plannedCycleLimit = plannedCycleLimit; self.countOnly=countOnly
+        self.subjectState = subjectState
     }
 }
 

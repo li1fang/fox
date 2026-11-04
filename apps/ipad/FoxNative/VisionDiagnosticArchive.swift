@@ -24,6 +24,7 @@ struct VisionDiagnosticContext: Codable {
     var workoutSessionID: UUID?
     var setAttemptID: UUID?
     var hardwareModel: String?
+    var retainOnSeal: Bool?
 }
 
 struct VisionDiagnosticManifest: Codable, Identifiable {
@@ -133,9 +134,10 @@ enum VisionDiagnosticArchive {
             let url = folder.appendingPathComponent(name)
             return manager.fileExists(atPath: url.path) ? try asset(url) : nil
         }
-        let manifest = VisionDiagnosticManifest(id: context.id, startedAt: context.startedAt, source: context.source,
+        var manifest = VisionDiagnosticManifest(id: context.id, startedAt: context.startedAt, source: context.source,
             state: state, stopReason: reason, error: message, video: video, files: files,
-            automaticCount: automaticCount, storagePolicy: "temporary-until-review")
+            automaticCount: automaticCount, storagePolicy: context.retainOnSeal == true ? "retain-on-seal" : "temporary-until-review")
+        if context.retainOnSeal == true { manifest.retainedAt = manifest.endedAt }
         try encode(manifest).write(to: folder.appendingPathComponent("manifest.json"), options: .atomic)
         try? manager.removeItem(at: folder.appendingPathComponent("status"))
         return manifest
@@ -166,6 +168,14 @@ enum VisionDiagnosticArchive {
         guard FileManager.default.fileExists(atPath: folder.appendingPathComponent("manifest.json").path),
               try folder.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw error("只允许删除已封存的诊断。") }
         try FileManager.default.removeItem(at: folder)
+    }
+    static func belongsToSet(_ context: VisionDiagnosticContext, sessionID: UUID, attemptID: UUID) -> Bool {
+        context.workoutSessionID == sessionID && context.setAttemptID == attemptID
+    }
+    static func linkedFeedback(for context: VisionDiagnosticContext, in archive: TrainingArchive) -> LocalSetRecord? {
+        guard let session = archive.sessions.first(where: { $0.id == context.workoutSessionID }),
+              let attempt = context.setAttemptID else { return nil }
+        return session.records.first { $0.id == attempt }
     }
     static func retain(id: UUID, drafts: URL, destination: URL, review: VisionDiagnosticReview? = nil) throws -> VisionDiagnosticManifest {
         let manager = FileManager.default, folder = drafts.appendingPathComponent(id.uuidString)

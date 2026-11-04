@@ -519,9 +519,9 @@ final class VisionLabController: ObservableObject {
             screenOrientation: screenOrientation, configuration: configuration, runtimePolicy: runtimePolicy,
             visionRevision: latest?.revision ?? VNDetectHumanBodyPoseRequest.currentRevision,
             workoutSessionID: diagnosticWorkoutSessionID, setAttemptID: diagnosticSetAttemptID,
-            hardwareModel: VisionDiagnosticArchive.hardwareModel())
+            hardwareModel: VisionDiagnosticArchive.hardwareModel(), retainOnSeal: diagnosticCapture.autoRetain ? true : nil)
         guard diagnosticCapture.begin(context) else { return }
-        camera.beginDiagnostic(context: context, root: diagnosticCapture.draftRoot)
+        camera.beginDiagnostic(context: context, root: diagnosticCapture.recordingRoot)
         recordDiagnosticEvent("recordingRequested")
         if cameraState == .denied || cameraState == .restricted || cameraState == .unavailable {
             finishDiagnostic(reason: "cameraUnavailable")

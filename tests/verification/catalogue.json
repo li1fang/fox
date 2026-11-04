@@ -2016,6 +2016,18 @@
       "surface": "ipad"
     },
     {
+      "id": "FoxAppTests/VisionDiagnosticTests/testTrialAutomaticallyRetainsWithoutReviewAndReopens",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxAppTests/VisionDiagnosticTests/testVideoUsesBothTrainingAndAttemptIdentityForFeedback",
+      "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
       "id": "FoxAppTests/VisionDiagnosticTests/testTemporaryExpiryNeverDeletesRetainedPackages",
       "file": "apps/ipad/FoxAppTests/VisionDiagnosticTests.swift",
       "scope": "public",
@@ -2143,6 +2155,12 @@
     },
     {
       "id": "FoxUITests/FoxDiagnosticUITests/testFailedPreparationCanBeKeptAfterReviewAndCancelledExportPreservesIt",
+      "file": "apps/ipad/FoxUITests/FoxDiagnosticUITests.swift",
+      "scope": "public",
+      "surface": "ipad"
+    },
+    {
+      "id": "FoxUITests/FoxDiagnosticUITests/testTrialVideoSavesWithoutReviewAndReopensReadOnly",
       "file": "apps/ipad/FoxUITests/FoxDiagnosticUITests.swift",
       "scope": "public",
       "surface": "ipad"

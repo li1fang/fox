@@ -312,6 +312,10 @@ struct TrainingScreen: View {
                 session.stage == .paused ? "已暂停" : "人工记录")
                 .font(.subheadline).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("workout-tracking-status")
+            if visual.diagnosticCapture.autoRetain && visual.diagnosticCapture.isActive {
+                Label("录像", systemImage: "record.circle").font(.caption).foregroundStyle(FoxStyle.coral)
+                    .accessibilityLabel("无声录像中，停止后保留")
+            }
             Text(durationText(session.elapsed(at: date))).font(.headline).monospacedDigit().fixedSize(horizontal: true, vertical: false)
                 .accessibilityIdentifier("set-elapsed")
         }.frame(minHeight: 44)
@@ -441,7 +445,7 @@ struct TrainingScreen: View {
                                 }.disabled(!TrainingArmChoice.canChange(session: session))
                                     .accessibilityIdentifier("diagnostic-other-arm")
                             }
-                            VisionDiagnosticControls(controller: visual)
+                            VisionDiagnosticControls(controller: visual, training: store.archive, session: session)
                         }
                             .accessibilityIdentifier("training-diagnostics")
                     }
@@ -624,7 +628,7 @@ struct SetFeedbackView: View {
                 Divider()
                 if session.exercise.visualObservation != nil {
                     DisclosureGroup("录像与诊断") {
-                        VisionDiagnosticControls(controller: store.workoutVision.controller)
+                        VisionDiagnosticControls(controller: store.workoutVision.controller, training: store.archive, session: session)
                     }
                 }
             }.padding(.vertical, 12)
