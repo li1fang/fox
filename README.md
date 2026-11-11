@@ -10,7 +10,7 @@ Fox is a local-first iPhone and iPad app for personal records and guided exercis
   <a href="docs/showcase/assets/activity-result.png"><img src="docs/showcase/assets/activity-result.png" width="360" alt="Actual Fox iPad simulator result page: automatic observation unknown, actual repetitions unconfirmed, retained video available, optional feedback, and analysis not yet requested."></a>
 </p>
 
-*Actual native UI, synthetic activity. November 9, 2026 development snapshot, not the public main build. The Chinese interface says “automatic observation: unknown” and “not yet analyzed.” [Source, full-size images and limits](docs/showcase/README.md#evidence-and-provenance).*
+*Retained video, an optional reference count, notes and analysis status in one activity result. Real native UI with synthetic input; November 9, 2026 development snapshot (`789e99c`), separate from public main. [Explore the screens and their source](docs/showcase/README.md).*
 
 ## One activity, one review
 
@@ -20,16 +20,16 @@ Workout data is rarely perfect. A camera can lose a joint; a set can end early; 
 2. **Capture and save.** End the segment and retain the associated recording.
 3. **Review the result.** Open the video, add an optional reference count or note, and see whether analysis has been requested.
 
-The [illustrated walkthrough](docs/showcase/README.md) follows this implemented development flow using a no-person fixture. It demonstrates navigation and saved-result presentation, **not exercise recognition accuracy**.
+Follow the [illustrated walkthrough](docs/showcase/README.md) from the activity card to the saved result.
 
 ## Engineering decisions
 
 - **Native UI, separate domain logic.** SwiftUI presents the activity; [training logic](apps/ipad/FoxTrainingCore) and [journal storage](apps/ipad/FoxJournalCore) have independently testable boundaries.
 - **Preserve observations.** Automatic counts, user corrections and unobservable return phases have different meanings. See the [motion strategy and evidence design](docs/fitness/VISION_STRATEGY_AND_EVIDENCE_V1.zh-CN.md).
-- **Test the journey as well as the units.** The public source includes [save-and-relaunch journal tests](apps/ipad/FoxUITests/FoxJournalUITests.swift) and a [training-confirmation persistence story](apps/ipad/FoxUITests/FoxNativeUITests.swift). Test source is not a claim that today's CI passes.
+- **Test the journey as well as the units.** The public source includes [save-and-relaunch journal tests](apps/ipad/FoxUITests/FoxJournalUITests.swift) and a [training-confirmation persistence story](apps/ipad/FoxUITests/FoxNativeUITests.swift).
 - **Design for investigation.** Exercise-specific replay and preserved recordings support diagnosis when real-world tracking fails, rather than hiding the failure behind a corrected total.
 
-Created by Yifang Li with AI coding agents. The work combines product direction, interface iteration, storage contracts, verification design and device-delivery coordination. It is an actively developed prototype, not a claim of clinical validation, universal exercise support or production scale.
+Created by Yifang Li with AI coding agents. Yifang leads product direction, interface iteration, storage-contract design, verification and device-delivery coordination. Fox is an actively developed prototype.
 
 ## Explore the work
 
@@ -38,7 +38,7 @@ Created by Yifang Li with AI coding agents. The work combines product direction,
 - **Engineering decisions:** [UI design](docs/design/UI_INTENT_AND_REVIEW.zh-CN.md), [storage design](docs/journal/RECORD_STORAGE_V1.zh-CN.md), [architecture](docs/architecture.md).
 - **Build and verify:** [verification guide](docs/development/VERIFICATION.md). Native builds require macOS and Xcode; public web checks have a separate Linux path.
 
-Vision-assisted training has limited exercise-specific support. Public main and device candidates are not synchronized releases: the linked [public baseline status](docs/development/CURRENT.md) is dated October 24. The later screenshot snapshot is documented separately. Private records and media remain outside the repository. [Known verification limits](docs/showcase/README.md#verification-status) include a failed public CI run; this documentation update does not repair or supersede it.
+For source versions, experimental vision support and test results, see [evidence and verification status](docs/showcase/README.md#evidence-and-provenance). Private records and media remain outside the repository.
 
 [中文说明与开发入口](#中文说明) · [MIT License](LICENSE)
 
