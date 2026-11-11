@@ -1,0 +1,11 @@
+{
+  "schema": "fox.showcase.assets.v1",
+  "capturedOn": "2026-11-09",
+  "sourceCommit": "789e99c",
+  "kind": "unaltered-native-simulator-synthetic-fixture",
+  "assets": [
+    {"name":"activity-capture.png","bytes":151912,"sha256":"e96c7ec43d717f337b135790adf2f76585760bf5b750f6013878f460eed5fec1"},
+    {"name":"activity-home.png","bytes":282000,"sha256":"5e4f373346ef74e1187a5df67f6f5a055c0ba1c63fbdddd571eabfef29783d3f"},
+    {"name":"activity-result.png","bytes":390367,"sha256":"3484d9b1721c17e9a26fbed2f6923d3e777f32f601f80c1c9cc27c38851cf9bf"}
+  ]
+}
