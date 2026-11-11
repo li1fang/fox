@@ -6,7 +6,7 @@ Documentation previews: [desktop](assets/preview-desktop.png) · [390px mobile](
 
 **The problem:** a useful training record needs more than a number. It needs the original observation, the recording, and the user's own account of the set.
 
-This walkthrough shows an implemented iPad activity flow captured on November 9, 2026. It uses synthetic input in the real app, not a concept rendering. No person exercised for this demonstration, and no real model service was called.
+This walkthrough shows the real iPad interface with synthetic, no-person input. Captured on November 9, 2026 at development snapshot `789e99c`, it is separate from the public main build.
 
 ## 1. Start an activity
 
@@ -16,7 +16,7 @@ The home card offers “Start” and “View records” for the push-up experime
 
 ## 2. Capture a segment
 
-The activity opens the shared camera workspace with push-up and left-side viewpoint selected. Start, then stop and save. The dark preview is intentional in this no-person simulator fixture; it is not a camera accuracy demonstration.
+The activity opens the shared camera workspace with push-up and left-side viewpoint selected. Start, then stop and save. The dark preview is the no-person simulator fixture.
 
 <img src="assets/activity-capture.png" width="420" alt="Native capture workspace with exercise, viewpoint and camera controls; synthetic preview contains no person.">
 
@@ -26,7 +26,7 @@ The result offers the retained video, an optional manual reference count and a n
 
 <img src="assets/activity-result.png" width="420" alt="Saved activity result with unknown observation, unconfirmed manual count, video link, optional note and not-yet-analyzed state.">
 
-**Result of this story:** the synthetic activity reached its result page, and the test opened its video player. The same historical test then explicitly requested a fake-service response. That simulated response is not shown as real AI feedback here.
+**Result of this story:** the activity reached its saved result, and the test opened the retained video player. The test then explicitly requested a fake-service response; the screenshots above end before that step.
 
 ## Evidence and provenance
 
@@ -44,7 +44,7 @@ Historical synthetic screenshots and test source were inspected for this publica
 
 [CI run 42963894362](https://github.com/li1fang/fox/actions/runs/42963894362) failed in public-web and native readiness diagnostics; the full native job was skipped. It remains a failure. The documentation checks and responsive previews described in the [publication receipt](RECEIPT.zh-CN.md) are not a replacement for product acceptance.
 
-Vision is experimental and exercise-specific. Push-up counting has failed on real trials and independent evaluation; those failures are not fixed by this flow or by these screenshots. Occlusion, viewpoint and missing joints remain important limitations. No general accuracy, force accuracy, medical or autonomous coaching claim is made.
+Vision is experimental and exercise-specific. Push-up counting has failed on real trials and independent evaluation. Occlusion, viewpoint and missing joints remain unresolved limitations; the synthetic workflow demonstrates navigation and result presentation, not recognition accuracy.
 
 ## Read the implementation
 
@@ -53,4 +53,4 @@ Vision is experimental and exercise-specific. Push-up counting has failed on rea
 - [Local record storage](../../apps/ipad/FoxJournalCore) and [storage design](../journal/RECORD_STORAGE_V1.zh-CN.md)
 - [Build and verification guide](../development/VERIFICATION.md), pinned to the public branch's toolchain
 
-The engineering story is the separation of observations, user input and derived conclusions, backed by testable boundaries. It is not a promise that computer vision can yet coach every workout reliably.
+The engineering story is the separation of observations, user input and derived conclusions, backed by testable boundaries.
