@@ -1,0 +1,63 @@
+import XCTest
+
+/// A bounded visual walkthrough using the actual UI and a local no-person / fake-service fixture.
+final class FoxActivityDemoUITests: XCTestCase {
+    private func capture(_ name: String, app: XCUIApplication) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    private func reveal(_ element: XCUIElement, app: XCUIApplication) -> Bool {
+        for _ in 0..<6 {
+            if element.exists && element.isHittable { return true }
+            app.swipeUp()
+        }
+        return element.exists && element.isHittable
+    }
+    func testSyntheticActivityScreens() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment = ["FOX_UI_TESTING": "1", "FOX_POSE_FIXTURE": "no_person",
+            "FOX_UI_ADMIT_COUNT_ONLY_PUSH_UP": "1", "FOX_TRIAL_RETAIN_VIDEO": "1", "FOX_ACTIVITY_FAKE_SERVICE": "1"]
+        app.launchArguments = ["--ui-testing-reset"]
+        app.launch()
+        let card = app.buttons["activity-push-up-start"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10)); capture("activity-demo-01-home", app: app)
+        card.tap()
+        let camera = app.otherElements["capture-camera-stage"]
+        XCTAssertTrue(camera.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["vision-quality"].label.contains("_"))
+        XCTAssertFalse(app.buttons["free-capture-library"].exists)
+        capture("activity-demo-02-capture", app: app)
+        let start = app.buttons["capture-start"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        start.tap()
+        let stop = app.buttons["capture-stop"]
+        let recording = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: stop)
+        XCTAssertEqual(XCTWaiter.wait(for: [recording], timeout: 10), .completed)
+        stop.tap()
+        let video = app.buttons["activity-original-video"]
+        XCTAssertTrue(video.waitForExistence(timeout: 20)); capture("activity-demo-03-result", app: app)
+        video.tap()
+        XCTAssertTrue(app.otherElements["diagnostic-video-player"].waitForExistence(timeout: 10))
+        app.navigationBars["核对本次录像"].buttons["完成"].tap()
+        let analyze = app.buttons["activity-analyze"]
+        XCTAssertTrue(reveal(analyze, app: app)); XCTAssertTrue(analyze.isEnabled); analyze.tap()
+        let question = app.textFields["home-card-activity-question-card-1-answer"]
+        for _ in 0..<6 {
+            if question.waitForExistence(timeout: 2) { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(reveal(question, app: app)); app.swipeUp()
+        capture("activity-demo-04-question", app: app)
+    }
+
+    func testOrdinaryIPadActivityEntryWithoutTestFlags() {
+        let app = XCUIApplication()
+        app.launch()
+        let entry = app.buttons["activity-push-up-start"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        entry.tap()
+        XCTAssertTrue(app.otherElements["capture-camera-stage"].waitForExistence(timeout: 10))
+    }
+}

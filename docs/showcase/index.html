@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fox | An activity, from start to review</title>
+<style>
+  :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17251f; background: #fafcfb; }
+  * { box-sizing: border-box; letter-spacing: 0; }
+  body { margin: 0; }
+  a { color: #17674f; text-underline-offset: 4px; overflow-wrap: anywhere; }
+  header, main, footer { max-width: 1040px; margin: auto; padding: 32px; }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; border-bottom: 1px solid #dce4df; }
+  header strong { font-size: 24px; }
+  nav { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 42px; line-height: 1.12; max-width: 750px; margin: 28px 0 20px; }
+  h2 { font-size: 28px; line-height: 1.2; margin: 12px 0 18px; }
+  p { font-size: 17px; line-height: 1.65; max-width: 680px; }
+  .lead { font-size: 20px; }
+  .label { font-size: 13px; font-weight: 650; text-transform: uppercase; color: #486358; }
+  .intro { padding-bottom: 22px; }
+  section.story { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 48px; padding: 42px 0; border-top: 1px solid #dce4df; }
+  figure { margin: 0; min-width: 0; }
+  img { display: block; width: 100%; height: auto; border: 1px solid #dce4df; border-radius: 8px; }
+  figcaption { font-size: 13px; line-height: 1.5; color: #52645b; margin-top: 12px; }
+  .note { border-left: 3px solid #bd6146; padding-left: 18px; }
+  footer { border-top: 1px solid #dce4df; color: #52645b; font-size: 14px; line-height: 1.6; }
+  @media (max-width: 640px) {
+    header, main, footer { padding: 22px; }
+    h1 { font-size: 32px; }
+    h2 { font-size: 25px; }
+    section.story { grid-template-columns: 1fr; gap: 22px; padding: 28px 0; }
+    section.story figure { order: -1; }
+    .lead { font-size: 18px; }
+  }
+</style>
+<header><strong>Fox</strong><nav><a href="../../README.md">Project</a><a href="README.md">Evidence &amp; source</a></nav></header>
+<main>
+  <div class="intro">
+    <p class="label">Native iPad workflow / Development snapshot</p>
+    <h1>An activity, from start to review.</h1>
+    <p class="lead">Capture what happened. Keep the recording. Add your account of the set without rewriting what the camera observed.</p>
+    <p>Real SwiftUI screens with synthetic input. November 9, 2026, before build48. English captions explain the Chinese interface.</p>
+  </div>
+  <section class="story">
+    <div><span class="label">01 / Entry</span><h2>One place to begin.</h2><p>The push-up card offers Start and View records. Text and photo capture share the home screen, while an activity has its own focused path.</p><p>This is an experimental activity, not a claim that push-up counting is reliable.</p></div>
+    <figure><a href="assets/activity-home.png"><img src="assets/activity-home.png" alt="Fox home: a push-up card with Start and View records beside training."></a><figcaption>Actual simulator screenshot. Empty synthetic record store.</figcaption></figure>
+  </section>
+  <section class="story">
+    <div><span class="label">02 / Capture</span><h2>Choose a viewpoint. Save a segment.</h2><p>The shared workspace keeps exercise, viewpoint and front/back camera controls together. Start, then stop and save.</p><p>The dark preview comes from a no-person fixture. No real workout or hardware command is demonstrated.</p></div>
+    <figure><a href="assets/activity-capture.png"><img src="assets/activity-capture.png" alt="Capture workspace with push-up, left viewpoint and front camera selected."></a><figcaption>Real UI, synthetic input; no live camera subject.</figcaption></figure>
+  </section>
+  <section class="story">
+    <div><span class="label">03 / Result</span><h2>A record, not just a number.</h2><p>Open the retained video. Add an optional reference count or note. Automatic observation stays <strong>unknown</strong> and the actual count stays <strong>unconfirmed</strong> until there is evidence.</p><p>“Not yet analyzed” is a separate state. Opening this page does not automatically request paid analysis.</p></div>
+    <figure><a href="assets/activity-result.png"><img src="assets/activity-result.png" alt="Activity result: unknown automatic observation, unconfirmed count, video link and optional feedback."></a><figcaption>Saved-result screen before any simulated service response.</figcaption></figure>
+  </section>
+  <div class="note"><p><strong>What this proves:</strong> an implemented navigation and result-presentation workflow, backed by a historical synthetic UI test. It does not prove camera accuracy, clinical benefit or production readiness. Public main is an older source baseline; these screens are a later development snapshot.</p></div>
+  <p><a href="README.md#evidence-and-provenance">Inspect provenance and test source</a> · <a href="https://github.com/li1fang/fox">Browse the repository</a></p>
+</main>
+<footer>Fox by Yifang Li, developed with AI coding agents. Original project interface; no personal training media. This is a documentation walkthrough, not an interactive app demo.</footer>
+</html>

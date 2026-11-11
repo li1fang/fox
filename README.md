@@ -1,8 +1,35 @@
 # Fox
 
-**Personal records and guided training, on iPhone and iPad.**
+**Record daily life. Train with guidance. Review what actually happened.**
 
-Fox is a local-first app combining text and photo capture with editable workout plans, timed guidance, and user-confirmed training records. Its SwiftUI interfaces organize recording, preparation, training, recovery, and review around the task at hand.
+Fox is a local-first iPhone and iPad app for personal records and guided exercise. It brings text, photos, workout plans and review into a native SwiftUI experience, while keeping what the camera observed separate from what the user confirms.
+
+[See an activity, start to finish](docs/showcase/README.md) · [Engineering decisions](#engineering-decisions) · [中文说明](#中文说明)
+
+<p align="center">
+  <a href="docs/showcase/assets/activity-result.png"><img src="docs/showcase/assets/activity-result.png" width="360" alt="Actual Fox iPad simulator result page: automatic observation unknown, actual repetitions unconfirmed, retained video available, optional feedback, and analysis not yet requested."></a>
+</p>
+
+*Actual native UI, synthetic activity. November 9, 2026 development snapshot, not the public main build. The Chinese interface says “automatic observation: unknown” and “not yet analyzed.” [Source, full-size images and limits](docs/showcase/README.md#evidence-and-provenance).*
+
+## One activity, one review
+
+Workout data is rarely perfect. A camera can lose a joint; a set can end early; a user can add context afterward. Fox keeps those facts together without turning missing evidence into a successful repetition.
+
+1. **Start from an activity.** Choose the exercise and camera viewpoint.
+2. **Capture and save.** End the segment and retain the associated recording.
+3. **Review the result.** Open the video, add an optional reference count or note, and see whether analysis has been requested.
+
+The [illustrated walkthrough](docs/showcase/README.md) follows this implemented development flow using a no-person fixture. It demonstrates navigation and saved-result presentation, **not exercise recognition accuracy**.
+
+## Engineering decisions
+
+- **Native UI, separate domain logic.** SwiftUI presents the activity; [training logic](apps/ipad/FoxTrainingCore) and [journal storage](apps/ipad/FoxJournalCore) have independently testable boundaries.
+- **Preserve observations.** Automatic counts, user corrections and unobservable return phases have different meanings. See the [motion strategy and evidence design](docs/fitness/VISION_STRATEGY_AND_EVIDENCE_V1.zh-CN.md).
+- **Test the journey as well as the units.** The public source includes [save-and-relaunch journal tests](apps/ipad/FoxUITests/FoxJournalUITests.swift) and a [training-confirmation persistence story](apps/ipad/FoxUITests/FoxNativeUITests.swift). Test source is not a claim that today's CI passes.
+- **Design for investigation.** Exercise-specific replay and preserved recordings support diagnosis when real-world tracking fails, rather than hiding the failure behind a corrected total.
+
+Created by Yifang Li with AI coding agents. The work combines product direction, interface iteration, storage contracts, verification design and device-delivery coordination. It is an actively developed prototype, not a claim of clinical validation, universal exercise support or production scale.
 
 ## Explore the work
 
@@ -11,7 +38,7 @@ Fox is a local-first app combining text and photo capture with editable workout 
 - **Engineering decisions:** [UI design](docs/design/UI_INTENT_AND_REVIEW.zh-CN.md), [storage design](docs/journal/RECORD_STORAGE_V1.zh-CN.md), [architecture](docs/architecture.md).
 - **Build and verify:** [verification guide](docs/development/VERIFICATION.md). Native builds require macOS and Xcode; public web checks have a separate Linux path.
 
-Vision-assisted training has limited exercise-specific support. See [current status](docs/development/CURRENT.md) for implemented scope and field-validation limits. Public source and synthetic tests are available; private records and media remain outside the repository.
+Vision-assisted training has limited exercise-specific support. Public main and device candidates are not synchronized releases: the linked [public baseline status](docs/development/CURRENT.md) is dated October 24. The later screenshot snapshot is documented separately. Private records and media remain outside the repository. [Known verification limits](docs/showcase/README.md#verification-status) include a failed public CI run; this documentation update does not repair or supersede it.
 
 [中文说明与开发入口](#中文说明) · [MIT License](LICENSE)
 
@@ -41,7 +68,7 @@ Vision-assisted training has limited exercise-specific support. See [current sta
 - **引导**：确定性语音/视觉节奏策略；延迟、取消和过期提示有测试。真实运动听感仍需自然试用。
 - **Fox Say**：独立语音实验入口，Web/API 与人工确认草稿。不是 Fox 主应用的联网依赖。
 
-**回放通过不等于任意现场可用。** 已安装的 0.6.8/build 25 试用候选与本次开发分支分开记录；本轮不更新设备。AI 分析、双设备同步、深度与跨平台尚未启动。
+**回放通过不等于任意现场可用。** 以下开发入口描述公开 main 的历史基线，不代表最新装机状态。后续试用已推进到 iPad 48；本次仅发布展示文档，不同步产品分支、不更新设备，也不把后续试用能力写成 main 已具备。上方截图为 11 月 9 日的原生合成演示，来源与限制见[展示说明](docs/showcase/README.md)。
 
 ## 开发起步
 
