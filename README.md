@@ -1,4 +1,24 @@
-# fox
+# Fox
+
+**Personal records and guided training, on iPhone and iPad.**
+
+Fox is a local-first app combining text and photo capture with editable workout plans, timed guidance, and user-confirmed training records. Its SwiftUI interfaces organize recording, preparation, training, recovery, and review around the task at hand.
+
+## Explore the work
+
+- **Product workflows:** local records, photos, correction and backup; editable training plans, timers and feedback.
+- **Implementation:** [native interfaces](apps/ipad/FoxNative), [training core](apps/ipad/FoxTrainingCore), [record storage](apps/ipad/FoxJournalCore).
+- **Engineering decisions:** [UI design](docs/design/UI_INTENT_AND_REVIEW.zh-CN.md), [storage design](docs/journal/RECORD_STORAGE_V1.zh-CN.md), [architecture](docs/architecture.md).
+- **Build and verify:** [verification guide](docs/development/VERIFICATION.md). Native builds require macOS and Xcode; public web checks have a separate Linux path.
+
+Vision-assisted training has limited exercise-specific support. See [current status](docs/development/CURRENT.md) for implemented scope and field-validation limits. Public source and synthetic tests are available; private records and media remain outside the repository.
+
+[中文说明与开发入口](#中文说明) · [MIT License](LICENSE)
+
+---
+
+## 中文说明
+
 
 **把日常留下，把训练做好。**
 
